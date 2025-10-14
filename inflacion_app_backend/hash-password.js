@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 const saltRounds = 10;
-const password = '123456'; // La contraseña de nuestros usuarios de prueba
+const password = 'password123'; // La contraseña de nuestros usuarios de prueba
 
 bcrypt.hash(password, saltRounds, function(err, hash) {
     if (err) {

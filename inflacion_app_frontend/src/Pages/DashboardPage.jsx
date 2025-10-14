@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Select from 'react-select';
-import { LogOut, User, Monitor, Shield } from 'lucide-react';
+import { LogOut, User, Monitor, Shield, Moon, Sun } from 'lucide-react';
 import StudentDashboard from '../components/StudentDashboard';
 import MonitorDashboard from '../components/MonitorDashboard';
 import AdminDashboard from '../components/AdminDashboard';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Opciones para el selector de roles, incluyendo iconos
 const roleOptions = {
@@ -52,6 +53,26 @@ const customSelectStyles = {
 
 function DashboardPage({ user, onLogout }) {
     const [activeRole, setActiveRole] = useState(user.roles[0]);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+    const { theme, toggleTheme } = useTheme();
+
+    // Cerrar menú cuando se hace click fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsMenuOpen(false);
+            }
+        };
+
+        if (isMenuOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isMenuOpen]);
 
     const renderDashboardByRole = () => {
         // Los dashboards ahora son "sin fondo" para flotar sobre el fondo principal
@@ -71,51 +92,81 @@ function DashboardPage({ user, onLogout }) {
 
     return (
         <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 to-blue-900 text-white font-sans">
-            <div className="max-w-screen-2xl mx-auto p-4 sm:p-6 md:p-8">
-                <header className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-white/10 p-3 rounded-full border border-white/20">
-                            <User size={24} />
-                        </div>
-                        <div>
-                            <h1 className="text-xl sm:text-2xl font-bold">{user.name}</h1>
-                            {userHasMultipleRoles ? (
-                                <Select
-                                    value={roleOptions[activeRole]}
-                                    onChange={(option) => setActiveRole(option.value)}
-                                    options={user.roles.map(role => roleOptions[role])}
-                                    styles={customSelectStyles}
-                                    isSearchable={false}
-                                    components={{
-                                        SingleValue: ({ children, ...props }) => (
-                                            <div {...props.innerProps} className="flex items-center gap-2 text-white">
-                                                {roleOptions[props.data.value].icon}
-                                                <span>{children}</span>
-                                            </div>
-                                        ),
-                                    }}
-                                    formatOptionLabel={({ label, icon }) => (
-                                        <div className="flex items-center gap-2">
-                                            {icon}
-                                            <span>{label}</span>
+            <div className="max-w-screen-2xl mx-auto p-3 sm:p-4 md:p-6 lg:p-8">
+                <header className="flex justify-between items-center mb-6 sm:mb-8 gap-4">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">{user.name}</h1>
+                        {userHasMultipleRoles ? (
+                            <Select
+                                value={roleOptions[activeRole]}
+                                onChange={(option) => setActiveRole(option.value)}
+                                options={user.roles.map(role => roleOptions[role])}
+                                styles={customSelectStyles}
+                                isSearchable={false}
+                                components={{
+                                    SingleValue: ({ children, ...props }) => (
+                                        <div {...props.innerProps} className="flex items-center gap-2 text-white">
+                                            {roleOptions[props.data.value].icon}
+                                            <span>{children}</span>
                                         </div>
-                                    )}
-                                />
-                            ) : (
-                                <span className="text-sm font-semibold bg-white/10 text-white px-3 py-1 rounded-full capitalize inline-flex items-center gap-2 border border-white/20">
-                                    {roleOptions[activeRole]?.icon}
-                                    {roleOptions[activeRole]?.label}
-                                </span>
-                            )}
-                        </div>
+                                    ),
+                                }}
+                                formatOptionLabel={({ label, icon }) => (
+                                    <div className="flex items-center gap-2">
+                                        {icon}
+                                        <span>{label}</span>
+                                    </div>
+                                )}
+                            />
+                        ) : (
+                            <span className="text-sm font-semibold bg-white/10 text-white px-3 py-1 rounded-full capitalize inline-flex items-center gap-2 border border-white/20">
+                                {roleOptions[activeRole]?.icon}
+                                {roleOptions[activeRole]?.label}
+                            </span>
+                        )}
                     </div>
-                    <button 
-                        onClick={onLogout}
-                        className="w-full sm:w-auto flex items-center justify-center px-4 py-2 bg-white/10 border border-white/20 text-white rounded-lg shadow-md hover:bg-white/20 transition"
-                    >
-                        <LogOut size={18} className="mr-2" />
-                        Cerrar Sesión
-                    </button>
+
+                    {/* Menú dropdown en icono de perfil */}
+                    <div className="relative" ref={menuRef}>
+                        <button
+                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                            className="bg-white/10 p-2.5 sm:p-3 rounded-full border border-white/20 hover:bg-white/20 transition-all duration-200 flex-shrink-0"
+                            aria-label="Menú de usuario"
+                            aria-expanded={isMenuOpen}
+                        >
+                            <User size={20} className="sm:w-6 sm:h-6" />
+                        </button>
+
+                        {isMenuOpen && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 overflow-hidden z-50 animate-scale-in">
+                                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{user.name}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{roleOptions[activeRole]?.label}</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        toggleTheme();
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                                    <span className="text-sm font-medium">
+                                        {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        onLogout();
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <LogOut size={18} />
+                                    <span className="text-sm font-medium">Cerrar Sesión</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </header>
                 
                 <main>

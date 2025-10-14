@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import LoginPage from './Pages/LoginPage';
 import DashboardPage from './Pages/DashboardPage';
 import { apiFetch } from './api';
+import { ToastProvider } from './components/Toast';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -41,13 +43,17 @@ function App() {
   }
 
   return (
-    <div>
-      {currentUser ? (
-        <DashboardPage user={currentUser} onLogout={handleLogout} />
-      ) : (
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
-      )}
-    </div>
+    <ThemeProvider>
+      <ToastProvider>
+        <div>
+          {currentUser ? (
+            <DashboardPage user={currentUser} onLogout={handleLogout} />
+          ) : (
+            <LoginPage onLoginSuccess={handleLoginSuccess} />
+          )}
+        </div>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

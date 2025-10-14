@@ -1,15 +1,35 @@
 /* Contenedor que tendrá la animación */
 .slide-item-enter {
-    animation: slideIn 0.35s forwards ease-out;
+    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes slideIn {
-    from {
+    0% {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(30px) scale(0.95);
+    }
+    60% {
+        opacity: 1;
+        transform: translateY(-5px) scale(1.01);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Smooth exit animation for better transitions */
+.slide-item-exit {
+    animation: slideOut 0.3s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
     }
     to {
-        opacity: 1;
-        transform: translateY(0);
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
     }
 }
