@@ -12,7 +12,6 @@ El sistema reemplaza el proceso manual anterior de uso de formularios de Google 
 - [Características](#características)
 - [Stack Tecnológico](#stack-tecnológico)
 - [Flujo de Trabajo](#flujo-de-trabajo)
-- [Autores](#autores)
 
 ## Objetivo General
 
@@ -30,7 +29,7 @@ El sistema cuenta con un acceso seguro y diferentes niveles de permisos para pro
 * **Registro de Precios**: Una interfaz dinámica optimizada para que los estudiantes puedan cargar datos fácilmente desde sus teléfonos móviles.
 * **Panel de Supervisión**: Permite a los monitores verificar el estado de la recolección de datos en tiempo real.
 * **Centro de Control del Administrador**: Para la gestión completa de datos, usuarios, productos, comercios y períodos de recolección.
-* **Análisis Automáticoy Reporte Estadístico**: Genera reportes y gráficos sobre la variación de precios, eliminando la necesidad de cálculos manuales.
+* **Análisis Automático y Reporte Estadístico**: Genera reportes y gráficos sobre la variación de precios, eliminando la necesidad de cálculos manuales.
 * **Base de Datos Centralizada**: Almacena de forma segura y permanente toda la información recopilada.
 
 ## Stack Tecnológico

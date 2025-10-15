@@ -92,7 +92,7 @@ function DashboardPage({ user, onLogout }) {
 
     return (
         <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 to-blue-900 text-white font-sans">
-            <div className="max-w-screen-2xl mx-auto p-3 sm:p-4 md:p-6 lg:p-8">
+            <div className="max-w-screen-2xl mx-auto p-4">
                 <header className="flex justify-between items-center mb-6 sm:mb-8 gap-4">
                     <div className="min-w-0 flex-1">
                         <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">{user.name}</h1>
