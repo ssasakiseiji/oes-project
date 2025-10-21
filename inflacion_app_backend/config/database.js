@@ -11,7 +11,11 @@ export const pool = new pg.Pool({
     port: process.env.DB_PORT,
     ssl: {
         rejectUnauthorized: false
-    }
+    },
+    // Configuración para Vercel Serverless + Supabase Session Mode
+    max: 1, // Máximo 1 conexión por función serverless
+    idleTimeoutMillis: 30000, // Cerrar conexiones inactivas después de 30 segundos
+    connectionTimeoutMillis: 10000, // Timeout de conexión: 10 segundos
 });
 
 // Handle pool errors
