@@ -1,4 +1,4 @@
--- Script de Datos de Prueba para InflaciónApp
+-- Script de Datos de Prueba para Portal IPC
 
 -- Insertar Categorías
 INSERT INTO categories (name) VALUES
@@ -37,14 +37,22 @@ INSERT INTO commerces (name, address) VALUES
 ON CONFLICT DO NOTHING;
 
 -- Insertar Usuarios de Prueba
--- Password para todos: "password123"
--- Hash generado con bcrypt (rounds=10)
+-- IMPORTANTE: Para producción, genere contraseñas únicas y seguras para cada usuario
+-- Use el script: node scripts/createUser.js
+-- Para desarrollo, puede usar el script update-passwords.js (NO use en producción)
+--
+-- NOTA: Los usuarios de prueba se insertarán sin contraseña.
+-- Ejecute node scripts/createUser.js para crear usuarios con contraseñas seguras.
+--
+-- Si necesita usuarios de prueba rápidos para desarrollo local:
+-- Ejecute: node update-passwords.js (esto establecerá contraseñas temporales)
+
 INSERT INTO users (name, email, password_hash, roles) VALUES
-    ('Admin Usuario', 'admin@test.com', '$2b$10$rXvzE2CJXgZLqKjH8qKjVOLKZjF6hQ.7EqH5KjD8pBYN8yZxV.GNm', '{"admin"}'),
-    ('Monitor Usuario', 'monitor@test.com', '$2b$10$rXvzE2CJXgZLqKjH8qKjVOLKZjF6hQ.7EqH5KjD8pBYN8yZxV.GNm', '{"monitor"}'),
-    ('Juan Pérez', 'juan@test.com', '$2b$10$rXvzE2CJXgZLqKjH8qKjVOLKZjF6hQ.7EqH5KjD8pBYN8yZxV.GNm', '{"student"}'),
-    ('María García', 'maria@test.com', '$2b$10$rXvzE2CJXgZLqKjH8qKjVOLKZjF6hQ.7EqH5KjD8pBYN8yZxV.GNm', '{"student"}'),
-    ('Carlos López', 'carlos@test.com', '$2b$10$rXvzE2CJXgZLqKjH8qKjVOLKZjF6hQ.7EqH5KjD8pBYN8yZxV.GNm', '{"student"}')
+    ('Admin Usuario', 'admin@test.com', '', '{"admin"}'),
+    ('Monitor Usuario', 'monitor@test.com', '', '{"monitor"}'),
+    ('Juan Pérez', 'juan@test.com', '', '{"student"}'),
+    ('María García', 'maria@test.com', '', '{"student"}'),
+    ('Carlos López', 'carlos@test.com', '', '{"student"}')
 ON CONFLICT (email) DO NOTHING;
 
 -- Insertar Períodos de Ejemplo
