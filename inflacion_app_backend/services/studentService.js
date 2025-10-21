@@ -23,28 +23,52 @@ export const studentService = {
     },
 
     async getStudentDashboard(userId) {
-        const [periodsRes, commercesRes] = await Promise.all([
-            pool.query('SELECT id, name, status FROM periods ORDER BY year DESC, month DESC'),
-            // Only get commerces assigned to this student
+        const periodsRes = await pool.query('SELECT id, name, status FROM periods ORDER BY year DESC, month DESC');
+        const allPeriods = periodsRes.rows;
+
+        const [draftsRes, pricesRes] = await Promise.all([
             pool.query(`
-                SELECT c.id, c.name
-                FROM commerces c
-                INNER JOIN commerce_assignments ca ON c.id = ca.commerce_id
-                WHERE ca.user_id = $1
-                ORDER BY c.name
+                SELECT d.product_id, d.commerce_id, d.period_id, d.price, c.name as commerce_name
+                FROM draft_prices d
+                JOIN commerces c ON d.commerce_id = c.id
+                WHERE d.user_id = $1
+            `, [userId]),
+            pool.query(`
+                SELECT p.product_id, p.commerce_id, p.period_id, p.price, c.name as commerce_name
+                FROM prices p
+                JOIN commerces c ON p.commerce_id = c.id
+                WHERE p.user_id = $1
             `, [userId])
         ]);
 
-        const allPeriods = periodsRes.rows;
-        const allCommerces = commercesRes.rows;
-
-        const [draftsRes, pricesRes] = await Promise.all([
-            pool.query('SELECT product_id, commerce_id, period_id, price FROM draft_prices WHERE user_id = $1', [userId]),
-            pool.query('SELECT product_id, commerce_id, period_id, price FROM prices WHERE user_id = $1', [userId])
-        ]);
+        // Obtener comercios actualmente asignados para períodos sin registros
+        const assignedCommercesRes = await pool.query(`
+            SELECT c.id, c.name
+            FROM commerces c
+            INNER JOIN commerce_assignments ca ON c.id = ca.commerce_id
+            WHERE ca.user_id = $1
+            ORDER BY c.name
+        `, [userId]);
 
         const dashboardData = allPeriods.map(period => {
-            const tasks = allCommerces.map(commerce => {
+            // Obtener comercios únicos donde el estudiante tiene registros (prices o drafts) en este período
+            const studentCommercesInPeriod = new Set();
+
+            pricesRes.rows
+                .filter(p => p.period_id === period.id)
+                .forEach(p => studentCommercesInPeriod.add(JSON.stringify({ id: p.commerce_id, name: p.commerce_name })));
+
+            draftsRes.rows
+                .filter(d => d.period_id === period.id)
+                .forEach(d => studentCommercesInPeriod.add(JSON.stringify({ id: d.commerce_id, name: d.commerce_name })));
+
+            // Si no hay registros en este período, usar las asignaciones actuales
+            let commercesForPeriod = Array.from(studentCommercesInPeriod).map(str => JSON.parse(str));
+            if (commercesForPeriod.length === 0) {
+                commercesForPeriod = assignedCommercesRes.rows;
+            }
+
+            const tasks = commercesForPeriod.map(commerce => {
                 const submittedPricesForPeriod = pricesRes.rows.filter(
                     p => p.period_id === period.id && p.commerce_id === commerce.id
                 );

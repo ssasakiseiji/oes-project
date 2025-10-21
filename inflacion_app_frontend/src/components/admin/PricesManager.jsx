@@ -51,6 +51,7 @@ export const PricesManager = () => {
         if (prices.length > 0) {
             const headers = [
                 { key: 'productName', label: 'Producto' },
+                { key: 'categoryName', label: 'Categoría' },
                 { key: 'price', label: 'Precio (₲)' },
                 { key: 'commerceName', label: 'Comercio' },
                 { key: 'userName', label: 'Estudiante' },
@@ -69,7 +70,29 @@ export const PricesManager = () => {
     useEffect(() => {
         const loadFilterOptions = async () => {
             const [p, t, u] = await Promise.all([apiFetch('/api/periods'), apiFetch('/api/student-tasks'), apiFetch('/api/users')]);
-            setFilterOptions({ periods: p, categories: t.categories, products: t.products, users: u, commerces: t.assignedCommerces });
+
+            // Agregar opciones especiales al inicio de períodos
+            const specialPeriods = [
+                { id: 'ALL', name: '📋 Todos los Períodos', special: true },
+                { id: 'LATEST', name: '🕐 Último Período', special: true }
+            ];
+
+            const allPeriods = [...specialPeriods, ...p];
+
+            setFilterOptions({
+                periods: allPeriods,
+                categories: t.categories,
+                products: t.products,
+                users: u,
+                commerces: t.assignedCommerces
+            });
+
+            // Configurar "Último Período" por defecto
+            if (p.length > 0) {
+                const latestPeriod = p[0]; // Los períodos vienen ordenados por fecha DESC
+                setSelectedFilters(prev => ({ ...prev, periodId: latestPeriod.id }));
+                setFilters({ periodId: latestPeriod.id });
+            }
         };
         loadFilterOptions();
     }, []);
@@ -121,6 +144,20 @@ export const PricesManager = () => {
         const newFilters = {};
         Object.entries(selectedFilters).forEach(([key, value]) => {
             if (value !== null && value !== false && value !== '') {
+                // Manejar filtros especiales de período
+                if (key === 'periodId') {
+                    if (value === 'ALL') {
+                        // No agregar filtro de período = mostrar todos
+                        return;
+                    } else if (value === 'LATEST') {
+                        // Obtener el último período real
+                        const realPeriods = filterOptions.periods.filter(p => !p.special);
+                        if (realPeriods.length > 0) {
+                            newFilters[key] = realPeriods[0].id;
+                        }
+                        return;
+                    }
+                }
                 newFilters[key] = value;
             }
         });
@@ -129,17 +166,21 @@ export const PricesManager = () => {
     };
 
     const clearFilters = () => {
+        // Obtener el último período real para configurarlo por defecto
+        const realPeriods = filterOptions.periods.filter(p => !p.special);
+        const defaultPeriodId = realPeriods.length > 0 ? realPeriods[0].id : null;
+
         setSelectedFilters({
-            periodId: null,
+            periodId: defaultPeriodId,
             categoryId: null,
             productId: null,
             userId: null,
             commerceId: null,
             showOutliersOnly: false
         });
-        setFilters({});
+        setFilters(defaultPeriodId ? { periodId: defaultPeriodId } : {});
         setCurrentPage(1);
-        toast.success('Filtros limpiados');
+        toast.success('Filtros limpiados - Mostrando último período');
     };
 
     const activeFilterCount = useMemo(() => {
@@ -288,6 +329,7 @@ export const PricesManager = () => {
                                         onClick={() => {
                                             const headers = [
                                                 { key: 'productName', label: 'Producto' },
+                                                { key: 'categoryName', label: 'Categoría' },
                                                 { key: 'price', label: 'Precio (₲)' },
                                                 { key: 'commerceName', label: 'Comercio' },
                                                 { key: 'userName', label: 'Estudiante' },
@@ -306,6 +348,7 @@ export const PricesManager = () => {
                                         onClick={() => {
                                             const headers = [
                                                 { key: 'productName', label: 'Producto' },
+                                                { key: 'categoryName', label: 'Categoría' },
                                                 { key: 'price', label: 'Precio (₲)' },
                                                 { key: 'commerceName', label: 'Comercio' },
                                                 { key: 'userName', label: 'Estudiante' },
@@ -484,6 +527,16 @@ export const PricesManager = () => {
                                                 )}
                                             </div>
                                         </th>
+                                        <th onClick={() => handleSort('categoryName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                            <div className="flex items-center gap-2">
+                                                Categoría
+                                                {sortConfig.key === 'categoryName' ? (
+                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="opacity-40" />
+                                                )}
+                                            </div>
+                                        </th>
                                         <th onClick={() => handleSort('price')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
                                             <div className="flex items-center gap-2">
                                                 Precio
@@ -537,6 +590,11 @@ export const PricesManager = () => {
                                         : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                             }`}>
                                 <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{p.productName}</td>
+                                <td className="p-3 text-gray-600 dark:text-gray-400">
+                                    <span className="text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                                        {p.categoryName}
+                                    </span>
+                                </td>
                                 <td className="p-3 font-mono text-gray-800 dark:text-gray-100">
                                     {editingPrice.id === p.id ? (
                                         <input

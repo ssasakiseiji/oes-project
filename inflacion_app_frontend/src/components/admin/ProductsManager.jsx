@@ -13,9 +13,10 @@ export const ProductsManager = () => {
     const [categories, setCategories] = useState([]);
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [editingItem, setEditingItem] = useState({ id: null, name: '', originalName: null });
+    const [editingItem, setEditingItem] = useState({ id: null, name: '', unit: '', originalName: null, originalUnit: null });
     const [showAddModal, setShowAddModal] = useState(false);
     const [newItemName, setNewItemName] = useState('');
+    const [newItemUnit, setNewItemUnit] = useState('');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [selectedCategory, setSelectedCategory] = useState(null);
@@ -137,13 +138,18 @@ export const ProductsManager = () => {
     };
 
     const cancelEditing = () => {
-        setEditingItem({ id: null, name: '', originalName: null });
+        setEditingItem({ id: null, name: '', unit: '', originalName: null, originalUnit: null });
     };
 
     // ========== PRODUCTS CRUD ==========
     const handleAddProduct = async () => {
         if (!newItemName.trim()) {
             toast.error('El nombre del producto no puede estar vacío');
+            return;
+        }
+
+        if (!newItemUnit.trim()) {
+            toast.error('La unidad de medida no puede estar vacía');
             return;
         }
 
@@ -157,6 +163,7 @@ export const ProductsManager = () => {
                 method: 'POST',
                 body: JSON.stringify({
                     name: newItemName.trim(),
+                    unit: newItemUnit.trim(),
                     categoryId: selectedCategory.value
                 })
             });
@@ -165,6 +172,7 @@ export const ProductsManager = () => {
             toast.success('Producto creado exitosamente');
             setShowAddModal(false);
             setNewItemName('');
+            setNewItemUnit('');
             setSelectedCategory(null);
         } catch (err) {
             toast.error(`Error al crear producto: ${err.message}`);
@@ -172,15 +180,22 @@ export const ProductsManager = () => {
     };
 
     const startEditingProduct = (product) => {
-        setEditingItem({ id: product.id, name: product.name, originalName: product.name });
+        setEditingItem({
+            id: product.id,
+            name: product.name,
+            unit: product.unit || '',
+            originalName: product.name,
+            originalUnit: product.unit || ''
+        });
     };
 
     const handleSaveProductEdit = async () => {
         const trimmedName = editingItem.name.trim();
+        const trimmedUnit = editingItem.unit.trim();
 
-        if (trimmedName === editingItem.originalName) {
+        if (trimmedName === editingItem.originalName && trimmedUnit === editingItem.originalUnit) {
             toast.info('No se detectaron cambios');
-            setEditingItem({ id: null, name: '', originalName: null });
+            setEditingItem({ id: null, name: '', unit: '', originalName: null, originalUnit: null });
             return;
         }
 
@@ -189,18 +204,23 @@ export const ProductsManager = () => {
             return;
         }
 
+        if (!trimmedUnit) {
+            toast.error('La unidad de medida no puede estar vacía');
+            return;
+        }
+
         try {
             await apiFetch(`/api/products/${editingItem.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name: trimmedName })
+                body: JSON.stringify({ name: trimmedName, unit: trimmedUnit })
             });
 
             setProducts(prev =>
-                prev.map(p => p.id === editingItem.id ? { ...p, name: trimmedName } : p)
+                prev.map(p => p.id === editingItem.id ? { ...p, name: trimmedName, unit: trimmedUnit } : p)
             );
 
             toast.success('Producto actualizado exitosamente');
-            setEditingItem({ id: null, name: '', originalName: null });
+            setEditingItem({ id: null, name: '', unit: '', originalName: null, originalUnit: null });
         } catch (err) {
             toast.error(`Error al actualizar producto: ${err.message}`);
         }
@@ -247,7 +267,9 @@ export const ProductsManager = () => {
                 return item.name.toLowerCase().includes(searchLower);
             } else {
                 const categoryName = categories.find(c => c.id === item.categoryId)?.name || '';
+                const unit = item.unit || '';
                 return item.name.toLowerCase().includes(searchLower) ||
+                       unit.toLowerCase().includes(searchLower) ||
                        categoryName.toLowerCase().includes(searchLower);
             }
         });
@@ -526,6 +548,21 @@ export const ProductsManager = () => {
                                             </div>
                                         </th>
                                         <th
+                                            onClick={() => handleSort('unit')}
+                                            className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                Unidad
+                                                {sortConfig.key === 'unit' ? (
+                                                    sortConfig.direction === 'asc' ?
+                                                        <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> :
+                                                        <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="opacity-40" />
+                                                )}
+                                            </div>
+                                        </th>
+                                        <th
                                             onClick={() => handleSort('categoryName')}
                                             className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                                         >
@@ -546,7 +583,7 @@ export const ProductsManager = () => {
                                 <tbody>
                                     {paginatedData.length === 0 ? (
                                         <tr>
-                                            <td colSpan="4" className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                            <td colSpan="5" className="text-center py-8 text-gray-500 dark:text-gray-400">
                                                 {searchTerm ? 'No se encontraron resultados' : 'No hay productos registrados'}
                                             </td>
                                         </tr>
@@ -576,6 +613,23 @@ export const ProductsManager = () => {
                                                     />
                                                 ) : (
                                                     product.name
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
+                                                {editingItem.id === product.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editingItem.unit}
+                                                        onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveProductEdit();
+                                                            if (e.key === 'Escape') cancelEditing();
+                                                        }}
+                                                        placeholder="ej: 1 kg"
+                                                        className="w-full p-2 border-2 border-blue-500 dark:border-blue-400 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                ) : (
+                                                    product.unit || 'N/A'
                                                 )}
                                             </td>
                                             <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
@@ -671,19 +725,33 @@ export const ProductsManager = () => {
                             </div>
 
                             {activeTab === 'products' && (
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                        Categoría
-                                    </label>
-                                    <Select
-                                        value={selectedCategory}
-                                        onChange={setSelectedCategory}
-                                        options={categoryOptions}
-                                        placeholder="Seleccionar categoría"
-                                        className="text-gray-800"
-                                        styles={getReactSelectStyles(document.documentElement.classList.contains('dark'))}
-                                    />
-                                </div>
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                            Unidad de Medida
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newItemUnit}
+                                            onChange={e => setNewItemUnit(e.target.value)}
+                                            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="ej: 1 kg, 500 g, 1 L"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                            Categoría
+                                        </label>
+                                        <Select
+                                            value={selectedCategory}
+                                            onChange={setSelectedCategory}
+                                            options={categoryOptions}
+                                            placeholder="Seleccionar categoría"
+                                            className="text-gray-800"
+                                            styles={getReactSelectStyles(document.documentElement.classList.contains('dark'))}
+                                        />
+                                    </div>
+                                </>
                             )}
                         </div>
 
@@ -692,6 +760,7 @@ export const ProductsManager = () => {
                                 onClick={() => {
                                     setShowAddModal(false);
                                     setNewItemName('');
+                                    setNewItemUnit('');
                                     setSelectedCategory(null);
                                 }}
                                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"

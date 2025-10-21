@@ -202,6 +202,7 @@ export const adminService = {
             SELECT
                 pr.id, pr.price, pr.created_at AS "createdAt",
                 pd.name AS "periodName", p.name AS "productName",
+                cat.name AS "categoryName",
                 u.name AS "userName", c.name AS "commerceName",
                 CASE
                     WHEN ps.std_dev > 0 AND ABS(pr.price - ps.avg_price) > (2 * ps.std_dev)
@@ -210,6 +211,7 @@ export const adminService = {
             FROM prices pr
             JOIN periods pd ON pr.period_id = pd.id
             JOIN products p ON pr.product_id = p.id
+            JOIN categories cat ON p.category_id = cat.id
             JOIN users u ON pr.user_id = u.id
             JOIN commerces c ON pr.commerce_id = c.id
             LEFT JOIN price_stats ps ON pr.period_id = ps.period_id AND pr.product_id = ps.product_id
