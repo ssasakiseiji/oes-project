@@ -624,7 +624,7 @@ function MonitorDashboard({ user }) {
                                       <RegistrationSummary
                                           products={staticData.products}
                                           categories={staticData.categories}
-                                          prices={task.draftPrices || {}}
+                                          prices={task.status === 'Completado' ? (task.submittedPrices || {}) : (task.draftPrices || {})}
                                       />
                                   </div>
                               )}
