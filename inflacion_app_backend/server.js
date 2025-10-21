@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// CORS Configuration para Vercel
+// CORS Configuration
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
@@ -26,22 +26,15 @@ const corsOptions = {
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            console.log('CORS blocked origin:', origin);
-            callback(new Error('No permitido por CORS'));
+            callback(null, true); // Temporal: permitir todos los orígenes
         }
     },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Type', 'Authorization']
+    credentials: true
 };
 
 // Middlewares
 app.use(cors(corsOptions));
 app.use(express.json());
-
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -55,12 +48,12 @@ app.use(routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server (solo en desarrollo local)
-if (process.env.NODE_ENV !== 'production') {
+// Start server solo si NO estamos en Vercel
+if (process.env.VERCEL !== '1') {
     app.listen(PORT, () => {
         console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
     });
 }
 
-// Export para Vercel serverless
+// Export para Vercel
 export default app;
