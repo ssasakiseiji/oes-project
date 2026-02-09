@@ -29,8 +29,8 @@ export const AnalysisView = () => {
             setPeriods(closedPeriods);
             setFilterOptions({ categories: tasksData.categories, products: tasksData.products });
             if (closedPeriods.length >= 2) {
-                setPeriodA(closedPeriods[1]);
-                setPeriodB(closedPeriods[0]);
+                setPeriodA(closedPeriods[0]);
+                setPeriodB(closedPeriods[1]);
             }
         };
         fetchData();
@@ -74,14 +74,14 @@ export const AnalysisView = () => {
             {reportData && (() => {
                 // Generate sparkline data - simple trend from period A to B
                 const sparklineDataA = [
+                    { value: reportData.totalCostA * 0.95 },
+                    { value: reportData.totalCostA * 0.97 },
+                    { value: reportData.totalCostA }
+                ];
+                const sparklineDataB = [
                     { value: reportData.totalCostB * 0.95 },
                     { value: reportData.totalCostB * 0.97 },
                     { value: reportData.totalCostB }
-                ];
-                const sparklineDataB = [
-                    { value: reportData.totalCostB },
-                    { value: reportData.totalCostB + (reportData.totalCostA - reportData.totalCostB) * 0.5 },
-                    { value: reportData.totalCostA }
                 ];
                 const variationSparkline = reportData.categoryAnalysis.slice(0, 6).map(cat => ({ value: cat.variation }));
 
@@ -90,14 +90,14 @@ export const AnalysisView = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <StatCard
                             title={`Canasta (${periodA.label})`}
-                            value={formatCurrency(reportData.totalCostB)}
+                            value={formatCurrency(reportData.totalCostA)}
                             icon={<BarChart2 size={24}/>}
                             color="gray"
                             sparklineData={sparklineDataA}
                         />
                         <StatCard
                             title={`Canasta (${periodB.label})`}
-                            value={formatCurrency(reportData.totalCostA)}
+                            value={formatCurrency(reportData.totalCostB)}
                             icon={<BarChart2 size={24}/>}
                             sparklineData={sparklineDataB}
                         />

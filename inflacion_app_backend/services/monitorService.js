@@ -9,6 +9,7 @@ export const monitorService = {
             productsRes,
             allAssignmentsRes, // Fetch current assignments
             pricesRes,          // Fetch ONLY submitted prices
+            draftPricesRes,     // Fetch draft prices for "En Proceso" detection
             allCommercesRes    // Fetch all commerce details once
         ] = await Promise.all([
             pool.query('SELECT id, name, status FROM periods ORDER BY year DESC, month DESC'),
@@ -18,7 +19,8 @@ export const monitorService = {
             pool.query(`
                 SELECT pr.user_id, pr.commerce_id, pr.period_id, pr.product_id, pr.price
                 FROM prices pr
-            `), // NO DRAFTS
+            `),
+            pool.query('SELECT user_id, commerce_id, period_id, product_id FROM draft_prices'),
             pool.query('SELECT id, name FROM commerces') // Fetch commerce names
         ]);
 
@@ -27,6 +29,7 @@ export const monitorService = {
         const totalProducts = productsRes.rows.length;
         const currentAssignments = allAssignmentsRes.rows;
         const allPrices = pricesRes.rows;
+        const allDraftPrices = draftPricesRes.rows;
         // Create a Map for quick commerce name lookup
         const commercesMap = new Map(allCommercesRes.rows.map(c => [c.id, c.name]));
 
@@ -58,13 +61,33 @@ export const monitorService = {
                     const submittedPrices = allPrices.filter(
                         p => p.period_id === period.id && p.user_id === student.id && p.commerce_id === commerceId
                     );
-                    // 'Completado' if ANY prices were submitted for this task in this period.
-                    // 'Pendiente' otherwise (only relevant for Open period based on assignments).
-                    const status = submittedPrices.length > 0 ? 'Completado' : 'Pendiente';
-                    // ---------------------------
 
-                    // Calculate progress based *only* on submitted prices count
+                    // Filter draft prices for this task
+                    const draftPricesForTask = allDraftPrices.filter(
+                        d => d.period_id === period.id && d.user_id === student.id && d.commerce_id === commerceId
+                    );
+
+                    // Determine status: 'Completado' (submitted), 'En Proceso' (drafts), 'Pendiente' (nothing)
+                    let status;
+                    if (submittedPrices.length > 0) {
+                        status = 'Completado';
+                    } else if (isCurrentPeriodOpen && draftPricesForTask.length > 0) {
+                        status = 'En Proceso';
+                    } else {
+                        status = 'Pendiente';
+                    }
+
+                    // Calculate progress based on submitted prices count
                     const currentProgress = submittedPrices.length;
+
+                    // Calculate completion level for submitted tasks
+                    const percentage = totalProducts > 0 ? (currentProgress / totalProducts) * 100 : 0;
+                    let completionLevel = null;
+                    if (status === 'Completado') {
+                        if (percentage < 33) completionLevel = 'bajo';
+                        else if (percentage <= 66) completionLevel = 'medio';
+                        else completionLevel = 'alto';
+                    }
 
                     // Prepare submitted prices object for potential detail view in frontend
                     const submittedPricesMap = submittedPrices.reduce((acc, p) => {
@@ -72,23 +95,30 @@ export const monitorService = {
                         return acc;
                     }, {});
 
+                    // Prepare draft prices for detail view
+                    const draftPricesMap = draftPricesForTask.reduce((acc, d) => {
+                        acc[d.product_id] = d.price;
+                        return acc;
+                    }, {});
+
                     return {
                         commerceId: commerceId,
                         commerceName: commerceName,
                         status,
+                        completionLevel,
                         progress: {
                             current: currentProgress, // Represents submitted count
                             total: totalProducts      // Always the total number of products expected
                         },
-                        // Provide submitted prices for the detail view (RegistrationSummary)
+                        // Provide prices for the detail view (RegistrationSummary)
                         submittedPrices: submittedPricesMap,
-                        // draftPrices property is removed as it's no longer needed in the response
+                        draftPrices: draftPricesMap,
                     };
                 }).sort((a, b) => a.commerceName.localeCompare(b.commerceName)); // Sort tasks alphabetically by commerce name
 
-                // Filter out 'Pendiente' tasks *only if* the period is not Open
-                // (Tasks based on assignments for the Open period should always show, even if pending)
-                const finalTasks = isCurrentPeriodOpen ? tasks : tasks.filter(t => t.status === 'Completado');
+                // For closed periods, filter out 'Pendiente' tasks (keep 'Completado' and 'En Proceso')
+                // For open periods, show all tasks including pending ones
+                const finalTasks = isCurrentPeriodOpen ? tasks : tasks.filter(t => t.status !== 'Pendiente');
 
                 return {
                     studentId: student.id,

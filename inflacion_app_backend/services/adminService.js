@@ -94,8 +94,21 @@ export const adminService = {
             const avgMap = new Map();
             priceMap.forEach((prices, productId) => {
                 if (prices.length > 0) {
-                    const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-                    avgMap.set(productId, avg);
+                    // First pass: compute mean and stddev
+                    const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
+                    const stdDev = prices.length > 1
+                        ? Math.sqrt(prices.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / prices.length)
+                        : 0;
+
+                    // Second pass: filter outliers using 2-sigma rule (consistent with getPrices)
+                    const filtered = stdDev > 0
+                        ? prices.filter(p => Math.abs(p - mean) <= 2 * stdDev)
+                        : prices;
+
+                    if (filtered.length > 0) {
+                        const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
+                        avgMap.set(productId, avg);
+                    }
                 }
             });
             return avgMap;

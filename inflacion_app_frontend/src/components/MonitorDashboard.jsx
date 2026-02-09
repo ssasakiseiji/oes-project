@@ -342,21 +342,35 @@ function MonitorDashboard({ user }) {
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-center p-8 text-red-500 dark:text-red-400">Error: {error}</div>;
 
-  const getStatusChip = (status) => {
+  const getStatusChip = (status, completionLevel) => {
+    const completionStyles = {
+      'alto': 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
+      'medio': 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
+      'bajo': 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+    };
     const styles = {
-      'Completado': 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
+      'Completado': completionLevel ? completionStyles[completionLevel] : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
       'En Proceso': 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
       'Pendiente': 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
     };
+    const completionIcons = {
+      'alto': <CheckCircle size={14} />,
+      'medio': <Clock size={14} />,
+      'bajo': <Clock size={14} />,
+    };
     const icon = {
-        'Completado': <CheckCircle size={14} />,
+        'Completado': completionLevel ? completionIcons[completionLevel] : <CheckCircle size={14} />,
         'En Proceso': <Clock size={14} />,
         'Pendiente': <div className="w-2.5 h-2.5 rounded-full bg-gray-400 dark:bg-gray-500" />
     }
+    const levelLabels = { 'alto': 'Alto', 'medio': 'Medio', 'bajo': 'Bajo' };
+    const label = status === 'Completado' && completionLevel
+        ? `${status}: ${levelLabels[completionLevel]}`
+        : status;
     return (
         <div className={`px-2.5 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 border ${styles[status]}`}>
             {icon[status]}
-            <span>{status}</span>
+            <span>{label}</span>
         </div>
     );
   };
@@ -390,7 +404,7 @@ function MonitorDashboard({ user }) {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
-            title="Estudiantes Activos"
+            title={activePeriodData?.status === 'Open' ? 'Estudiantes Asignados' : 'Estudiantes que Participaron'}
             value={globalStats.totalStudents}
             icon={<Users size={24} />}
             color="blue"
@@ -601,7 +615,7 @@ function MonitorDashboard({ user }) {
                                 <div className="flex-1 min-w-0 mr-4">
                                   <div className="flex items-center justify-between mb-2">
                                     <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{task.commerceName}</p>
-                                    {getStatusChip(task.status)}
+                                    {getStatusChip(task.status, task.completionLevel)}
                                   </div>
                                   <div className="flex items-center gap-2 mb-2">
                                     <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
