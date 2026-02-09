@@ -39,18 +39,17 @@ export const monitorService = {
                 let relevantCommerceIds = new Set();
                 let isCurrentPeriodOpen = period.status === 'Open';
 
-                // Determine relevant commerces based on period status
-                if (isCurrentPeriodOpen) {
-                    // Use CURRENT assignments for the OPEN period
-                    currentAssignments
-                        .filter(a => a.user_id === student.id)
-                        .forEach(a => relevantCommerceIds.add(a.commerce_id));
-                } else {
-                    // Use HISTORICAL submitted prices for CLOSED/SCHEDULED periods
+                // Always include current assignments so unassigned students appear
+                currentAssignments
+                    .filter(a => a.user_id === student.id)
+                    .forEach(a => relevantCommerceIds.add(a.commerce_id));
+
+                if (!isCurrentPeriodOpen) {
+                    // Also include commerces from historical submitted prices
+                    // (in case assignments changed since the period was active)
                     allPrices
                         .filter(p => p.period_id === period.id && p.user_id === student.id)
                         .forEach(p => relevantCommerceIds.add(p.commerce_id));
-                        // No need to check drafts here anymore
                 }
 
                 // Build tasks based on relevant commerces
@@ -116,14 +115,10 @@ export const monitorService = {
                     };
                 }).sort((a, b) => a.commerceName.localeCompare(b.commerceName)); // Sort tasks alphabetically by commerce name
 
-                // For closed periods, filter out 'Pendiente' tasks (keep 'Completado' and 'En Proceso')
-                // For open periods, show all tasks including pending ones
-                const finalTasks = isCurrentPeriodOpen ? tasks : tasks.filter(t => t.status !== 'Pendiente');
-
                 return {
                     studentId: student.id,
                     studentName: student.name,
-                    tasks: finalTasks
+                    tasks
                 };
             });
 

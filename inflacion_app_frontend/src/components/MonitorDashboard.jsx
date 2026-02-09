@@ -300,15 +300,26 @@ function MonitorDashboard({ user }) {
       .filter(student => student.studentName.toLowerCase().includes(searchTerm.toLowerCase()))
       .filter(student => {
         if (statusFilter === 'Todos') return true;
+        // Filter by completion level: "Completado:alto", "Completado:medio", "Completado:bajo"
+        if (statusFilter.startsWith('Completado:')) {
+          const level = statusFilter.split(':')[1];
+          return student.tasks.some(task => task.status === 'Completado' && task.completionLevel === level);
+        }
         return student.tasks.some(task => task.status === statusFilter);
       });
 
     // Sorting
+    const levelOrder = { 'alto': 3, 'medio': 2, 'bajo': 1, null: 0 };
     students = students.map(student => {
       const completedTasksCount = student.tasks.filter(t => t.status === 'Completado').length;
       const totalTasksCount = student.tasks.length;
       const progressPercentage = totalTasksCount > 0 ? (completedTasksCount / totalTasksCount) * 100 : 0;
-      return { ...student, completedTasksCount, totalTasksCount, progressPercentage };
+      // Best completion level among tasks (for sorting)
+      const bestLevel = student.tasks.reduce((best, t) => {
+        const current = levelOrder[t.completionLevel] || 0;
+        return current > best ? current : best;
+      }, 0);
+      return { ...student, completedTasksCount, totalTasksCount, progressPercentage, bestLevel };
     });
 
     students.sort((a, b) => {
@@ -316,13 +327,17 @@ function MonitorDashboard({ user }) {
         case 'name':
           return a.studentName.localeCompare(b.studentName);
         case 'progress':
-          return b.progressPercentage - a.progressPercentage; // Descendente
+          return b.progressPercentage - a.progressPercentage;
         case 'status':
           // Primero los que tienen tareas pendientes
           const aHasPending = a.tasks.some(t => t.status !== 'Completado');
           const bHasPending = b.tasks.some(t => t.status !== 'Completado');
           if (aHasPending && !bHasPending) return -1;
           if (!aHasPending && bHasPending) return 1;
+          return a.studentName.localeCompare(b.studentName);
+        case 'level':
+          // Ordenar por nivel de completitud (bajo primero = más problemáticos arriba)
+          if (a.bestLevel !== b.bestLevel) return a.bestLevel - b.bestLevel;
           return a.studentName.localeCompare(b.studentName);
         default:
           return 0;
@@ -378,7 +393,18 @@ function MonitorDashboard({ user }) {
   const sortOptions = [
     { value: 'name', label: 'Nombre A-Z' },
     { value: 'progress', label: 'Progreso (mayor a menor)' },
-    { value: 'status', label: 'Estado (pendientes primero)' }
+    { value: 'status', label: 'Estado (pendientes primero)' },
+    { value: 'level', label: 'Nivel (menor completitud primero)' }
+  ];
+
+  const filterOptions = [
+    { value: 'Todos', label: 'Todos' },
+    { value: 'Completado', label: 'Completado (todos)' },
+    { value: 'Completado:alto', label: 'Completado: Alto', indent: true },
+    { value: 'Completado:medio', label: 'Completado: Medio', indent: true },
+    { value: 'Completado:bajo', label: 'Completado: Bajo', indent: true },
+    { value: 'En Proceso', label: 'En Proceso' },
+    { value: 'Pendiente', label: 'Pendiente' },
   ];
 
   return (
@@ -404,7 +430,7 @@ function MonitorDashboard({ user }) {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
-            title={activePeriodData?.status === 'Open' ? 'Estudiantes Asignados' : 'Estudiantes que Participaron'}
+            title="Estudiantes Asignados"
             value={globalStats.totalStudents}
             icon={<Users size={24} />}
             color="blue"
@@ -506,7 +532,7 @@ function MonitorDashboard({ user }) {
                   </button>
 
                   {showFilterMenu && (
-                      <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-2">
+                      <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-2">
                           <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Filtrar por estado</p>
                               {statusFilter !== 'Todos' && (
@@ -518,20 +544,22 @@ function MonitorDashboard({ user }) {
                                   </button>
                               )}
                           </div>
-                          {['Todos', 'Completado', 'En Proceso', 'Pendiente'].map(status => (
+                          {filterOptions.map(option => (
                               <button
-                                  key={status}
+                                  key={option.value}
                                   onClick={() => {
-                                      setStatusFilter(status);
+                                      setStatusFilter(option.value);
                                       setShowFilterMenu(false);
                                   }}
-                                  className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
-                                      statusFilter === status
+                                  className={`w-full text-left py-2.5 text-sm transition-colors ${
+                                      option.indent ? 'pl-6 pr-3' : 'px-3'
+                                  } ${
+                                      statusFilter === option.value
                                           ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold'
                                           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                                   }`}
                               >
-                                  {status}
+                                  {option.label}
                               </button>
                           ))}
                       </div>
@@ -545,7 +573,7 @@ function MonitorDashboard({ user }) {
                   {sortedAndFilteredStudents.length} estudiante{sortedAndFilteredStudents.length !== 1 ? 's' : ''}
                   {statusFilter !== 'Todos' && (
                       <span className="ml-2 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-semibold">
-                          {statusFilter}
+                          {filterOptions.find(o => o.value === statusFilter)?.label || statusFilter}
                       </span>
                   )}
               </p>
