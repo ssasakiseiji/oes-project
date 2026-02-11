@@ -31,7 +31,7 @@ function AdminDashboard({ user }) {
             )}
 
             {/* Contenedor principal con bordes redondeados */}
-            <div className="flex h-screen md:h-auto md:overflow-hidden md:rounded-2xl md:shadow-xl">
+            <div className="flex h-[calc(100vh-10rem)] md:h-auto overflow-hidden rounded-2xl shadow-xl">
                 {/* Sidebar */}
                 <aside className={`
                     fixed md:static inset-y-0 left-0 z-50

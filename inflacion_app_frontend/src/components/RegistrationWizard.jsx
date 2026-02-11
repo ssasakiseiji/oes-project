@@ -292,6 +292,13 @@ export default function RegistrationWizard({ commerce, products, categories, ini
     const [touchEnd, setTouchEnd] = useState({ x: null, y: null });
     const minSwipeDistance = 50;
 
+    // Bloquear scroll del body para evitar que se vea/scrollee la pantalla de atrás en móviles
+    useEffect(() => {
+        const original = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = original; };
+    }, []);
+
     // Guardar borrador en localStorage como respaldo ante pérdida de sesión
     const draftKey = `draft_${commerce.id}`;
     useEffect(() => {
@@ -486,7 +493,7 @@ export default function RegistrationWizard({ commerce, products, categories, ini
     }, [sortedProducts, categoriesMap]);
 
     return (
-        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 to-blue-900 flex flex-col z-50 p-4 overflow-x-hidden" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 to-blue-900 flex flex-col z-50 p-4 overflow-hidden" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
             {alertInfo && <CustomAlert {...alertInfo} />}
             {showSearchModal && (
                 <SearchModal

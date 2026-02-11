@@ -9,8 +9,12 @@ import { useToast } from './Toast';
 
 const hasValidPrice = (price) => price != null && price !== '' && price !== undefined;
 
-// Lazy load RegistrationWizard para mejorar el performance del bundle inicial
-const RegistrationWizard = lazy(() => import('./RegistrationWizard'));
+// Lazy load RegistrationWizard con recarga automática si el chunk cambió tras un deploy
+const RegistrationWizard = lazy(() =>
+    import('./RegistrationWizard').catch(() => {
+        window.location.reload();
+    })
+);
 
 const NoCollectionPanel = React.memo(() => (
     <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 p-8 rounded-2xl shadow-lg text-center">
@@ -326,7 +330,16 @@ function StudentDashboard({ user }) {
                 {activePeriodData && (
                     <div className="space-y-3">
                         {activePeriodData.tasks.map((task, index) => {
-                            const prices = task.status === 'Completado' ? task.submittedPrices : task.draftPrices;
+                            let prices = task.status === 'Completado' ? task.submittedPrices : task.draftPrices;
+                            // Fusionar borradores de localStorage si tienen más progreso que el backend
+                            if (task.status !== 'Completado') {
+                                try {
+                                    const localDraft = JSON.parse(localStorage.getItem(`draft_${task.commerceId}`) || '{}');
+                                    const localCount = Object.values(localDraft).filter(hasValidPrice).length;
+                                    const serverCount = Object.values(prices).filter(hasValidPrice).length;
+                                    if (localCount > serverCount) prices = localDraft;
+                                } catch { /* ignorar errores de parse */ }
+                            }
                             const completedCount = Object.values(prices).filter(hasValidPrice).length;
                             const totalCount = staticData.products.length;
                             const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
