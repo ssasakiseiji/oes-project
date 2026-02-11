@@ -52,18 +52,26 @@ export const studentService = {
 
         const dashboardData = allPeriods.map(period => {
             // Obtener comercios únicos donde el estudiante tiene registros (prices o drafts) en este período
-            const studentCommercesInPeriod = new Set();
+            const commercesMap = new Map();
 
             pricesRes.rows
                 .filter(p => p.period_id === period.id)
-                .forEach(p => studentCommercesInPeriod.add(JSON.stringify({ id: p.commerce_id, name: p.commerce_name })));
+                .forEach(p => {
+                    if (!commercesMap.has(p.commerce_id)) {
+                        commercesMap.set(p.commerce_id, { id: p.commerce_id, name: p.commerce_name });
+                    }
+                });
 
             draftsRes.rows
                 .filter(d => d.period_id === period.id)
-                .forEach(d => studentCommercesInPeriod.add(JSON.stringify({ id: d.commerce_id, name: d.commerce_name })));
+                .forEach(d => {
+                    if (!commercesMap.has(d.commerce_id)) {
+                        commercesMap.set(d.commerce_id, { id: d.commerce_id, name: d.commerce_name });
+                    }
+                });
 
             // Si no hay registros en este período, usar las asignaciones actuales
-            let commercesForPeriod = Array.from(studentCommercesInPeriod).map(str => JSON.parse(str));
+            let commercesForPeriod = Array.from(commercesMap.values());
             if (commercesForPeriod.length === 0) {
                 commercesForPeriod = assignedCommercesRes.rows;
             }
@@ -120,7 +128,7 @@ export const studentService = {
 
             if (prices && Object.keys(prices).length > 0) {
                 const priceEntries = Object.entries(prices).filter(
-                    ([_, price]) => price !== '' && price !== null
+                    ([_, price]) => price != null && price !== ''
                 );
 
                 if (priceEntries.length > 0) {
@@ -150,6 +158,28 @@ export const studentService = {
         try {
             await client.query('BEGIN');
 
+            // Verificar que el estudiante está asignado a este comercio
+            if (commerceId) {
+                const assignmentCheck = await client.query(
+                    'SELECT 1 FROM commerce_assignments WHERE user_id = $1 AND commerce_id = $2',
+                    [userId, commerceId]
+                );
+                if (assignmentCheck.rows.length === 0) {
+                    const error = new Error('No estás asignado a este comercio');
+                    error.statusCode = 403;
+                    throw error;
+                }
+            }
+
+            // Eliminar precios existentes para este usuario/comercio/período (previene duplicados)
+            if (commerceId) {
+                await client.query(
+                    'DELETE FROM prices WHERE user_id = $1 AND commerce_id = $2 AND period_id = $3',
+                    [userId, commerceId, periodId]
+                );
+            }
+
+            // Insertar nuevos precios
             for (const p of pricesData) {
                 await client.query(
                     'INSERT INTO prices (price, period_id, product_id, user_id, commerce_id) VALUES ($1, $2, $3, $4, $5)',
@@ -157,6 +187,7 @@ export const studentService = {
                 );
             }
 
+            // Eliminar borradores después del envío exitoso
             if (commerceId) {
                 await client.query(
                     'DELETE FROM draft_prices WHERE user_id = $1 AND commerce_id = $2 AND period_id = $3',

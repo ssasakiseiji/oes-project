@@ -24,20 +24,34 @@ export async function apiFetch(url, options = {}) {
 
     // 5. Manejo de errores HTTP
     if (!response.ok) {
-        // Token expirado o inválido - redirigir al login
-        if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem('token');
-            window.location.href = '/';
-            throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
-        }
-
-        // Otros errores
         let errorMessage = 'Error en la petición a la API';
         try {
             const errorData = await response.json();
             errorMessage = errorData.message || errorMessage;
         } catch (e) {
             // Si no se puede parsear el error, usar mensaje genérico
+        }
+
+        // 401 = token ausente → redirigir al login (salvo que se pida no hacerlo)
+        if (response.status === 401) {
+            if (!options.skipAuthRedirect) {
+                localStorage.removeItem('token');
+                window.location.href = '/';
+            }
+            throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        }
+
+        // 403 = puede ser token expirado O un error de autorización diferente
+        if (response.status === 403) {
+            // Solo redirigir si es un error de token (auth.js devuelve "Token inválido o expirado")
+            if (errorMessage.toLowerCase().includes('token')) {
+                if (!options.skipAuthRedirect) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/';
+                }
+                throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+            }
+            // Otros 403 (período cerrado, rol insuficiente, etc.) se propagan como error normal
         }
 
         throw new Error(errorMessage);

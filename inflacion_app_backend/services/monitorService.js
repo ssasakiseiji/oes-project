@@ -66,14 +66,16 @@ export const monitorService = {
                         d => d.period_id === period.id && d.user_id === student.id && d.commerce_id === commerceId
                     );
 
-                    // Determine status: 'Completado' (submitted), 'En Proceso' (drafts), 'Pendiente' (nothing)
+                    // Determine status based on period state
                     let status;
                     if (submittedPrices.length > 0) {
                         status = 'Completado';
-                    } else if (isCurrentPeriodOpen && draftPricesForTask.length > 0) {
-                        status = 'En Proceso';
+                    } else if (isCurrentPeriodOpen) {
+                        // Open period: distinguish between drafts and nothing
+                        status = draftPricesForTask.length > 0 ? 'En Proceso' : 'Pendiente';
                     } else {
-                        status = 'Pendiente';
+                        // Closed period: no chance to complete anymore
+                        status = 'No completado';
                     }
 
                     // Calculate progress based on submitted prices count

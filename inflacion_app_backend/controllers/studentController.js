@@ -46,6 +46,26 @@ export const studentController = {
                 });
             }
 
+            // Validar campos individuales de cada entrada
+            const hasInvalid = pricesData.some(entry =>
+                !Number.isInteger(entry.productId) || entry.productId <= 0 ||
+                !Number.isInteger(entry.commerceId) || entry.commerceId <= 0 ||
+                typeof entry.price !== 'number' || entry.price <= 0 || entry.price > 99999999
+            );
+            if (hasInvalid) {
+                return res.status(400).json({
+                    message: 'Datos de precios inválidos. Cada precio debe tener productId, commerceId válidos y un precio positivo.'
+                });
+            }
+
+            // Verificar que todos los precios son para el mismo comercio
+            const commerceIds = [...new Set(pricesData.map(p => p.commerceId))];
+            if (commerceIds.length > 1) {
+                return res.status(400).json({
+                    message: 'Todos los precios deben ser para el mismo comercio'
+                });
+            }
+
             await studentService.submitPrices(userId, periodId, pricesData);
             res.status(201).json({ message: '¡Registro completado con éxito!' });
         } catch (error) {

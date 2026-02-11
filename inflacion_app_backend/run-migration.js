@@ -18,11 +18,12 @@ const pool = new pg.Pool({
 });
 
 async function runMigration() {
+    const migrationFile = process.argv[2] || 'migrations/002-prices-integrity.sql';
     const client = await pool.connect();
     try {
-        console.log('📦 Ejecutando migración: add-commerce-assignments.sql\n');
+        console.log(`📦 Ejecutando migración: ${migrationFile}\n`);
 
-        const migrationPath = path.join(__dirname, 'migrations', 'add-commerce-assignments.sql');
+        const migrationPath = path.join(__dirname, migrationFile);
         const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
 
         await client.query('BEGIN');
@@ -30,25 +31,6 @@ async function runMigration() {
         await client.query('COMMIT');
 
         console.log('✅ Migración ejecutada exitosamente!\n');
-
-        // Verify the results
-        const result = await client.query(`
-            SELECT
-                u.name as student_name,
-                COUNT(ca.commerce_id) as assigned_commerces
-            FROM users u
-            LEFT JOIN commerce_assignments ca ON u.id = ca.user_id
-            WHERE 'student' = ANY(u.roles)
-            GROUP BY u.id, u.name
-            ORDER BY u.name
-        `);
-
-        console.log('📊 Asignaciones actuales:');
-        console.log('═══════════════════════════════════════════════════════');
-        result.rows.forEach(row => {
-            console.log(`  ${row.student_name}: ${row.assigned_commerces} comercio(s) asignado(s)`);
-        });
-        console.log('═══════════════════════════════════════════════════════\n');
 
     } catch (error) {
         await client.query('ROLLBACK');

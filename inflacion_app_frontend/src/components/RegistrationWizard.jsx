@@ -6,6 +6,8 @@ import { useToast } from './Toast';
 import LoadingOverlay from './LoadingOverlay';
 import './RegistrationWizard.css';
 
+const hasValidPrice = (price) => price != null && price !== '' && price !== undefined;
+
 const CustomAlert = ({ message, onConfirm, onCancel }) => (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl text-center max-w-sm mx-4 animate-scale-in">
@@ -98,7 +100,7 @@ const SearchModal = ({ products, categories, prices, onClose, onSelectProduct })
                                 </h3>
                                 <div className="space-y-2">
                                     {categoryProducts.map((product) => {
-                                        const hasPrice = prices[product.id] && prices[product.id] !== '';
+                                        const hasPrice = hasValidPrice(prices[product.id]);
                                         return (
                                             <button
                                                 key={product.id}
@@ -152,7 +154,7 @@ const SearchModal = ({ products, categories, prices, onClose, onSelectProduct })
 
 const CategoryView = ({ category, products, prices, onEdit, onBack }) => {
     const categoryProducts = products.filter(p => p.categoryId === category.id);
-    const completedCount = categoryProducts.filter(p => prices[p.id] && prices[p.id] !== '').length;
+    const completedCount = categoryProducts.filter(p => hasValidPrice(prices[p.id])).length;
     const percentage = categoryProducts.length > 0 ? Math.round((completedCount / categoryProducts.length) * 100) : 0;
 
     return (
@@ -175,7 +177,7 @@ const CategoryView = ({ category, products, prices, onEdit, onBack }) => {
             <div className="overflow-y-auto overflow-x-hidden p-4 space-y-2">
                 {categoryProducts.map(product => {
                     const productIndex = products.findIndex(prod => prod.id === product.id);
-                    const hasPrice = prices[product.id] && prices[product.id] !== '';
+                    const hasPrice = hasValidPrice(prices[product.id]);
 
                     return (
                         <div
@@ -215,13 +217,13 @@ const RegistrationSummary = ({ products, categories, prices, onEdit, onCategoryC
     const summaryData = useMemo(() => {
         return categories.map(category => {
             const categoryProducts = products.filter(p => p.categoryId === category.id);
-            const completedCount = categoryProducts.filter(p => prices[p.id] && prices[p.id] !== '').length;
+            const completedCount = categoryProducts.filter(p => hasValidPrice(prices[p.id])).length;
             const percentage = categoryProducts.length > 0 ? Math.round((completedCount / categoryProducts.length) * 100) : 0;
             return { ...category, products: categoryProducts, completedCount, totalCount: categoryProducts.length, percentage };
         });
     }, [categories, products, prices]);
 
-    const totalCompleted = Object.values(prices).filter(p => p && p !== '').length;
+    const totalCompleted = Object.values(prices).filter(hasValidPrice).length;
     const totalPercentage = products.length > 0 ? Math.round((totalCompleted / products.length) * 100) : 0;
 
     return (
@@ -272,7 +274,14 @@ const RegistrationSummary = ({ products, categories, prices, onEdit, onCategoryC
 export default function RegistrationWizard({ commerce, products, categories, initialDraft, onClose, onSubmitSuccess }) {
     const toast = useToast();
     const [step, setStep] = useState(0);
-    const [localPrices, setLocalPrices] = useState(initialDraft || {});
+    const [localPrices, setLocalPrices] = useState(() => {
+        // Usar initialDraft del servidor; si está vacío, intentar recuperar de localStorage
+        if (initialDraft && Object.keys(initialDraft).length > 0) return initialDraft;
+        try {
+            const saved = localStorage.getItem(`draft_${commerce.id}`);
+            return saved ? JSON.parse(saved) : {};
+        } catch { return {}; }
+    });
     const [alertInfo, setAlertInfo] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedCategoryId, setSelectedCategoryId] = useState(null);
@@ -282,6 +291,15 @@ export default function RegistrationWizard({ commerce, products, categories, ini
     const [touchStart, setTouchStart] = useState({ x: null, y: null });
     const [touchEnd, setTouchEnd] = useState({ x: null, y: null });
     const minSwipeDistance = 50;
+
+    // Guardar borrador en localStorage como respaldo ante pérdida de sesión
+    const draftKey = `draft_${commerce.id}`;
+    useEffect(() => {
+        const hasData = Object.values(localPrices).some(hasValidPrice);
+        if (hasData) {
+            localStorage.setItem(draftKey, JSON.stringify(localPrices));
+        }
+    }, [localPrices, draftKey]);
 
     const categoriesMap = useMemo(() => {
         const map = {};
@@ -377,7 +395,7 @@ export default function RegistrationWizard({ commerce, products, categories, ini
     const handlePrev = () => { if (step > 0) setStep(prev => Math.max(prev - 1, 0)); };
     
     const confirmSubmission = () => {
-        const filledCount = Object.values(localPrices).filter(p => p || p === 0).length;
+        const filledCount = Object.values(localPrices).filter(hasValidPrice).length;
         const confirmationMessage = `Has completado ${filledCount} de ${sortedProducts.length} productos. ¿Deseas enviar el formulario?`;
         setAlertInfo({
             message: confirmationMessage,
@@ -390,14 +408,19 @@ export default function RegistrationWizard({ commerce, products, categories, ini
         const pricesToSubmit = sortedProducts
             .map(p => ({
                 productId: p.id,
-                price: localPrices[p.id] && !isNaN(parseFloat(localPrices[p.id])) ? parseFloat(localPrices[p.id]) : null,
+                price: hasValidPrice(localPrices[p.id]) ? parseInt(localPrices[p.id], 10) : null,
                 commerceId: commerce.id
             }))
             .filter(p => p.price !== null);
 
         setIsSubmitting(true);
         try {
-            await apiFetch('/api/submit-prices', { method: 'POST', body: JSON.stringify(pricesToSubmit) });
+            await apiFetch('/api/submit-prices', {
+                method: 'POST',
+                body: JSON.stringify(pricesToSubmit),
+                skipAuthRedirect: true,
+            });
+            localStorage.removeItem(`draft_${commerce.id}`);
             onSubmitSuccess(commerce.id);
         } catch (error) {
             toast.error(error.message || 'No se pudieron guardar los precios');

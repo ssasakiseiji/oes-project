@@ -40,7 +40,9 @@ export const checkCollectionPeriod = async (req, res, next) => {
     try {
         const query = `
             SELECT id, start_date, end_date FROM periods
-            WHERE status = 'Open' AND NOW()::DATE BETWEEN start_date AND end_date;
+            WHERE status = 'Open'
+            ORDER BY id DESC
+            LIMIT 1;
         `;
         const result = await pool.query(query);
 

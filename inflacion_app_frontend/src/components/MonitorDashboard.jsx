@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Select from 'react-select';
-import { CheckCircle, Clock, Search, ChevronRight, PieChart, Users, ListFilter, Smile, Store, TrendingUp, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, X } from 'lucide-react';
+import { CheckCircle, Clock, Search, ChevronRight, PieChart, Users, ListFilter, Smile, Store, TrendingUp, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, X, XCircle } from 'lucide-react';
 import { apiFetch } from '../api';
 import { useTheme } from '../contexts/ThemeContext';
 import { getReactSelectStyles } from '../utils/reactSelectStyles';
@@ -329,11 +329,11 @@ function MonitorDashboard({ user }) {
         case 'progress':
           return b.progressPercentage - a.progressPercentage;
         case 'status':
-          // Primero los que tienen tareas pendientes
-          const aHasPending = a.tasks.some(t => t.status !== 'Completado');
-          const bHasPending = b.tasks.some(t => t.status !== 'Completado');
-          if (aHasPending && !bHasPending) return -1;
-          if (!aHasPending && bHasPending) return 1;
+          // Primero los que tienen tareas sin completar
+          const aHasIncomplete = a.tasks.some(t => t.status !== 'Completado');
+          const bHasIncomplete = b.tasks.some(t => t.status !== 'Completado');
+          if (aHasIncomplete && !bHasIncomplete) return -1;
+          if (!aHasIncomplete && bHasIncomplete) return 1;
           return a.studentName.localeCompare(b.studentName);
         case 'level':
           // Ordenar por nivel de completitud (bajo primero = más problemáticos arriba)
@@ -366,7 +366,8 @@ function MonitorDashboard({ user }) {
     const styles = {
       'Completado': completionLevel ? completionStyles[completionLevel] : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
       'En Proceso': 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
-      'Pendiente': 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
+      'Pendiente': 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600',
+      'No completado': 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
     };
     const completionIcons = {
       'alto': <CheckCircle size={14} />,
@@ -376,7 +377,8 @@ function MonitorDashboard({ user }) {
     const icon = {
         'Completado': completionLevel ? completionIcons[completionLevel] : <CheckCircle size={14} />,
         'En Proceso': <Clock size={14} />,
-        'Pendiente': <div className="w-2.5 h-2.5 rounded-full bg-gray-400 dark:bg-gray-500" />
+        'Pendiente': <div className="w-2.5 h-2.5 rounded-full bg-gray-400 dark:bg-gray-500" />,
+        'No completado': <XCircle size={14} />
     }
     const levelLabels = { 'alto': 'Alto', 'medio': 'Medio', 'bajo': 'Bajo' };
     const label = status === 'Completado' && completionLevel
@@ -405,6 +407,7 @@ function MonitorDashboard({ user }) {
     { value: 'Completado:bajo', label: 'Completado: Bajo', indent: true },
     { value: 'En Proceso', label: 'En Proceso' },
     { value: 'Pendiente', label: 'Pendiente' },
+    { value: 'No completado', label: 'No completado' },
   ];
 
   return (

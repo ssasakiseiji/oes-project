@@ -7,6 +7,8 @@ import { DashboardSkeleton } from './Skeleton';
 import { apiFetch } from '../api';
 import { useToast } from './Toast';
 
+const hasValidPrice = (price) => price != null && price !== '' && price !== undefined;
+
 // Lazy load RegistrationWizard para mejorar el performance del bundle inicial
 const RegistrationWizard = lazy(() => import('./RegistrationWizard'));
 
@@ -56,7 +58,7 @@ const RegistrationSummary = ({ products, categories, prices, title }) => {
     const summaryData = useMemo(() => {
         return categories.map(category => {
             const categoryProducts = products.filter(p => p.categoryId === category.id);
-            const completedCount = categoryProducts.filter(p => prices[p.id] || prices[p.id] === 0).length;
+            const completedCount = categoryProducts.filter(p => hasValidPrice(prices[p.id])).length;
             const percentage = categoryProducts.length > 0 ? (completedCount / categoryProducts.length) * 100 : 0;
             return { ...category, products: categoryProducts, completedCount, percentage };
         });
@@ -109,7 +111,7 @@ const RegistrationSummary = ({ products, categories, prices, title }) => {
                         {isCategoryActive && (
                             <ul className="space-y-2 p-3 pt-0 animate-fade-in">
                                 {category.products.map(p => {
-                                    const hasPrice = prices[p.id] || prices[p.id] === 0;
+                                    const hasPrice = hasValidPrice(prices[p.id]);
                                     return (
                                         <li
                                             key={p.id}
@@ -181,12 +183,17 @@ function StudentDashboard({ user }) {
         if (editingCommerce) {
             setIsSaving(true);
             try {
-                await apiFetch('/api/save-draft', { method: 'POST', body: JSON.stringify({ commerceId: editingCommerce.id, prices: draftData }) });
-                const newData = await apiFetch('/api/student/dashboard');
+                await apiFetch('/api/save-draft', {
+                    method: 'POST',
+                    body: JSON.stringify({ commerceId: editingCommerce.id, prices: draftData }),
+                    skipAuthRedirect: true,
+                });
+                const newData = await apiFetch('/api/student/dashboard', { skipAuthRedirect: true });
                 setDashboardData(newData);
                 toast.success('Borrador guardado exitosamente');
             } catch (err) {
-                toast.error(err.message || 'Error al guardar el borrador');
+                // Si la sesión expiró o el período cerró, el borrador ya está en localStorage
+                toast.info?.('Borrador guardado localmente') ?? toast.success('Borrador guardado localmente');
             } finally {
                 setIsSaving(false);
             }
@@ -320,7 +327,7 @@ function StudentDashboard({ user }) {
                     <div className="space-y-3">
                         {activePeriodData.tasks.map((task, index) => {
                             const prices = task.status === 'Completado' ? task.submittedPrices : task.draftPrices;
-                            const completedCount = Object.values(prices).filter(p => p || p === 0).length;
+                            const completedCount = Object.values(prices).filter(hasValidPrice).length;
                             const totalCount = staticData.products.length;
                             const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
                             const isTaskActive = activeCommerce === task.commerceId;
