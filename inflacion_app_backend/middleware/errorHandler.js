@@ -1,5 +1,12 @@
+import * as Sentry from '@sentry/node';
+
+// eslint-disable-next-line no-unused-vars -- Express detecta el error handler por su aridad de 4 args
 export const errorHandler = (err, req, res, next) => {
     console.error('Error:', err);
+
+    if (process.env.SENTRY_DSN && (!err.statusCode || err.statusCode >= 500)) {
+        Sentry.captureException(err);
+    }
 
     // Database errors
     if (err.code === '23505') {

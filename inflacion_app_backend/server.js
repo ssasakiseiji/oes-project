@@ -3,9 +3,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { initSentry } from './lib/sentry.js';
 
 // Load environment variables
 dotenv.config();
+
+// Error tracking (no-op si no hay SENTRY_DSN configurado)
+initSentry();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,7 +30,9 @@ const corsOptions = {
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            callback(null, true); // Temporal: permitir todos los orígenes
+            const error = new Error('No permitido por CORS');
+            error.statusCode = 403;
+            callback(error);
         }
     },
     credentials: true

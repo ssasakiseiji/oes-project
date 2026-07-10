@@ -24,6 +24,9 @@ build
 .env.local
 .env.*.local
 
+# Backups locales de la base de datos
+backups/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

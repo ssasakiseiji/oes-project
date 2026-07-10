@@ -169,7 +169,7 @@ export const adminService = {
 
     async getHistoricalData(productId, categoryId) {
         let query;
-        let params = [];
+        let params;
 
         if (productId) {
             query = `

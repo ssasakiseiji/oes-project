@@ -1,19 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from '@jest/globals';
-import { authService } from './authService.js';
+import { describe, it, expect, jest } from '@jest/globals';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-// Mock dependencies
-vi.mock('../config/database.js', () => ({
+// Mock dependencies (debe registrarse antes de importar el módulo bajo prueba)
+jest.unstable_mockModule('../config/database.js', () => ({
     default: {
-        query: vi.fn(),
+        query: jest.fn(),
     },
 }));
+
+const { authService } = await import('./authService.js');
+const pool = (await import('../config/database.js')).default;
 
 describe('authService', () => {
     describe('login', () => {
         it('should throw error when user is not found', async () => {
-            const pool = (await import('../config/database.js')).default;
             pool.query.mockResolvedValue({ rows: [] });
 
             await expect(
@@ -22,7 +23,6 @@ describe('authService', () => {
         });
 
         it('should throw error when password is incorrect', async () => {
-            const pool = (await import('../config/database.js')).default;
             const hashedPassword = await bcrypt.hash('correctpassword', 10);
 
             pool.query.mockResolvedValue({
@@ -41,7 +41,6 @@ describe('authService', () => {
         });
 
         it('should return token and user data when credentials are correct', async () => {
-            const pool = (await import('../config/database.js')).default;
             const hashedPassword = await bcrypt.hash('correctpassword', 10);
 
             pool.query.mockResolvedValue({
