@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// Escrito a mano a partir de supabase-setup.sql + migrations/*.sql
+// (inflacion_app_backend), porque el sandbox de esta sesión no tiene
+// salida de red hacia la base de Supabase para introspectar con
+// `prisma db pull`. Antes de confiar en este schema para producción,
+// correr `npx prisma db pull` con acceso real a la base y comparar
+// el diff contra este archivo.
+
+// Se usa el generador clásico "prisma-client-js" (en vez del nuevo "prisma-client")
+// porque el segundo emite `import.meta.url` de forma incondicional y este proyecto
+// Nest compila a CommonJS por defecto (sin "type": "module" en package.json) — con
+// el generador nuevo, `nest build`/`tsc` falla al toparse con import.meta en un
+// archivo resuelto como CJS. prisma-client-js es CJS/UMD-safe.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 ya no acepta `url` acá — la connection string se pasa como
+// "driver adapter" al constructor de PrismaClient (ver src/prisma/prisma.service.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(255)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  roles        String[] @default(["student"])
+  createdAt    DateTime? @default(now()) @map("created_at")
+
+  prices              Price[]
+  draftPrices         DraftPrice[]
+  commerceAssignments CommerceAssignment[] @relation("AssignedUser")
+  assignmentsMade     CommerceAssignment[] @relation("AssignedByUser")
+
+  @@map("users")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(255)
+  unit       String    @db.VarChar(50)
+  categoryId Int?      @map("category_id")
+  createdAt  DateTime? @default(now()) @map("created_at")
+
+  category    Category?    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  prices      Price[]
+  draftPrices DraftPrice[]
+
+  @@index([categoryId], map: "idx_products_category")
+  @@map("products")
+}
+
+model Commerce {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  address   String?
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  prices              Price[]
+  draftPrices         DraftPrice[]
+  commerceAssignments CommerceAssignment[]
+
+  @@map("commerces")
+}
+
+model Period {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  month     Int
+  year      Int
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime  @map("end_date") @db.Date
+  status    String    @default("Scheduled") @db.VarChar(50)
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  prices      Price[]
+  draftPrices DraftPrice[]
+
+  @@unique([month, year])
+  @@map("periods")
+}
+
+model Price {
+  id         Int       @id @default(autoincrement())
+  price      Decimal   @db.Decimal(10, 2)
+  periodId   Int?      @map("period_id")
+  productId  Int?      @map("product_id")
+  userId     Int?      @map("user_id")
+  commerceId Int?      @map("commerce_id")
+  createdAt  DateTime? @default(now()) @map("created_at")
+
+  period   Period?   @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commerce Commerce? @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  // migrations/002-prices-integrity.sql
+  @@unique([userId, productId, commerceId, periodId], map: "prices_unique_submission")
+  @@index([periodId], map: "idx_prices_period")
+  @@index([productId], map: "idx_prices_product")
+  @@index([userId], map: "idx_prices_user")
+  @@index([commerceId], map: "idx_prices_commerce")
+  @@index([userId, periodId, commerceId], map: "idx_prices_user_period_commerce")
+  @@map("prices")
+}
+
+model DraftPrice {
+  id         Int       @id @default(autoincrement())
+  price      Decimal   @db.Decimal(10, 2)
+  periodId   Int?      @map("period_id")
+  productId  Int?      @map("product_id")
+  userId     Int?      @map("user_id")
+  commerceId Int?      @map("commerce_id")
+  createdAt  DateTime? @default(now()) @map("created_at")
+  updatedAt  DateTime? @default(now()) @map("updated_at")
+
+  period   Period?   @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commerce Commerce? @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, commerceId, periodId], map: "idx_draft_prices_user_commerce_period")
+  @@map("draft_prices")
+}
+
+// migrations/add-commerce-assignments.sql
+model CommerceAssignment {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @map("user_id")
+  commerceId Int       @map("commerce_id")
+  assignedAt DateTime? @default(now()) @map("assigned_at")
+  assignedBy Int?      @map("assigned_by")
+
+  user           User     @relation("AssignedUser", fields: [userId], references: [id], onDelete: Cascade)
+  commerce       Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  assignedByUser User?    @relation("AssignedByUser", fields: [assignedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, commerceId])
+  @@index([userId], map: "idx_commerce_assignments_user")
+  @@index([commerceId], map: "idx_commerce_assignments_commerce")
+  @@map("commerce_assignments")
+}
