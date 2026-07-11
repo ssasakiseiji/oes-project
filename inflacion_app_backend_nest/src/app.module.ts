@@ -7,6 +7,8 @@ import { CategoriesModule } from './categories/categories.module';
 import { ProductsModule } from './products/products.module';
 import { CommercesModule } from './commerces/commerces.module';
 import { CommerceAssignmentsModule } from './commerce-assignments/commerce-assignments.module';
+import { StudentsModule } from './students/students.module';
+import { MonitorModule } from './monitor/monitor.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { CommerceAssignmentsModule } from './commerce-assignments/commerce-assig
     ProductsModule,
     CommercesModule,
     CommerceAssignmentsModule,
+    StudentsModule,
+    MonitorModule,
   ],
   controllers: [AppController],
 })
