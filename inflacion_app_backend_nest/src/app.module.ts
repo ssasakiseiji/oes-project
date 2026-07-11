@@ -9,6 +9,7 @@ import { CommercesModule } from './commerces/commerces.module';
 import { CommerceAssignmentsModule } from './commerce-assignments/commerce-assignments.module';
 import { StudentsModule } from './students/students.module';
 import { MonitorModule } from './monitor/monitor.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { MonitorModule } from './monitor/monitor.module';
     CommerceAssignmentsModule,
     StudentsModule,
     MonitorModule,
+    AdminModule,
   ],
   controllers: [AppController],
 })
