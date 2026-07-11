@@ -20,7 +20,7 @@ export const monitorService = {
                 SELECT pr.user_id, pr.commerce_id, pr.period_id, pr.product_id, pr.price
                 FROM prices pr
             `),
-            pool.query('SELECT user_id, commerce_id, period_id, product_id FROM draft_prices'),
+            pool.query('SELECT user_id, commerce_id, period_id, product_id, price FROM draft_prices'),
             pool.query('SELECT id, name FROM commerces') // Fetch commerce names
         ]);
 
