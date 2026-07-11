@@ -13,8 +13,8 @@ process.env.JWT_SECRET = 'test-jwt-secret-key';
 // adminRoutes.test.js (categories en vez de admin, ya que es el módulo
 // portado en esta fase). Se mockea PrismaService para no depender de una
 // base de datos real corriendo durante los tests.
-const prismaMock = {
-  user: { findUnique: jest.fn() },
+const prismaMockBase = {
+  user: { findUnique: jest.fn(), findMany: jest.fn() },
   category: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
@@ -22,7 +22,36 @@ const prismaMock = {
     update: jest.fn(),
     delete: jest.fn(),
   },
-  product: { count: jest.fn() },
+  product: {
+    count: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
+  commerce: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
+  commerceAssignment: {
+    findMany: jest.fn(),
+    deleteMany: jest.fn(),
+    createMany: jest.fn(),
+  },
+  draftPrice: { deleteMany: jest.fn() },
+};
+
+// $transaction se agrega por separado (en vez de en el mismo objeto literal)
+// para evitar que TS tenga que resolver el tipo de prismaMock de forma
+// circular, lo que degradaba todo a `any` y disparaba no-unsafe-call en cada
+// mock.methodName.mockResolvedValue(...) de los tests.
+const prismaMock = {
+  ...prismaMockBase,
+  $transaction: jest.fn((callback: (tx: typeof prismaMockBase) => unknown) =>
+    callback(prismaMockBase),
+  ),
 };
 
 describe('App (e2e)', () => {
@@ -144,6 +173,113 @@ describe('App (e2e)', () => {
         .expect(200);
 
       expect(res.body).toEqual([{ id: 1, name: 'Alimentos' }]);
+    });
+  });
+
+  describe('Autorización de /api/products', () => {
+    const studentToken = () =>
+      jwt.sign(
+        { id: 2, name: 'Estudiante', roles: ['student'] },
+        process.env.JWT_SECRET as string,
+      );
+
+    it('rechaza acceso sin token con 401', () => {
+      return request(app.getHttpServer())
+        .post('/api/products')
+        .send({ name: 'Arroz', unit: '1 kg', categoryId: 1 })
+        .expect(401);
+    });
+
+    it('permite crear a cualquier usuario autenticado (sin restricción de rol, igual que el Express actual)', () => {
+      prismaMock.product.create.mockResolvedValue({
+        id: 1,
+        name: 'Arroz',
+        unit: '1 kg',
+        categoryId: 1,
+      });
+
+      return request(app.getHttpServer())
+        .post('/api/products')
+        .set('Authorization', `Bearer ${studentToken()}`)
+        .send({ name: 'Arroz', unit: '1 kg', categoryId: 1 })
+        .expect(201);
+    });
+  });
+
+  describe('Autorización de /api/commerces', () => {
+    it('rechaza acceso sin token con 401', () => {
+      return request(app.getHttpServer()).get('/api/commerces').expect(401);
+    });
+
+    it('rechaza escritura de usuarios sin rol admin con 403', () => {
+      const token = jwt.sign(
+        { id: 2, name: 'Estudiante', roles: ['student'] },
+        process.env.JWT_SECRET as string,
+      );
+
+      return request(app.getHttpServer())
+        .post('/api/commerces')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Comercio Nuevo', address: 'Calle 1' })
+        .expect(403);
+    });
+
+    it('permite crear a un admin', () => {
+      const token = jwt.sign(
+        { id: 1, name: 'Admin', roles: ['admin'] },
+        process.env.JWT_SECRET as string,
+      );
+      prismaMock.commerce.create.mockResolvedValue({
+        id: 1,
+        name: 'Comercio Nuevo',
+        address: 'Calle 1',
+      });
+
+      return request(app.getHttpServer())
+        .post('/api/commerces')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Comercio Nuevo', address: 'Calle 1' })
+        .expect(201);
+    });
+  });
+
+  describe('Autorización de /api/commerce-assignments', () => {
+    it('rechaza acceso sin token con 401', () => {
+      return request(app.getHttpServer())
+        .get('/api/commerce-assignments/students')
+        .expect(401);
+    });
+
+    it('rechaza a usuarios sin rol admin con 403 (todas las rutas son admin-only)', () => {
+      const token = jwt.sign(
+        { id: 2, name: 'Estudiante', roles: ['student'] },
+        process.env.JWT_SECRET as string,
+      );
+
+      return request(app.getHttpServer())
+        .get('/api/commerce-assignments/students')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(403);
+    });
+
+    it('permite a un admin asignar comercios a un estudiante', async () => {
+      const token = jwt.sign(
+        { id: 1, name: 'Admin', roles: ['admin'] },
+        process.env.JWT_SECRET as string,
+      );
+      prismaMock.commerceAssignment.findMany.mockResolvedValue([]);
+      prismaMock.commerceAssignment.createMany.mockResolvedValue({ count: 2 });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/commerce-assignments/student/5')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ commerceIds: [1, 2] })
+        .expect(200);
+
+      expect(res.body).toHaveProperty(
+        'message',
+        'Comercios asignados exitosamente',
+      );
     });
   });
 });
