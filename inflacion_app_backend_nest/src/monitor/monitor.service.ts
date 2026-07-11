@@ -41,14 +41,13 @@ export class MonitorService {
           price: true,
         },
       }),
-      // Igual que el original: no se selecciona `price` acá, solo se usa
-      // para detectar la existencia de un borrador ("En Proceso").
       this.prisma.draftPrice.findMany({
         select: {
           userId: true,
           commerceId: true,
           periodId: true,
           productId: true,
+          price: true,
         },
       }),
       this.prisma.commerce.findMany({ select: { id: true, name: true } }),
@@ -121,7 +120,7 @@ export class MonitorService {
             const draftPricesMap = draftPricesForTask.reduce<
               Record<string, unknown>
             >((acc, d) => {
-              if (d.productId != null) acc[d.productId] = undefined;
+              if (d.productId != null) acc[d.productId] = d.price;
               return acc;
             }, {});
 
