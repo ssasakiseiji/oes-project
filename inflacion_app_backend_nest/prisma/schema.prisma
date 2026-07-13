@@ -2,11 +2,19 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 //
 // Escrito a mano a partir de supabase-setup.sql + migrations/*.sql
-// (inflacion_app_backend), porque el sandbox de esta sesión no tiene
-// salida de red hacia la base de Supabase para introspectar con
-// `prisma db pull`. Antes de confiar en este schema para producción,
-// correr `npx prisma db pull` con acceso real a la base y comparar
-// el diff contra este archivo.
+// (inflacion_app_backend).
+//
+// Verificado (Fase F, 2026-07-13) con `prisma db pull --print` contra el
+// Postgres local de docker-compose (bootstrapeado por los mismos SQL de
+// arriba) — sin mismatches semánticos: tipos, nullability, defaults,
+// índices, unique constraints y onDelete/onUpdate de cada FK coinciden
+// modelo por modelo. La única diferencia superficial fue que introspección
+// omite `onDelete: SetNull` en CommerceAssignment.assignedByUser porque
+// coincide con el default implícito de Prisma para relaciones opcionales
+// (confirmado además contra la DDL: `assigned_by ... REFERENCES users(id)
+// ON DELETE SET NULL`) — no es un gap real. Pendiente (fuera de esta
+// verificación, no bloqueante): confirmar que la Supabase real en producción
+// no divergió de supabase-setup.sql vía ediciones manuales en el dashboard.
 
 // Se usa el generador clásico "prisma-client-js" (en vez del nuevo "prisma-client")
 // porque el segundo emite `import.meta.url` de forma incondicional y este proyecto
