@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { TrendingUp, Mail, Lock, Loader2 } from 'lucide-react';
 import type { LoginResponse } from '../types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
 interface LoginPageProps {
     onLoginSuccess: (response: LoginResponse) => void;

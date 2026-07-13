@@ -47,6 +47,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
+    // Sentry parity con errorHandler.js (Sentry.captureException en 5xx)
+    // deliberadamente diferida — @sentry/node no está entre las deps de
+    // este backend todavía; ver decisión de Fase F.
     console.error('Error:', exception);
     response
       .status(HttpStatus.INTERNAL_SERVER_ERROR)

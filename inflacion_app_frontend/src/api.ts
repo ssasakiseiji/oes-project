@@ -1,5 +1,5 @@
 // Obtener la URL base de la API desde las variables de entorno
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
     headers?: Record<string, string>;
