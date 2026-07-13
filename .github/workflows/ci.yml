@@ -23,6 +23,25 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  backend-nest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inflacion_app_backend_nest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: inflacion_app_backend_nest/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:e2e
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
