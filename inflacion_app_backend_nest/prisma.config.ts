@@ -7,6 +7,13 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // Solo corre con `npx prisma db seed` explícito — no se engancha a
+    // `migrate deploy` (ver prisma/seed.ts, Fase G). Usa un tsconfig propio
+    // (prisma/tsconfig.seed.json) que fuerza CommonJS: con "module":
+    // "nodenext" (tsconfig.json base), el detector de formato ESM/CJS de
+    // ts-node rompe con "Unknown file extension .ts" al ejecutar un script
+    // suelto.
+    seed: "npx ts-node --project prisma/tsconfig.seed.json prisma/seed.ts",
   },
   datasource: {
     url: process.env["DATABASE_URL"],
