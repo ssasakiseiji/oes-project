@@ -57,6 +57,55 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Base de datos (Prisma Migrate)
+
+Desde la Fase G de la migración, el schema de la base lo maneja Prisma
+Migrate — no SQL a mano.
+
+### Cambiar el schema
+
+1. Editar `prisma/schema.prisma`.
+2. `npx prisma migrate dev --name <descripcion>` — genera y aplica una
+   migración nueva contra tu base local, y regenera el client.
+3. Commitear la carpeta `prisma/migrations/<timestamp>_<descripcion>/`
+   junto con el cambio de schema.
+
+### Deploy
+
+El contenedor del backend corre `prisma migrate deploy` automáticamente al
+arrancar (ver `Dockerfile` / script `start:migrate`) — aplica cualquier
+migración pendiente y no hace nada si ya están todas aplicadas. Es seguro
+que corra en cada restart.
+
+### Adoptar una base EXISTENTE (ej. la Supabase de producción)
+
+La primera vez que esta app se apunte a una base que **ya tiene** el schema
+(creada a mano con `supabase-setup.sql` + `inflacion_app_backend/migrations/*.sql`,
+de antes de esta fase), hay que decirle a Prisma que la migración baseline
+(`0_init`) ya está aplicada, para que no intente recrear tablas existentes:
+
+```bash
+DATABASE_URL="<la url real>" npx prisma migrate resolve --applied 0_init
+```
+
+Correr esto **una sola vez**, antes del primer deploy del backend nuevo
+contra esa base. Si se corre `migrate deploy` sin este paso primero, va a
+fallar con "relation already exists".
+
+### Datos de demo/test
+
+`prisma migrate deploy` solo crea el schema, no inserta datos. Para
+popular las categorías/productos/comercios/usuarios de prueba (los mismos
+que tenía `supabase-setup.sql`):
+
+```bash
+npx prisma db seed
+```
+
+No se corre automáticamente (ni en `migrate deploy` ni al arrancar el
+contenedor) porque son credenciales de test, no algo para insertar en
+cualquier entorno sin pensarlo — ver `prisma/seed.ts`.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
