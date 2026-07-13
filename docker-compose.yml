@@ -37,7 +37,11 @@ services:
     build:
       context: ./inflacion_app_frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-/api}
+        # Vacío a propósito: mismo origen, detrás del proxy nginx que monta
+        # /api (ver nginx.conf). El código del frontend ya antepone /api a
+        # cada request — un valor no vacío acá duplicaría el prefijo
+        # (/api/api/...). Ver comentario en src/api.ts.
+        VITE_API_URL: ${VITE_API_URL:-}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     restart: unless-stopped
     depends_on:
