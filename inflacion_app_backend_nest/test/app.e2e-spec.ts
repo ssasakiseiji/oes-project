@@ -132,6 +132,27 @@ describe('App (e2e)', () => {
         roles: ['student'],
       });
     });
+
+    it('devuelve 429 luego de 10 intentos fallidos en la ventana (igual que rateLimiter.js)', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(null);
+
+      for (let i = 0; i < 10; i++) {
+        await request(app.getHttpServer())
+          .post('/api/login')
+          .send({ email: 'test@test.com', password: 'incorrecta' })
+          .expect(401);
+      }
+
+      const res = await request(app.getHttpServer())
+        .post('/api/login')
+        .send({ email: 'test@test.com', password: 'incorrecta' })
+        .expect(429);
+
+      expect(res.body).toHaveProperty(
+        'message',
+        'Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.',
+      );
+    });
   });
 
   describe('GET /api/me', () => {
