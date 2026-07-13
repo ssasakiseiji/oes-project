@@ -3,3 +3,7 @@ node_modules
 .env
 
 /generated/prisma
+
+# TypeScript incremental build cache — lives at the project root (not inside
+# dist/), so it survives `rm -rf dist` and must be ignored separately.
+*.tsbuildinfo
