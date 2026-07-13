@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { TrendingUp, Mail, Lock, Loader2 } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Ver comentario equivalente en api.js sobre por qué ?? y no ||.
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
 function LoginPage({ onLoginSuccess }) {
     const [email, setEmail] = useState('');
