@@ -1,4 +1,9 @@
 services:
+  # Sin scripts de init: el schema lo crea `prisma migrate deploy`, que el
+  # servicio backend corre al arrancar (ver inflacion_app_backend_nest/
+  # Dockerfile y prisma/migrations/, Fase G). Antes se bootstrapeaba acá
+  # con supabase-setup.sql + inflacion_app_backend/migrations/*.sql — esos
+  # archivos quedan como referencia histórica, ya no los usa nada.
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -8,9 +13,6 @@ services:
       POSTGRES_DB: ${DB_DATABASE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./supabase-setup.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./inflacion_app_backend/migrations/002-prices-integrity.sql:/docker-entrypoint-initdb.d/02-prices-integrity.sql:ro
-      - ./inflacion_app_backend/migrations/add-commerce-assignments.sql:/docker-entrypoint-initdb.d/03-commerce-assignments.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE}"]
       interval: 5s
