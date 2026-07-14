@@ -15,6 +15,20 @@
 // ON DELETE SET NULL`) — no es un gap real. Pendiente (fuera de esta
 // verificación, no bloqueante): confirmar que la Supabase real en producción
 // no divergió de supabase-setup.sql vía ediciones manuales en el dashboard.
+//
+// Fase H (2026-07-13): renombrado de dominio — la app deja de ser una app
+// de "precios" para ser una plataforma genérica de recolección de datos de
+// variables. Category/Product/Commerce/Price/DraftPrice/CommerceAssignment
+// pasan a StudyField/Variable/ObservationUnit/Observation/DraftObservation/
+// ObservationUnitAssignment. Variable gana `dataType`/`config` para soportar
+// tipos de dato más allá de numérico (categórico/booleano/texto); Observation
+// y DraftObservation guardan el valor en columnas tipadas separadas
+// (numericValue/textValue/booleanValue/choiceValue) en vez de un único
+// campo `price` — así el análisis estadístico (AVG/STDDEV) sigue corriendo
+// nativo sobre `numericValue` sin casts, y automáticamente queda
+// numeric-only (las filas no numéricas tienen `numericValue IS NULL`, que
+// los agregados de Postgres ya ignoran). Ver prisma/migrations/ para el
+// rename+backfill que preserva los datos existentes.
 
 // Se usa el generador clásico "prisma-client-js" (en vez del nuevo "prisma-client")
 // porque el segundo emite `import.meta.url` de forma incondicional y este proyecto
@@ -40,57 +54,70 @@ datasource db {
 // original (ver Fase G).
 
 model User {
-  id           Int      @id @default(autoincrement())
-  name         String   @db.VarChar(255)
-  email        String   @unique @db.VarChar(255)
-  passwordHash String   @map("password_hash") @db.VarChar(255)
-  roles        String[] @default(["student"])
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(255)
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  roles        String[]  @default(["student"])
   createdAt    DateTime? @default(now()) @map("created_at")
 
-  prices              Price[]
-  draftPrices         DraftPrice[]
-  commerceAssignments CommerceAssignment[] @relation("AssignedUser")
-  assignmentsMade     CommerceAssignment[] @relation("AssignedByUser")
+  observations               Observation[]
+  draftObservations          DraftObservation[]
+  observationUnitAssignments ObservationUnitAssignment[] @relation("AssignedUser")
+  assignmentsMade            ObservationUnitAssignment[] @relation("AssignedByUser")
 
   @@map("users")
 }
 
-model Category {
+model StudyField {
   id        Int       @id @default(autoincrement())
   name      String    @db.VarChar(255)
   createdAt DateTime? @default(now()) @map("created_at")
 
-  products Product[]
+  variables Variable[]
 
-  @@map("categories")
+  @@map("study_fields")
 }
 
-model Product {
-  id         Int       @id @default(autoincrement())
-  name       String    @db.VarChar(255)
-  unit       String    @db.VarChar(50)
-  categoryId Int?      @map("category_id")
-  createdAt  DateTime? @default(now()) @map("created_at")
+// dataType: 'numeric' | 'categorical' | 'boolean' | 'text' — String + CHECK
+// constraint (ver migrations/), mismo patrón que Period.status en vez de un
+// enum de Prisma, para seguir la convención ya establecida en este schema.
+//
+// config (Json?, forma depende de dataType, validada por Zod en el backend
+// — Postgres no modela esto, igual que la unicidad de nombre de categoría
+// ya es solo app-level):
+//   numeric:     { isCurrency: boolean, min?: number, max?: number, decimals?: number }
+//   categorical: { options: string[] }
+//   boolean:     null (sin config)
+//   text:        { maxLength?: number }
+model Variable {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(255)
+  unit         String?   @db.VarChar(50)
+  dataType     String    @default("numeric") @map("data_type") @db.VarChar(20)
+  config       Json?
+  studyFieldId Int?      @map("study_field_id")
+  createdAt    DateTime? @default(now()) @map("created_at")
 
-  category    Category?    @relation(fields: [categoryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  prices      Price[]
-  draftPrices DraftPrice[]
+  studyField        StudyField?        @relation(fields: [studyFieldId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observations      Observation[]
+  draftObservations DraftObservation[]
 
-  @@index([categoryId], map: "idx_products_category")
-  @@map("products")
+  @@index([studyFieldId], map: "idx_variables_study_field")
+  @@map("variables")
 }
 
-model Commerce {
+model ObservationUnit {
   id        Int       @id @default(autoincrement())
   name      String    @db.VarChar(255)
   address   String?
   createdAt DateTime? @default(now()) @map("created_at")
 
-  prices              Price[]
-  draftPrices         DraftPrice[]
-  commerceAssignments CommerceAssignment[]
+  observations               Observation[]
+  draftObservations          DraftObservation[]
+  observationUnitAssignments ObservationUnitAssignment[]
 
-  @@map("commerces")
+  @@map("observation_units")
 }
 
 model Period {
@@ -103,70 +130,82 @@ model Period {
   status    String    @default("Scheduled") @db.VarChar(50)
   createdAt DateTime? @default(now()) @map("created_at")
 
-  prices      Price[]
-  draftPrices DraftPrice[]
+  observations      Observation[]
+  draftObservations DraftObservation[]
 
   @@unique([month, year])
   @@map("periods")
 }
 
-model Price {
-  id         Int       @id @default(autoincrement())
-  price      Decimal   @db.Decimal(10, 2)
-  periodId   Int?      @map("period_id")
-  productId  Int?      @map("product_id")
-  userId     Int?      @map("user_id")
-  commerceId Int?      @map("commerce_id")
-  createdAt  DateTime? @default(now()) @map("created_at")
+// Solo una de numericValue/textValue/booleanValue/choiceValue debería estar
+// poblada por fila (la que corresponde al dataType de la Variable referenciada)
+// — enforced en el service layer (variable-value.ts), no en Postgres: un
+// CHECK constraint no puede validar contra el dataType de otra tabla. El
+// value_presence_check (ver migrations/) solo garantiza que AL MENOS una
+// esté poblada.
+model Observation {
+  id                Int       @id @default(autoincrement())
+  numericValue      Decimal?  @map("numeric_value") @db.Decimal(12, 2)
+  textValue         String?   @map("text_value")
+  booleanValue      Boolean?  @map("boolean_value")
+  choiceValue       String?   @map("choice_value") @db.VarChar(255)
+  periodId          Int?      @map("period_id")
+  variableId        Int?      @map("variable_id")
+  userId            Int?      @map("user_id")
+  observationUnitId Int?      @map("observation_unit_id")
+  createdAt         DateTime? @default(now()) @map("created_at")
 
-  period   Period?   @relation(fields: [periodId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  commerce Commerce? @relation(fields: [commerceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  period          Period?          @relation(fields: [periodId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variable        Variable?        @relation(fields: [variableId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observationUnit ObservationUnit? @relation(fields: [observationUnitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  // migrations/002-prices-integrity.sql
-  @@unique([userId, productId, commerceId, periodId], map: "prices_unique_submission")
-  @@index([periodId], map: "idx_prices_period")
-  @@index([productId], map: "idx_prices_product")
-  @@index([userId], map: "idx_prices_user")
-  @@index([commerceId], map: "idx_prices_commerce")
-  @@index([userId, periodId, commerceId], map: "idx_prices_user_period_commerce")
-  @@map("prices")
+  // migrations/002-prices-integrity.sql (heredado de Price)
+  @@unique([userId, variableId, observationUnitId, periodId], map: "observations_unique_submission")
+  @@index([periodId], map: "idx_observations_period")
+  @@index([variableId], map: "idx_observations_variable")
+  @@index([userId], map: "idx_observations_user")
+  @@index([observationUnitId], map: "idx_observations_observation_unit")
+  @@index([userId, periodId, observationUnitId], map: "idx_observations_user_period_observation_unit")
+  @@map("observations")
 }
 
-model DraftPrice {
-  id         Int       @id @default(autoincrement())
-  price      Decimal   @db.Decimal(10, 2)
-  periodId   Int?      @map("period_id")
-  productId  Int?      @map("product_id")
-  userId     Int?      @map("user_id")
-  commerceId Int?      @map("commerce_id")
-  createdAt  DateTime? @default(now()) @map("created_at")
-  updatedAt  DateTime? @default(now()) @map("updated_at")
+model DraftObservation {
+  id                Int       @id @default(autoincrement())
+  numericValue      Decimal?  @map("numeric_value") @db.Decimal(12, 2)
+  textValue         String?   @map("text_value")
+  booleanValue      Boolean?  @map("boolean_value")
+  choiceValue       String?   @map("choice_value") @db.VarChar(255)
+  periodId          Int?      @map("period_id")
+  variableId        Int?      @map("variable_id")
+  userId            Int?      @map("user_id")
+  observationUnitId Int?      @map("observation_unit_id")
+  createdAt         DateTime? @default(now()) @map("created_at")
+  updatedAt         DateTime? @default(now()) @map("updated_at")
 
-  period   Period?   @relation(fields: [periodId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  commerce Commerce? @relation(fields: [commerceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  period          Period?          @relation(fields: [periodId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variable        Variable?        @relation(fields: [variableId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observationUnit ObservationUnit? @relation(fields: [observationUnitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([userId, commerceId, periodId], map: "idx_draft_prices_user_commerce_period")
-  @@map("draft_prices")
+  @@index([userId, observationUnitId, periodId], map: "idx_draft_observations_user_observation_unit_period")
+  @@map("draft_observations")
 }
 
-// migrations/add-commerce-assignments.sql
-model CommerceAssignment {
-  id         Int       @id @default(autoincrement())
-  userId     Int       @map("user_id")
-  commerceId Int       @map("commerce_id")
-  assignedAt DateTime? @default(now()) @map("assigned_at")
-  assignedBy Int?      @map("assigned_by")
+// migrations/add-commerce-assignments.sql (heredado de CommerceAssignment)
+model ObservationUnitAssignment {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @map("user_id")
+  observationUnitId Int       @map("observation_unit_id")
+  assignedAt        DateTime? @default(now()) @map("assigned_at")
+  assignedBy        Int?      @map("assigned_by")
 
-  user           User     @relation("AssignedUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  commerce       Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  assignedByUser User?    @relation("AssignedByUser", fields: [assignedBy], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  user            User            @relation("AssignedUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observationUnit ObservationUnit @relation(fields: [observationUnitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assignedByUser  User?           @relation("AssignedByUser", fields: [assignedBy], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
-  @@unique([userId, commerceId])
-  @@index([userId], map: "idx_commerce_assignments_user")
-  @@index([commerceId], map: "idx_commerce_assignments_commerce")
-  @@map("commerce_assignments")
+  @@unique([userId, observationUnitId])
+  @@index([userId], map: "idx_observation_unit_assignments_user")
+  @@index([observationUnitId], map: "idx_observation_unit_assignments_observation_unit")
+  @@map("observation_unit_assignments")
 }
