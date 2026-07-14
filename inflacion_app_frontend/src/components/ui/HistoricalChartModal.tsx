@@ -11,21 +11,22 @@ export interface HistoricalChartModalProps {
     type: 'variable' | 'studyField' | null;
     id: number | null;
     name: string;
+    projectId: number;
 }
 
-export const HistoricalChartModal = ({ isOpen, onClose, type, id, name }: HistoricalChartModalProps) => {
+export const HistoricalChartModal = ({ isOpen, onClose, type, id, name, projectId }: HistoricalChartModalProps) => {
     const [data, setData] = useState<VariableHistoryRow[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         if (isOpen && id) {
             setIsLoading(true);
-            const query = type === 'variable' ? `?variableId=${id}` : `?studyFieldId=${id}`;
-            apiFetch<VariableHistoryRow[]>(`/api/variable-history${query}`)
+            const idParam = type === 'variable' ? `variableId=${id}` : `studyFieldId=${id}`;
+            apiFetch<VariableHistoryRow[]>(`/api/variable-history?projectId=${projectId}&${idParam}`)
                 .then(setData)
                 .finally(() => setIsLoading(false));
         }
-    }, [isOpen, type, id]);
+    }, [isOpen, type, id, projectId]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Evolución de "${name}"`}>

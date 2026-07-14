@@ -12,7 +12,7 @@ import { Pagination } from '../ui/Pagination';
 import { TableSkeleton } from '../ui/TableSkeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmModal } from '../ui/ConfirmModal';
-import type { ObservationUnit, StudyField, ObservationRow, Period, StudentTasksResponse, User, Variable, VariableDataType } from '../../types/api';
+import type { ObservationUnit, StudyField, ObservationRow, Period, ProjectMember, StudentTasksResponse, User, Variable, VariableDataType } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -66,7 +66,11 @@ type ExportRow = ObservationRow & { formattedValue: string };
 // nullable) y no tiene un único campo comparable con < / >.
 type SortableKey = 'variableName' | 'studyFieldName' | 'observationUnitName' | 'userName' | 'periodName';
 
-export const ObservationsManager = () => {
+interface ObservationsManagerProps {
+    projectId: number;
+}
+
+export const ObservationsManager = ({ projectId }: ObservationsManagerProps) => {
     const [observations, setObservations] = useState<ObservationRow[]>([]);
     const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
     const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({
@@ -143,11 +147,16 @@ export const ObservationsManager = () => {
 
     useEffect(() => {
         const loadFilterOptions = async () => {
-            const [p, t, u] = await Promise.all([
-                apiFetch<Period[]>('/api/periods'),
-                apiFetch<StudentTasksResponse>('/api/student-tasks'),
-                apiFetch<User[]>('/api/users'),
+            const [p, t, members] = await Promise.all([
+                apiFetch<Period[]>(`/api/periods?projectId=${projectId}`),
+                apiFetch<StudentTasksResponse>(`/api/student-tasks?projectId=${projectId}`),
+                // GET /api/users quedó superadmin-only en Fase R -- un admin de
+                // proyecto (no superadmin) recibiría 403 acá. project-memberships
+                // devuelve justo los miembros de ESTE proyecto, que es lo que este
+                // filtro necesita de todos modos.
+                apiFetch<ProjectMember[]>(`/api/project-memberships?projectId=${projectId}`),
             ]);
+            const u: User[] = members.map(m => ({ id: m.userId, name: m.name, email: m.email, roles: m.roles }));
 
             // Agregar opciones especiales al inicio de períodos
             const specialPeriods: FilterPeriodOption[] = [
@@ -173,7 +182,7 @@ export const ObservationsManager = () => {
             }
         };
         loadFilterOptions();
-    }, []);
+    }, [projectId]);
 
     // Close export menu when clicking outside
     useEffect(() => {
@@ -205,6 +214,7 @@ export const ObservationsManager = () => {
                     .map(([k, v]) => [k, String(v)])
             );
             const params = new URLSearchParams(validFilters);
+            params.set('projectId', String(projectId));
             try {
                 const data = await apiFetch<ObservationRow[]>(`/api/observations?${params.toString()}`);
                 setObservations(data);
@@ -215,7 +225,7 @@ export const ObservationsManager = () => {
             }
         };
         fetchObservations();
-    }, [filters]);
+    }, [filters, projectId]);
 
     const handleFilterChange = <K extends keyof SelectedFilters>(key: K, value: SelectedFilters[K]) => {
         setSelectedFilters(prev => ({ ...prev, [key]: value }));
@@ -332,7 +342,7 @@ export const ObservationsManager = () => {
         }
 
         try {
-            await apiFetch(`/api/observations/${observationId}`, { method: 'PUT', body: JSON.stringify({ value: payloadValue }) });
+            await apiFetch(`/api/observations/${observationId}`, { method: 'PUT', body: JSON.stringify({ value: payloadValue, projectId }) });
 
             setObservations(prev =>
                 prev.map(o => {
@@ -357,7 +367,7 @@ export const ObservationsManager = () => {
 
     const confirmDelete = async () => {
         try {
-            await apiFetch(`/api/observations/${confirmModal.observationId}`, { method: 'DELETE' });
+            await apiFetch(`/api/observations/${confirmModal.observationId}?projectId=${projectId}`, { method: 'DELETE' });
 
             setObservations(prev => prev.filter(o => o.id !== confirmModal.observationId));
 

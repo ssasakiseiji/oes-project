@@ -10,6 +10,7 @@ export interface DistributionChartModalProps {
     onClose: () => void;
     variableId: number | null;
     name: string;
+    projectId: number;
 }
 
 // Complemento de HistoricalChartModal (promedio numérico) para variables
@@ -17,18 +18,18 @@ export interface DistributionChartModalProps {
 // conteo de frecuencias por opción, agrupado por período (Fase K).
 const BAR_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2'];
 
-export const DistributionChartModal = ({ isOpen, onClose, variableId, name }: DistributionChartModalProps) => {
+export const DistributionChartModal = ({ isOpen, onClose, variableId, name, projectId }: DistributionChartModalProps) => {
     const [entries, setEntries] = useState<VariableDistributionEntry[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         if (isOpen && variableId) {
             setIsLoading(true);
-            apiFetch<VariableDistributionEntry[]>(`/api/variable-distribution?variableId=${variableId}`)
+            apiFetch<VariableDistributionEntry[]>(`/api/variable-distribution?projectId=${projectId}&variableId=${variableId}`)
                 .then(setEntries)
                 .finally(() => setIsLoading(false));
         }
-    }, [isOpen, variableId]);
+    }, [isOpen, variableId, projectId]);
 
     const { data, seriesKeys } = useMemo(() => {
         const keys = Array.from(new Set(entries.flatMap(e => Object.keys(e.counts)))).sort();

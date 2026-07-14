@@ -287,6 +287,7 @@ export interface CreateVariablePayload {
   studyFieldId: number;
   dataType: VariableDataType;
   config?: VariableConfig;
+  projectId: number;
 }
 
 export interface UpdateVariablePayload {
@@ -306,6 +307,7 @@ export interface CreatePeriodPayload {
   year: number;
   start_date: string;
   end_date: string;
+  projectId: number;
 }
 
 export interface UpdateUserPayload {

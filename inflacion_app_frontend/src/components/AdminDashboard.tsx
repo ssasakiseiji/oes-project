@@ -6,6 +6,7 @@ import { ObservationsManager } from './admin/ObservationsManager';
 import { UsersManager } from './admin/UsersManager';
 import { VariablesManager } from './admin/VariablesManager';
 import { ObservationUnitsManager } from './admin/ObservationUnitsManager';
+import { useProject } from '../contexts/ProjectContext';
 import type { AuthUser } from '../types/api';
 
 type AdminView = 'analysis' | 'periods' | 'records' | 'variables' | 'observation-units' | 'users';
@@ -13,6 +14,7 @@ type AdminView = 'analysis' | 'periods' | 'records' | 'variables' | 'observation
 function AdminDashboard({ user: _user }: { user: AuthUser }) {
     const [view, setView] = useState<AdminView>('analysis');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const { activeProjectId } = useProject();
 
     const menuItems: { id: AdminView; label: string; icon: typeof BarChart2 }[] = [
         { id: 'analysis', label: 'Análisis', icon: BarChart2 },
@@ -22,6 +24,15 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
         { id: 'observation-units', label: 'Unidades de Observación', icon: Store },
         { id: 'users', label: 'Usuarios', icon: Users },
     ];
+
+    // Fase U garantiza que activeProjectId ya está resuelto para cuando
+    // AdminDashboard llega a renderizar (ProjectRoleBridge gatea en isLoading
+    // y en availableProjects vacío antes de montar este árbol) -- este check
+    // es solo el boundary de tipos entre ProjectContext (number | null) y los
+    // managers de acá abajo (que reciben projectId: number sin nullability).
+    if (activeProjectId === null) {
+        return null;
+    }
 
     return (
         <>
@@ -91,11 +102,11 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
                 {/* Contenido scrolleable */}
                 <div className="flex-grow overflow-y-auto p-4 md:p-8">
                     <div className="max-w-7xl mx-auto">
-                        {view === 'analysis' && <AnalysisView />}
-                        {view === 'periods' && <PeriodsManager />}
-                        {view === 'records' && <ObservationsManager />}
-                        {view === 'variables' && <VariablesManager />}
-                        {view === 'observation-units' && <ObservationUnitsManager />}
+                        {view === 'analysis' && <AnalysisView projectId={activeProjectId} />}
+                        {view === 'periods' && <PeriodsManager projectId={activeProjectId} />}
+                        {view === 'records' && <ObservationsManager projectId={activeProjectId} />}
+                        {view === 'variables' && <VariablesManager projectId={activeProjectId} />}
+                        {view === 'observation-units' && <ObservationUnitsManager projectId={activeProjectId} />}
                         {view === 'users' && <UsersManager />}
                     </div>
                 </div>

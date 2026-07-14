@@ -13,7 +13,11 @@ const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : 
 
 type SortKey = 'name' | 'status' | 'year' | 'month';
 
-export const PeriodsManager = () => {
+interface PeriodsManagerProps {
+    projectId: number;
+}
+
+export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
     const [periods, setPeriods] = useState<Period[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
@@ -53,7 +57,7 @@ export const PeriodsManager = () => {
     const fetchPeriods = async () => {
         setIsLoading(true);
         try {
-            const data = await apiFetch<Period[]>('/api/periods');
+            const data = await apiFetch<Period[]>(`/api/periods?projectId=${projectId}`);
             setPeriods(data);
         } catch (err) {
             toast.error(`Error al cargar períodos: ${getErrorMessage(err)}`);
@@ -62,13 +66,14 @@ export const PeriodsManager = () => {
         }
     };
 
-    useEffect(() => { fetchPeriods(); }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { fetchPeriods(); }, [projectId]);
 
     const handleUpdateStatus = async (periodId: number, newStatus: string, isAutoClose = false) => {
         try {
             await apiFetch(`/api/periods/${periodId}/status`, {
                 method: 'PUT',
-                body: JSON.stringify({ status: newStatus })
+                body: JSON.stringify({ status: newStatus, projectId })
             });
 
             if (!isAutoClose) {
@@ -113,7 +118,8 @@ export const PeriodsManager = () => {
         const monthName = months.find(m => m.value === newPeriod.month)?.name ?? '';
         const periodToCreate: CreatePeriodPayload = {
             ...newPeriod,
-            name: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${newPeriod.year}`
+            name: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${newPeriod.year}`,
+            projectId,
         };
 
         try {
@@ -153,7 +159,8 @@ export const PeriodsManager = () => {
                 method: 'PUT',
                 body: JSON.stringify({
                     start_date: editingPeriod.start_date,
-                    end_date: editingPeriod.end_date
+                    end_date: editingPeriod.end_date,
+                    projectId
                 })
             });
 

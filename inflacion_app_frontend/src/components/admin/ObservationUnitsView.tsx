@@ -19,7 +19,11 @@ interface EditingObservationUnitState {
 
 type SortKey = 'id' | 'name' | 'address';
 
-export const ObservationUnitsView = () => {
+interface ObservationUnitsViewProps {
+    projectId: number;
+}
+
+export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) => {
     const [observationUnits, setObservationUnits] = useState<ObservationUnitWithStudents[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingObservationUnit, setEditingObservationUnit] = useState<EditingObservationUnitState>({ id: null, name: '', address: '', originalName: null, originalAddress: null });
@@ -39,7 +43,8 @@ export const ObservationUnitsView = () => {
 
     useEffect(() => {
         fetchObservationUnits();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId]);
 
     // Auto-focus on edit
     useEffect(() => {
@@ -57,7 +62,7 @@ export const ObservationUnitsView = () => {
     const fetchObservationUnits = async () => {
         setIsLoading(true);
         try {
-            const data = await apiFetch<ObservationUnitWithStudents[]>('/api/observation-units');
+            const data = await apiFetch<ObservationUnitWithStudents[]>(`/api/observation-units?projectId=${projectId}`);
             setObservationUnits(data || []);
         } catch (err) {
             toast.error(`Error al cargar unidades de observación: ${getErrorMessage(err)}`);
@@ -83,7 +88,8 @@ export const ObservationUnitsView = () => {
                 method: 'POST',
                 body: JSON.stringify({
                     name: newObservationUnit.name.trim(),
-                    address: newObservationUnit.address.trim()
+                    address: newObservationUnit.address.trim(),
+                    projectId
                 })
             });
 
@@ -129,7 +135,7 @@ export const ObservationUnitsView = () => {
         try {
             await apiFetch(`/api/observation-units/${editingObservationUnit.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name: trimmedName, address: trimmedAddress })
+                body: JSON.stringify({ name: trimmedName, address: trimmedAddress, projectId })
             });
 
             setObservationUnits(prev =>
@@ -156,7 +162,7 @@ export const ObservationUnitsView = () => {
         if (!observationUnitToDelete) return;
 
         try {
-            await apiFetch(`/api/observation-units/${observationUnitToDelete.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/observation-units/${observationUnitToDelete.id}?projectId=${projectId}`, { method: 'DELETE' });
 
             setObservationUnits(prev => prev.filter(u => u.id !== observationUnitToDelete.id));
             toast.success('Unidad de observación eliminada exitosamente');

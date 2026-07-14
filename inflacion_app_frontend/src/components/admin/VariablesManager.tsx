@@ -66,7 +66,11 @@ function configSummary(variable: Variable): string {
     }
 }
 
-export const VariablesManager = () => {
+interface VariablesManagerProps {
+    projectId: number;
+}
+
+export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
     const [activeTab, setActiveTab] = useState<Tab>('study-fields');
     const [studyFields, setStudyFields] = useState<StudyField[]>([]);
     const [variables, setVariables] = useState<Variable[]>([]);
@@ -102,7 +106,7 @@ export const VariablesManager = () => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const data = await apiFetch<StudentTasksResponse>('/api/student-tasks');
+            const data = await apiFetch<StudentTasksResponse>(`/api/student-tasks?projectId=${projectId}`);
             setStudyFields(data.studyFields || []);
             setVariables(data.variables || []);
         } catch (err) {
@@ -115,7 +119,7 @@ export const VariablesManager = () => {
     useEffect(() => {
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab]);
+    }, [activeTab, projectId]);
 
     // Auto-focus on edit
     useEffect(() => {
@@ -140,7 +144,7 @@ export const VariablesManager = () => {
         try {
             const response = await apiFetch<StudyField>('/api/study-fields', {
                 method: 'POST',
-                body: JSON.stringify({ name: newItemName.trim() })
+                body: JSON.stringify({ name: newItemName.trim(), projectId })
             });
 
             setStudyFields(prev => [...prev, response]);
@@ -173,7 +177,7 @@ export const VariablesManager = () => {
         try {
             await apiFetch(`/api/study-fields/${editingItem.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name: trimmedName })
+                body: JSON.stringify({ name: trimmedName, projectId })
             });
 
             setStudyFields(prev =>
@@ -196,7 +200,7 @@ export const VariablesManager = () => {
         if (!itemToDelete) return;
 
         try {
-            await apiFetch(`/api/study-fields/${itemToDelete.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/study-fields/${itemToDelete.id}?projectId=${projectId}`, { method: 'DELETE' });
 
             setStudyFields(prev => prev.filter(f => f.id !== itemToDelete.id));
             toast.success('Campo de estudio eliminado exitosamente');
@@ -243,6 +247,7 @@ export const VariablesManager = () => {
             name: newItemName.trim(),
             unit: newItemUnit.trim() || undefined,
             studyFieldId: selectedStudyField.value,
+            projectId,
         };
 
         let payload: CreateVariablePayload;
@@ -308,7 +313,7 @@ export const VariablesManager = () => {
         try {
             await apiFetch(`/api/variables/${editingItem.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name: trimmedName, unit: trimmedUnit || undefined })
+                body: JSON.stringify({ name: trimmedName, unit: trimmedUnit || undefined, projectId })
             });
 
             setVariables(prev =>
@@ -331,7 +336,7 @@ export const VariablesManager = () => {
         if (!itemToDelete) return;
 
         try {
-            await apiFetch(`/api/variables/${itemToDelete.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/variables/${itemToDelete.id}?projectId=${projectId}`, { method: 'DELETE' });
 
             setVariables(prev => prev.filter(v => v.id !== itemToDelete.id));
             toast.success('Variable eliminada exitosamente');
@@ -383,7 +388,7 @@ export const VariablesManager = () => {
         try {
             await apiFetch(`/api/variables/${configTarget.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name: configTarget.name, unit: configTarget.unit || undefined, config })
+                body: JSON.stringify({ name: configTarget.name, unit: configTarget.unit || undefined, config, projectId })
             });
             setVariables(prev => prev.map(v => v.id === configTarget.id ? { ...v, config: config ?? null } : v));
             toast.success('Configuración actualizada exitosamente');
@@ -976,6 +981,7 @@ export const VariablesManager = () => {
                 onClose={() => setDistributionTarget(null)}
                 variableId={distributionTarget?.id ?? null}
                 name={distributionTarget?.name ?? ''}
+                projectId={projectId}
             />
         </>
     );

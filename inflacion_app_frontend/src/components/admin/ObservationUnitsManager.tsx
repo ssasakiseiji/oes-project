@@ -6,7 +6,11 @@ import { StudentsAssignmentView } from './StudentsAssignmentView';
 
 type TabId = 'observation-units' | 'assignments';
 
-export const ObservationUnitsManager = () => {
+interface ObservationUnitsManagerProps {
+    projectId: number;
+}
+
+export const ObservationUnitsManager = ({ projectId }: ObservationUnitsManagerProps) => {
     const [activeTab, setActiveTab] = useState<TabId>('observation-units');
 
     const tabs: { id: TabId; label: string; icon: LucideIcon; description: string }[] = [
@@ -57,8 +61,8 @@ export const ObservationUnitsManager = () => {
             </div>
             {/* Tab Content */}
             <div className="animate-fade-in">
-                {activeTab === 'observation-units' && <ObservationUnitsView />}
-                {activeTab === 'assignments' && <StudentsAssignmentView />}
+                {activeTab === 'observation-units' && <ObservationUnitsView projectId={projectId} />}
+                {activeTab === 'assignments' && <StudentsAssignmentView projectId={projectId} />}
             </div>
         </div>
     );

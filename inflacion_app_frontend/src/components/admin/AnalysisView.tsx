@@ -23,7 +23,11 @@ interface ChartModalState {
     name: string;
 }
 
-export const AnalysisView = () => {
+interface AnalysisViewProps {
+    projectId: number;
+}
+
+export const AnalysisView = ({ projectId }: AnalysisViewProps) => {
     const [periods, setPeriods] = useState<PeriodOption[]>([]);
     const [periodA, setPeriodA] = useState<PeriodOption | null>(null);
     const [periodB, setPeriodB] = useState<PeriodOption | null>(null);
@@ -35,10 +39,17 @@ export const AnalysisView = () => {
     const isDark = document.documentElement.classList.contains('dark');
 
     useEffect(() => {
+        // Limpiar selección/reporte del proyecto anterior -- si no, un
+        // proyecto con <2 períodos cerrados dejaría periodA/periodB (y el
+        // reporte ya renderizado) apuntando a períodos de OTRO proyecto.
+        setPeriodA(null);
+        setPeriodB(null);
+        setReportData(null);
+
         const fetchData = async () => {
             const [periodsData, tasksData] = await Promise.all([
-                apiFetch<Period[]>('/api/periods'),
-                apiFetch<{ studyFields: StudyField[]; variables: Variable[] }>('/api/student-tasks'),
+                apiFetch<Period[]>(`/api/periods?projectId=${projectId}`),
+                apiFetch<{ studyFields: StudyField[]; variables: Variable[] }>(`/api/student-tasks?projectId=${projectId}`),
             ]);
             const closedPeriods = periodsData.filter(p => p.status === 'Closed').map(p => ({ value: p.id, label: p.name }));
             setPeriods(closedPeriods);
@@ -49,14 +60,14 @@ export const AnalysisView = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [projectId]);
 
     const generateReport = async () => {
         if (!periodA || !periodB) return;
         setIsLoading(true);
         setReportData(null);
         try {
-            const data = await apiFetch<AnalysisResult>('/api/analysis', { method: 'POST', body: JSON.stringify({ periodAId: periodA.value, periodBId: periodB.value }) });
+            const data = await apiFetch<AnalysisResult>('/api/analysis', { method: 'POST', body: JSON.stringify({ periodAId: periodA.value, periodBId: periodB.value, projectId }) });
             setReportData(data);
         } finally { setIsLoading(false); }
     };
@@ -189,7 +200,7 @@ export const AnalysisView = () => {
                 </div>
                 );
             })()}
-            <HistoricalChartModal {...chartModal} onClose={() => setChartModal({isOpen: false, type: null, id: null, name: ''})} />
+            <HistoricalChartModal {...chartModal} projectId={projectId} onClose={() => setChartModal({isOpen: false, type: null, id: null, name: ''})} />
         </div>
     );
 };

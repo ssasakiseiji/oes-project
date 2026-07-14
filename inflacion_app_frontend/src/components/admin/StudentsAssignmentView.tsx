@@ -10,7 +10,11 @@ const getErrorStatus = (err: unknown): number | undefined =>
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-export const StudentsAssignmentView = () => {
+interface StudentsAssignmentViewProps {
+    projectId: number;
+}
+
+export const StudentsAssignmentView = ({ projectId }: StudentsAssignmentViewProps) => {
     const [students, setStudents] = useState<StudentWithAssignments[]>([]);
     const [observationUnits, setObservationUnits] = useState<ObservationUnit[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -24,12 +28,12 @@ export const StudentsAssignmentView = () => {
     useEffect(() => {
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [projectId]);
 
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const data = await apiFetch<StudentsWithAssignmentsResponse>('/api/observation-unit-assignments/students');
+            const data = await apiFetch<StudentsWithAssignmentsResponse>(`/api/observation-unit-assignments/students?projectId=${projectId}`);
             setStudents(data.students || []);
             setObservationUnits(data.allObservationUnits || []);
         } catch (err) {
@@ -52,14 +56,15 @@ export const StudentsAssignmentView = () => {
                 method: 'POST',
                 body: JSON.stringify({
                     observationUnitId,
-                    studentIds: [selectedStudent.id]
+                    studentIds: [selectedStudent.id],
+                    projectId
                 })
             });
             toast.success('Unidad de observación asignada exitosamente');
             await fetchData();
 
             // Update selected student with new data
-            const updatedData = await apiFetch<StudentsWithAssignmentsResponse>('/api/observation-unit-assignments/students');
+            const updatedData = await apiFetch<StudentsWithAssignmentsResponse>(`/api/observation-unit-assignments/students?projectId=${projectId}`);
             const updatedStudent = updatedData.students.find(s => s.id === selectedStudent.id);
             if (updatedStudent) {
                 setSelectedStudent(updatedStudent);
@@ -80,14 +85,14 @@ export const StudentsAssignmentView = () => {
 
         setIsSaving(true);
         try {
-            await apiFetch(`/api/observation-unit-assignments/student/${selectedStudent.id}/observation-unit/${observationUnitId}`, {
+            await apiFetch(`/api/observation-unit-assignments/student/${selectedStudent.id}/observation-unit/${observationUnitId}?projectId=${projectId}`, {
                 method: 'DELETE'
             });
             toast.success('Asignación eliminada exitosamente');
             await fetchData();
 
             // Update selected student with new data
-            const updatedData = await apiFetch<StudentsWithAssignmentsResponse>('/api/observation-unit-assignments/students');
+            const updatedData = await apiFetch<StudentsWithAssignmentsResponse>(`/api/observation-unit-assignments/students?projectId=${projectId}`);
             const updatedStudent = updatedData.students.find(s => s.id === selectedStudent.id);
             if (updatedStudent) {
                 setSelectedStudent(updatedStudent);
