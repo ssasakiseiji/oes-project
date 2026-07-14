@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import Select from 'react-select';
 import { CheckCircle, Clock, Search, ChevronRight, PieChart, Users, ListFilter, Smile, Store, TrendingUp, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, XCircle } from 'lucide-react';
 import { apiFetch } from '../api';
+import { useProject } from '../contexts/ProjectContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { getReactSelectStyles } from '../utils/reactSelectStyles';
 import type {
@@ -265,6 +266,7 @@ type SortBy = 'name' | 'progress' | 'status' | 'level';
 function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { activeProjectId } = useProject();
 
   const [monitorData, setMonitorData] = useState<MonitorPeriod[]>([]);
   const [staticData, setStaticData] = useState<{ variables: Variable[]; studyFields: StudyField[] }>({ variables: [], studyFields: [] });
@@ -288,8 +290,8 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
     const fetchMonitorData = async () => {
       try {
         const [progressData, catalogData] = await Promise.all([
-          apiFetch<MonitorPeriod[]>('/api/monitor-data'),
-          apiFetch<StudentTasksResponse>('/api/student-tasks')
+          apiFetch<MonitorPeriod[]>(`/api/monitor-data?projectId=${activeProjectId}`),
+          apiFetch<StudentTasksResponse>(`/api/student-tasks?projectId=${activeProjectId}`)
         ]);
         setMonitorData(progressData);
         setStaticData({ variables: catalogData.variables, studyFields: catalogData.studyFields });
@@ -308,7 +310,7 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
       }
     };
     fetchMonitorData();
-  }, []);
+  }, [activeProjectId]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -417,6 +419,7 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
     return sortedAndFilteredStudents.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedAndFilteredStudents, currentPage, itemsPerPage]);
 
+  if (activeProjectId === null) return null;
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-center p-8 text-red-500 dark:text-red-400">Error: {error}</div>;
 

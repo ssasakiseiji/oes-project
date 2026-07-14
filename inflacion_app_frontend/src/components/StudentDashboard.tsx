@@ -4,6 +4,7 @@ import { Edit3, CheckCircle, ChevronRight, Smile, RadioTower } from 'lucide-reac
 import LoadingOverlay from './LoadingOverlay';
 import { DashboardSkeleton } from './Skeleton';
 import { apiFetch } from '../api';
+import { useProject } from '../contexts/ProjectContext';
 import { useToast } from './Toast';
 import type {
     AuthUser,
@@ -198,6 +199,7 @@ interface EditingObservationUnit {
 }
 
 function StudentDashboard({ user: _user }: { user: AuthUser }) {
+    const { activeProjectId } = useProject();
     const toast = useToast();
     const [dashboardData, setDashboardData] = useState<StudentDashboardPeriod[]>([]);
     const [staticData, setStaticData] = useState<StudentTasksResponse>({ variables: [], studyFields: [], assignedObservationUnits: [] });
@@ -212,8 +214,8 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
         const fetchInitialData = async () => {
             try {
                 const [periodsData, staticInfo] = await Promise.all([
-                    apiFetch<StudentDashboardPeriod[]>('/api/student/dashboard'),
-                    apiFetch<StudentTasksResponse>('/api/student-tasks')
+                    apiFetch<StudentDashboardPeriod[]>(`/api/student/dashboard?projectId=${activeProjectId}`),
+                    apiFetch<StudentTasksResponse>(`/api/student-tasks?projectId=${activeProjectId}`)
                 ]);
                 setDashboardData(periodsData);
                 setStaticData(staticInfo);
@@ -231,7 +233,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
             }
         };
         fetchInitialData();
-    }, []);
+    }, [activeProjectId]);
 
     const handleCloseWizard = async (draftData: ObservationValueMap) => {
         if (editingObservationUnit) {
@@ -242,7 +244,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                     body: JSON.stringify({ observationUnitId: editingObservationUnit.id, values: toValueEntries(draftData) }),
                     skipAuthRedirect: true,
                 });
-                const newData = await apiFetch<StudentDashboardPeriod[]>('/api/student/dashboard', { skipAuthRedirect: true });
+                const newData = await apiFetch<StudentDashboardPeriod[]>(`/api/student/dashboard?projectId=${activeProjectId}`, { skipAuthRedirect: true });
                 setDashboardData(newData);
                 toast.success('Borrador guardado exitosamente');
             } catch {
@@ -259,7 +261,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
         setEditingObservationUnit(null);
         setIsSaving(true);
         try {
-            const newData = await apiFetch<StudentDashboardPeriod[]>('/api/student/dashboard');
+            const newData = await apiFetch<StudentDashboardPeriod[]>(`/api/student/dashboard?projectId=${activeProjectId}`);
             setDashboardData(newData);
             toast.success('¡Registro enviado exitosamente!');
         } catch (err) {
@@ -274,6 +276,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
     const openPeriod = useMemo(() => dashboardData.find(p => p.status === 'Open'), [dashboardData]);
     const goToActivePeriod = () => { if (openPeriod) setSelectedPeriod({ value: openPeriod.periodId, label: openPeriod.periodName, status: openPeriod.status }); };
 
+    if (activeProjectId === null) return null;
     if (isLoading) return <DashboardSkeleton />;
     if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
     if (dashboardData.length === 0) return <NoCollectionPanel />;
