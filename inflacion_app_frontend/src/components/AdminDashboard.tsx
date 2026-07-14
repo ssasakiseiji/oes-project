@@ -3,7 +3,7 @@ import { BarChart2, Users, Calendar, Settings, Variable as VariableIcon, Store, 
 import { AnalysisView } from './admin/AnalysisView';
 import { PeriodsManager } from './admin/PeriodsManager';
 import { ObservationsManager } from './admin/ObservationsManager';
-import { UsersManager } from './admin/UsersManager';
+import { MembersManager } from './admin/MembersManager';
 import { VariablesManager } from './admin/VariablesManager';
 import { ObservationUnitsManager } from './admin/ObservationUnitsManager';
 import { useProject } from '../contexts/ProjectContext';
@@ -22,7 +22,7 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
         { id: 'records', label: 'Registros', icon: Settings },
         { id: 'variables', label: 'Variables', icon: VariableIcon },
         { id: 'observation-units', label: 'Unidades de Observación', icon: Store },
-        { id: 'users', label: 'Usuarios', icon: Users },
+        { id: 'users', label: 'Miembros', icon: Users },
     ];
 
     // Fase U garantiza que activeProjectId ya está resuelto para cuando
@@ -107,7 +107,7 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
                         {view === 'records' && <ObservationsManager projectId={activeProjectId} />}
                         {view === 'variables' && <VariablesManager projectId={activeProjectId} />}
                         {view === 'observation-units' && <ObservationUnitsManager projectId={activeProjectId} />}
-                        {view === 'users' && <UsersManager />}
+                        {view === 'users' && <MembersManager projectId={activeProjectId} />}
                     </div>
                 </div>
             </main>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Select from 'react-select';
-import { Users, ArrowUpDown, Plus, Edit, Trash2, Key, ArrowUp, ArrowDown } from 'lucide-react';
+import { Users, ArrowUpDown, Plus, Edit, UserMinus, Key, ArrowUp, ArrowDown } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
 import { getReactSelectStyles } from '../../utils/reactSelectStyles';
@@ -12,98 +12,114 @@ import { RoleTag } from '../ui/RoleTag';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { UserManagementModal, type UserFormData, type UserManagementModalMode } from './UserManagementModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import type { User } from '../../types/api';
+import type { ProjectMember } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-type SortKey = 'id' | 'name' | 'email';
+type SortKey = 'userId' | 'name' | 'email';
 
 interface RoleFilterOption {
     value: string;
     label: string;
 }
 
-export const UsersManager = () => {
-    const [users, setUsers] = useState<User[]>([]);
+interface MembersManagerProps {
+    projectId: number;
+}
+
+// Reemplaza al viejo UsersManager.tsx (borrado) -- GET /api/users pasó a
+// ser superadmin-only en Fase R, así que un admin de proyecto normal
+// necesita esta vista project-scoped en su lugar. Editar/crear usuarios y
+// editar sus roles DE ESTE PROYECTO son ahora dos llamadas separadas
+// (PUT /api/users/:id para name/email, POST /project-memberships para
+// roles), porque el backend ya no acepta `roles` en el PUT de usuario.
+// Borrar una cuenta completa es acción de plataforma (ver
+// PlatformUsersManager) -- acá solo se puede quitar la membership.
+export const MembersManager = ({ projectId }: MembersManagerProps) => {
+    const [members, setMembers] = useState<ProjectMember[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<RoleFilterOption | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'id', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'userId', direction: 'asc' });
 
     // Modals
     const [showUserModal, setShowUserModal] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [modalMode, setModalMode] = useState<UserManagementModalMode>('edit'); // 'create' or 'edit'
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+    const [modalMode, setModalMode] = useState<UserManagementModalMode>('edit');
+    const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
 
     const itemsPerPage = 10;
     const toast = useToast();
     const isDark = document.documentElement.classList.contains('dark');
 
-    const fetchUsers = async () => {
+    const fetchMembers = async () => {
         setIsLoading(true);
         try {
-            const data = await apiFetch<User[]>('/api/users');
-            setUsers(data);
+            const data = await apiFetch<ProjectMember[]>(`/api/project-memberships?projectId=${projectId}`);
+            setMembers(data);
         } catch (err) {
-            toast.error(`Error al cargar usuarios: ${getErrorMessage(err)}`);
+            toast.error(`Error al cargar miembros: ${getErrorMessage(err)}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    useEffect(() => { fetchUsers(); }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { fetchMembers(); }, [projectId]);
 
-    // Handle Create
     const handleCreateUser = () => {
-        setSelectedUser(null);
+        setSelectedMember(null);
         setModalMode('create');
         setShowUserModal(true);
     };
 
-    // Handle Edit
-    const handleEditUser = (user: User) => {
-        setSelectedUser(user);
+    const handleEditUser = (member: ProjectMember) => {
+        setSelectedMember(member);
         setModalMode('edit');
         setShowUserModal(true);
     };
 
-    // Handle Change Password
-    const handleChangePassword = (user: User) => {
-        setSelectedUser(user);
+    const handleChangePassword = (member: ProjectMember) => {
+        setSelectedMember(member);
         setShowPasswordModal(true);
     };
 
-    // Handle Delete
-    const handleDeleteUser = (user: User) => {
-        setSelectedUser(user);
-        setShowDeleteConfirm(true);
+    const handleRemoveFromProject = (member: ProjectMember) => {
+        setSelectedMember(member);
+        setShowRemoveConfirm(true);
     };
 
-    // Save User (Create or Update)
     const handleSaveUser = async (formData: UserFormData) => {
         try {
             if (modalMode === 'create') {
                 await apiFetch('/api/users', {
                     method: 'POST',
-                    body: JSON.stringify(formData)
-                });
-                toast.success('Usuario creado exitosamente');
-            } else {
-                if (!selectedUser) return;
-                await apiFetch(`/api/users/${selectedUser.id}`, {
-                    method: 'PUT',
                     body: JSON.stringify({
                         name: formData.name,
                         email: formData.email,
-                        roles: formData.roles
+                        password: formData.password,
+                        roles: formData.roles,
+                        projectId,
                     })
                 });
+                toast.success('Usuario creado y agregado al proyecto exitosamente');
+            } else {
+                if (!selectedMember) return;
+                await Promise.all([
+                    apiFetch(`/api/users/${selectedMember.userId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ name: formData.name, email: formData.email, projectId })
+                    }),
+                    apiFetch('/api/project-memberships', {
+                        method: 'POST',
+                        body: JSON.stringify({ projectId, userId: selectedMember.userId, roles: formData.roles })
+                    }),
+                ]);
                 toast.success('Usuario actualizado exitosamente');
             }
-            fetchUsers();
+            fetchMembers();
             setShowUserModal(false);
         } catch (err) {
             toast.error(`Error: ${getErrorMessage(err)}`);
@@ -111,13 +127,12 @@ export const UsersManager = () => {
         }
     };
 
-    // Save Password
     const handleSavePassword = async (password: string) => {
-        if (!selectedUser) return;
+        if (!selectedMember) return;
         try {
-            await apiFetch(`/api/users/${selectedUser.id}/password`, {
+            await apiFetch(`/api/users/${selectedMember.userId}/password`, {
                 method: 'PUT',
-                body: JSON.stringify({ password })
+                body: JSON.stringify({ password, projectId })
             });
             toast.success('Contraseña actualizada exitosamente');
             setShowPasswordModal(false);
@@ -127,18 +142,17 @@ export const UsersManager = () => {
         }
     };
 
-    // Confirm Delete
-    const handleConfirmDelete = async () => {
-        if (!selectedUser) return;
+    const handleConfirmRemove = async () => {
+        if (!selectedMember) return;
         try {
-            await apiFetch(`/api/users/${selectedUser.id}`, {
+            await apiFetch(`/api/project-memberships?projectId=${projectId}&userId=${selectedMember.userId}`, {
                 method: 'DELETE'
             });
-            toast.success('Usuario eliminado exitosamente');
-            fetchUsers();
-            setShowDeleteConfirm(false);
+            toast.success('Miembro quitado del proyecto exitosamente');
+            fetchMembers();
+            setShowRemoveConfirm(false);
         } catch (err) {
-            toast.error(`Error al eliminar usuario: ${getErrorMessage(err)}`);
+            toast.error(`Error al quitar miembro: ${getErrorMessage(err)}`);
         }
     };
 
@@ -149,52 +163,47 @@ export const UsersManager = () => {
         }));
     };
 
-    const filteredUsers = useMemo(() => {
-        return users
-            .filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         u.email.toLowerCase().includes(searchTerm.toLowerCase()))
-            .filter(u => !roleFilter || u.roles.includes(roleFilter.value));
-    }, [users, searchTerm, roleFilter]);
+    const filteredMembers = useMemo(() => {
+        return members
+            .filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         m.email.toLowerCase().includes(searchTerm.toLowerCase()))
+            .filter(m => !roleFilter || m.roles.includes(roleFilter.value));
+    }, [members, searchTerm, roleFilter]);
 
-    const sortedUsers = useMemo(() => {
-        const sorted = [...filteredUsers];
-        if (sortConfig.key) {
-            sorted.sort((a, b) => {
-                let aValue: string | number = a[sortConfig.key];
-                let bValue: string | number = b[sortConfig.key];
-
-                if (typeof aValue === 'string' && typeof bValue === 'string') {
-                    aValue = aValue.toLowerCase();
-                    bValue = bValue.toLowerCase();
-                }
-
-                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
+    const sortedMembers = useMemo(() => {
+        const sorted = [...filteredMembers];
+        sorted.sort((a, b) => {
+            let aValue: string | number = a[sortConfig.key];
+            let bValue: string | number = b[sortConfig.key];
+            if (typeof aValue === 'string' && typeof bValue === 'string') {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+            if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
         return sorted;
-    }, [filteredUsers, sortConfig]);
+    }, [filteredMembers, sortConfig]);
 
-    const paginatedUsers = useMemo(() => {
+    const paginatedMembers = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
-        return sortedUsers.slice(start, start + itemsPerPage);
-    }, [sortedUsers, currentPage]);
+        return sortedMembers.slice(start, start + itemsPerPage);
+    }, [sortedMembers, currentPage]);
 
-    const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedMembers.length / itemsPerPage);
 
-    // Reset to page 1 when filters change
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm, roleFilter]);
 
     return (
         <>
-            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Usuarios' }]} />
+            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Miembros' }]} />
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Gestión de Usuarios</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Miembros del Proyecto</h3>
                     <button
                         onClick={handleCreateUser}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
@@ -230,11 +239,11 @@ export const UsersManager = () => {
                 {/* Table */}
                 {isLoading ? (
                     <TableSkeleton rows={5} columns={4} />
-                ) : filteredUsers.length === 0 ? (
+                ) : filteredMembers.length === 0 ? (
                     <EmptyState
                         icon={Users}
-                        title="No se encontraron usuarios"
-                        description="No hay usuarios que coincidan con los filtros aplicados."
+                        title="No se encontraron miembros"
+                        description="No hay miembros de este proyecto que coincidan con los filtros aplicados."
                     />
                 ) : (
                     <>
@@ -243,12 +252,12 @@ export const UsersManager = () => {
                                 <thead>
                                     <tr className="border-b border-gray-200 dark:border-gray-700">
                                         <th
-                                            onClick={() => handleSort('id')}
+                                            onClick={() => handleSort('userId')}
                                             className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                                         >
                                             <div className="flex items-center gap-2">
                                                 ID
-                                                {sortConfig.key === 'id' ? (
+                                                {sortConfig.key === 'userId' ? (
                                                     sortConfig.direction === 'asc' ?
                                                         <ArrowUp size={14} className="text-blue-600" /> :
                                                         <ArrowDown size={14} className="text-blue-600" />
@@ -287,25 +296,25 @@ export const UsersManager = () => {
                                                 )}
                                             </div>
                                         </th>
-                                        <th className="p-3 text-gray-500 dark:text-gray-400">Roles</th>
+                                        <th className="p-3 text-gray-500 dark:text-gray-400">Roles en el Proyecto</th>
                                         <th className="p-3 text-right text-gray-500 dark:text-gray-400">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {paginatedUsers.map(u => (
-                                        <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-none transition-all">
-                                            <td className="p-3 text-gray-600 dark:text-gray-400">{u.id}</td>
-                                            <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{u.name}</td>
-                                            <td className="p-3 text-gray-700 dark:text-gray-300">{u.email}</td>
+                                    {paginatedMembers.map(m => (
+                                        <tr key={m.userId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-none transition-all">
+                                            <td className="p-3 text-gray-600 dark:text-gray-400">{m.userId}</td>
+                                            <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{m.name}</td>
+                                            <td className="p-3 text-gray-700 dark:text-gray-300">{m.email}</td>
                                             <td className="p-3">
                                                 <div className="flex gap-2 flex-wrap">
-                                                    {u.roles.map(r => <RoleTag key={r} role={r} />)}
+                                                    {m.roles.map(r => <RoleTag key={r} role={r} />)}
                                                 </div>
                                             </td>
                                             <td className="p-3">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button
-                                                        onClick={() => handleEditUser(u)}
+                                                        onClick={() => handleEditUser(m)}
                                                         className="flex items-center gap-1 px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors text-sm font-medium"
                                                         title="Editar usuario"
                                                     >
@@ -313,18 +322,18 @@ export const UsersManager = () => {
                                                         <span>Editar</span>
                                                     </button>
                                                     <button
-                                                        onClick={() => handleChangePassword(u)}
+                                                        onClick={() => handleChangePassword(m)}
                                                         className="flex items-center gap-1 px-3 py-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-colors text-sm font-medium"
                                                         title="Cambiar contraseña"
                                                     >
                                                         <Key size={16} />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteUser(u)}
+                                                        onClick={() => handleRemoveFromProject(m)}
                                                         className="flex items-center gap-1 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors text-sm font-medium"
-                                                        title="Eliminar usuario"
+                                                        title="Quitar del proyecto"
                                                     >
-                                                        <Trash2 size={16} />
+                                                        <UserMinus size={16} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -336,7 +345,7 @@ export const UsersManager = () => {
                         <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}
-                            totalItems={sortedUsers.length}
+                            totalItems={sortedMembers.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={setCurrentPage}
                         />
@@ -348,7 +357,7 @@ export const UsersManager = () => {
             <UserManagementModal
                 isOpen={showUserModal}
                 onClose={() => setShowUserModal(false)}
-                user={selectedUser}
+                user={selectedMember}
                 onSave={handleSaveUser}
                 mode={modalMode}
             />
@@ -356,17 +365,17 @@ export const UsersManager = () => {
             <ChangePasswordModal
                 isOpen={showPasswordModal}
                 onClose={() => setShowPasswordModal(false)}
-                user={selectedUser}
+                user={selectedMember}
                 onSave={handleSavePassword}
             />
 
             <ConfirmModal
-                isOpen={showDeleteConfirm}
-                onClose={() => setShowDeleteConfirm(false)}
-                onConfirm={handleConfirmDelete}
-                title="Eliminar Usuario"
-                message={`¿Estás seguro de eliminar a ${selectedUser?.name}? Esta acción no se puede deshacer.`}
-                confirmText="Eliminar"
+                isOpen={showRemoveConfirm}
+                onClose={() => setShowRemoveConfirm(false)}
+                onConfirm={handleConfirmRemove}
+                title="Quitar del Proyecto"
+                message={`¿Estás seguro de quitar a ${selectedMember?.name} de este proyecto? Sus observaciones históricas se conservan, pero perderá acceso y sus asignaciones/borradores de este proyecto se eliminarán.`}
+                confirmText="Quitar"
                 confirmType="danger"
             />
         </>

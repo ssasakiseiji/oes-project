@@ -1,8 +1,9 @@
 import { useState, useRef, useMemo, useEffect, type ComponentType } from 'react';
-import { LogOut, User, Shield, UserCog, GraduationCap, FolderKanban, ChevronDown, Check, type LucideIcon } from 'lucide-react';
+import { LogOut, User, Shield, UserCog, GraduationCap, FolderKanban, ChevronDown, Check, Building2, ArrowLeftCircle, type LucideIcon } from 'lucide-react';
 import StudentDashboard from '../components/StudentDashboard';
 import MonitorDashboard from '../components/MonitorDashboard';
 import AdminDashboard from '../components/AdminDashboard';
+import PlatformDashboard from '../components/PlatformDashboard';
 import { RoleProvider, useRole } from '../contexts/RoleContext';
 import { ProjectProvider, useProject } from '../contexts/ProjectContext';
 import type { AuthUser } from '../types/api';
@@ -53,9 +54,19 @@ interface DashboardContentProps {
 const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
     const { activeRole, switchRole, hasMultipleRoles, availableRoles } = useRole();
     const { activeProjectId, switchProject, hasMultipleProjects, availableProjects } = useProject();
+    const isSuperadmin = user.roles.includes('superadmin');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
     const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+    // Arranca directo en Modo Plataforma si el superadmin todavía no tiene
+    // ningún proyecto en la plataforma (instalación nueva) -- si no,
+    // quedaría viendo "No tienes un rol asignado" sin ninguna forma de
+    // llegar a crear el primer proyecto. Lazy initializer: availableProjects
+    // ya está resuelto y estable para cuando DashboardContent monta
+    // (ProjectRoleBridge gatea en isLoading antes de llegar acá), a
+    // diferencia de activeRole (que depende del efecto de RoleProvider, un
+    // componente padre cuyo efecto corre DESPUÉS del de este hijo).
+    const [isPlatformMode, setIsPlatformMode] = useState(() => isSuperadmin && availableProjects.length === 0);
     const menuRef = useRef<HTMLDivElement>(null);
     const roleMenuRef = useRef<HTMLDivElement>(null);
     const projectMenuRef = useRef<HTMLDivElement>(null);
@@ -112,8 +123,15 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                     <div className="min-w-0 flex-1">
                         <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">{user.name}</h1>
 
-                        {/* Selector de Proyecto -- solo visible si el usuario pertenece a más de uno */}
-                        {hasMultipleProjects && activeProject && (
+                        {isPlatformMode && (
+                            <span className="mt-2 inline-flex items-center gap-2 text-sm font-semibold bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full border border-indigo-400/30">
+                                <Building2 size={16} />
+                                Modo Plataforma
+                            </span>
+                        )}
+
+                        {/* Selector de Proyecto -- solo visible si el usuario pertenece a más de uno y no está en Modo Plataforma (que es project-agnostic) */}
+                        {!isPlatformMode && hasMultipleProjects && activeProject && (
                             <div className="relative mt-2" ref={projectMenuRef}>
                                 <button
                                     onClick={() => setIsProjectMenuOpen(!isProjectMenuOpen)}
@@ -169,7 +187,7 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                         )}
 
                         {/* Badge de Rol con Dropdown Integrado */}
-                        {currentRoleConfig && (
+                        {!isPlatformMode && currentRoleConfig && (
                             <div className="relative mt-2" ref={roleMenuRef}>
                                 {hasMultipleRoles ? (
                                     <button
@@ -245,6 +263,17 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                         )}
                     </div>
 
+                    {/* Toggle Modo Plataforma -- solo visible para superadmin */}
+                    {isSuperadmin && (
+                        <button
+                            onClick={() => setIsPlatformMode(prev => !prev)}
+                            className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition-all duration-200 flex-shrink-0 text-sm font-semibold"
+                        >
+                            {isPlatformMode ? <ArrowLeftCircle size={18} /> : <Building2 size={18} />}
+                            <span className="hidden sm:inline">{isPlatformMode ? 'Volver a mi Proyecto' : 'Modo Plataforma'}</span>
+                        </button>
+                    )}
+
                     {/* Menú dropdown en icono de perfil */}
                     <div className="relative" ref={menuRef}>
                         <button
@@ -277,7 +306,7 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                 </header>
 
                 <main>
-                    {renderDashboardByRole()}
+                    {isPlatformMode ? <PlatformDashboard /> : renderDashboardByRole()}
                 </main>
             </div>
         </div>
@@ -305,7 +334,11 @@ const ProjectRoleBridge = ({ user, onLogout }: DashboardPageProps) => {
         );
     }
 
-    if (availableProjects.length === 0) {
+    // Un superadmin sin proyectos igual necesita llegar a DashboardContent
+    // para poder usar el toggle "Modo Plataforma" y crear el primer
+    // proyecto -- solo usuarios no-superadmin quedan atrapados en esta
+    // pantalla (de verdad no tienen adónde ir sin que un admin los agregue).
+    if (availableProjects.length === 0 && !user.roles.includes('superadmin')) {
         return (
             <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 to-blue-900 flex flex-col items-center justify-center gap-4 text-white text-center p-4">
                 <p className="text-lg font-semibold">No tenés acceso a ningún proyecto todavía.</p>
