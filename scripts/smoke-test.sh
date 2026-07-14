@@ -61,7 +61,7 @@ fi
 
 # 4. Endpoints autenticados devuelven 200
 if [ -n "$token" ]; then
-  for path in /api/categories /api/commerces /api/users; do
+  for path in /api/study-fields /api/observation-units /api/users; do
     code="$(http_code "$BASE_URL$path" -H "Authorization: Bearer $token")"
     if [ "$code" = "200" ]; then
       pass "GET $path -> 200"
