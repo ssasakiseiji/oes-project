@@ -49,6 +49,14 @@ export interface VariableDistributionEntry {
 // original -- ahora corren nativas sobre `numeric_value`, que queda
 // numeric-only automáticamente porque las filas no numéricas tienen esa
 // columna en NULL (que AVG/STDDEV ya ignoran).
+//
+// Fase R: scoped por proyecto. Se prefirió NO denormalizar projectId en
+// Observation/DraftObservation (ver plan) -- las queries raw ya hacen JOIN
+// periods/variables, así que un `AND p.project_id = $1` extra no cuesta
+// nada estructuralmente. Cada método valida ("chequeo IDOR") que las
+// entidades referenciadas por id (period, variable, observation) pertenecen
+// efectivamente al projectId recibido, para que un admin del Proyecto A no
+// pueda leer/editar datos del Proyecto B adivinando ids.
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
@@ -71,8 +79,9 @@ export class AdminService {
     };
   }
 
-  async getPeriods() {
+  async getPeriods(projectId: number) {
     const periods = await this.prisma.period.findMany({
+      where: { projectId },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
     return periods.map((p) => this.mapPeriod(p));
@@ -84,15 +93,16 @@ export class AdminService {
     year,
     start_date,
     end_date,
+    projectId,
   }: CreatePeriodDto) {
     const existingPeriod = await this.prisma.period.findFirst({
-      where: { month, year },
+      where: { month, year, projectId },
       select: { id: true },
     });
 
     if (existingPeriod) {
       throw new ConflictException(
-        `Ya existe un período de recolección para ${name}.`,
+        `Ya existe un período de recolección para ${name} en este proyecto.`,
       );
     }
 
@@ -104,58 +114,56 @@ export class AdminService {
         startDate: start_date,
         endDate: end_date,
         status: 'Scheduled',
+        projectId,
       },
     });
     return this.mapPeriod(period);
   }
 
-  async updatePeriod(id: number, { start_date, end_date }: UpdatePeriodDto) {
-    try {
-      const period = await this.prisma.period.update({
-        where: { id },
-        data: { startDate: start_date, endDate: end_date },
-      });
-      return this.mapPeriod(period);
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Período no encontrado');
-      }
-      throw error;
+  private async assertPeriodInProject(id: number, projectId: number) {
+    const period = await this.prisma.period.findUnique({
+      where: { id },
+      select: { projectId: true },
+    });
+    if (!period || period.projectId !== projectId) {
+      throw new NotFoundException('Período no encontrado');
     }
   }
 
-  async updatePeriodStatus(id: number, status: string) {
+  async updatePeriod(
+    id: number,
+    { start_date, end_date, projectId }: UpdatePeriodDto,
+  ) {
+    await this.assertPeriodInProject(id, projectId);
+
+    const period = await this.prisma.period.update({
+      where: { id },
+      data: { startDate: start_date, endDate: end_date },
+    });
+    return this.mapPeriod(period);
+  }
+
+  async updatePeriodStatus(id: number, status: string, projectId: number) {
+    await this.assertPeriodInProject(id, projectId);
+
     if (status === 'Open') {
       const openPeriod = await this.prisma.period.findFirst({
-        where: { status: 'Open', id: { not: id } },
+        where: { status: 'Open', projectId, id: { not: id } },
         select: { id: true },
       });
 
       if (openPeriod) {
         throw new ConflictException(
-          'Ya existe otro período abierto. Ciérrelo antes de abrir uno nuevo.',
+          'Ya existe otro período abierto en este proyecto. Ciérrelo antes de abrir uno nuevo.',
         );
       }
     }
 
-    try {
-      const period = await this.prisma.period.update({
-        where: { id },
-        data: { status },
-      });
-      return this.mapPeriod(period);
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Período no encontrado');
-      }
-      throw error;
-    }
+    const period = await this.prisma.period.update({
+      where: { id },
+      data: { status },
+    });
+    return this.mapPeriod(period);
   }
 
   // Analysis
@@ -165,9 +173,12 @@ export class AdminService {
   // sentido. Variables numéricas no-monetarias, categóricas, booleanas y de
   // texto quedan fuera de este análisis "costo de canasta" (ver
   // getVariableDistribution para categóricas/booleanas).
-  async getAnalysis(periodAId: number, periodBId: number) {
+  async getAnalysis(projectId: number, periodAId: number, periodBId: number) {
+    await this.assertPeriodInProject(periodAId, projectId);
+    await this.assertPeriodInProject(periodBId, projectId);
+
     const allVariables = await this.prisma.variable.findMany({
-      where: { dataType: 'numeric' },
+      where: { dataType: 'numeric', studyField: { projectId } },
       select: { id: true, name: true, studyFieldId: true, config: true },
     });
     const currencyVariables = allVariables.filter(
@@ -190,7 +201,10 @@ export class AdminService {
         },
         select: { variableId: true, numericValue: true },
       }),
-      this.prisma.studyField.findMany({ select: { id: true, name: true } }),
+      this.prisma.studyField.findMany({
+        where: { projectId },
+        select: { id: true, name: true },
+      }),
     ]);
 
     const calculateAverages = (
@@ -294,13 +308,17 @@ export class AdminService {
     };
   }
 
-  getVariableHistory(variableId?: number, studyFieldId?: number) {
+  getVariableHistory(
+    projectId: number,
+    variableId?: number,
+    studyFieldId?: number,
+  ) {
     if (variableId != null) {
       return this.prisma.$queryRaw<VariableHistoryRow[]>`
         SELECT p.name, AVG(o.numeric_value) as "avgValue"
         FROM observations o
         JOIN periods p ON o.period_id = p.id
-        WHERE o.variable_id = ${variableId}
+        WHERE o.variable_id = ${variableId} AND p.project_id = ${projectId}
         GROUP BY p.id, p.name, p.year, p.month
         ORDER BY p.year, p.month;
       `;
@@ -312,7 +330,7 @@ export class AdminService {
         FROM observations o
         JOIN variables v ON o.variable_id = v.id
         JOIN periods p ON o.period_id = p.id
-        WHERE v.study_field_id = ${studyFieldId}
+        WHERE v.study_field_id = ${studyFieldId} AND p.project_id = ${projectId}
         GROUP BY p.id, p.name, p.year, p.month
         ORDER BY p.year, p.month;
       `;
@@ -325,13 +343,15 @@ export class AdminService {
   // getVariableHistory pero para variables categóricas/booleanas, donde un
   // AVG no tiene sentido (ver plan de Fase I).
   async getVariableDistribution(
+    projectId: number,
     variableId: number,
   ): Promise<VariableDistributionEntry[]> {
     const variable = await this.prisma.variable.findUnique({
       where: { id: variableId },
+      include: { studyField: { select: { projectId: true } } },
     });
 
-    if (!variable) {
+    if (!variable || variable.studyField?.projectId !== projectId) {
       throw new NotFoundException('Variable no encontrada');
     }
     if (
@@ -353,6 +373,7 @@ export class AdminService {
       FROM observations o
       JOIN periods p ON o.period_id = p.id
       WHERE o.variable_id = ${variableId}
+        AND p.project_id = ${projectId}
         AND (o.choice_value IS NOT NULL OR o.boolean_value IS NOT NULL)
       GROUP BY p.id, p.name, p.year, p.month, COALESCE(o.choice_value, o.boolean_value::text)
       ORDER BY p.year, p.month;
@@ -373,6 +394,7 @@ export class AdminService {
   // Observations
 
   getObservations(filters: {
+    projectId: number;
     periodId?: number;
     studyFieldId?: number;
     variableId?: number;
@@ -380,7 +402,12 @@ export class AdminService {
     observationUnitId?: number;
     showOutliersOnly?: boolean;
   }) {
-    const conditions: Prisma.Sql[] = [];
+    // projectId es obligatorio y siempre se aplica -- a diferencia del
+    // resto de `conditions`, que son filtros opcionales que el caller puede
+    // combinar libremente.
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`pd.project_id = ${filters.projectId}`,
+    ];
 
     if (filters.periodId != null) {
       conditions.push(Prisma.sql`o.period_id = ${filters.periodId}`);
@@ -405,10 +432,7 @@ export class AdminService {
       );
     }
 
-    const whereClause =
-      conditions.length > 0
-        ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
-        : Prisma.empty;
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
 
     const query = Prisma.sql`
       WITH observation_stats AS (
@@ -444,12 +468,23 @@ export class AdminService {
     return this.prisma.$queryRaw<ObservationRow[]>(query);
   }
 
-  async updateObservation(id: number, rawValue: number | string | boolean) {
+  async updateObservation(
+    id: number,
+    rawValue: number | string | boolean,
+    projectId: number,
+  ) {
     const observation = await this.prisma.observation.findUnique({
       where: { id },
-      select: { variableId: true },
+      select: {
+        variableId: true,
+        period: { select: { projectId: true } },
+      },
     });
-    if (!observation || observation.variableId == null) {
+    if (
+      !observation ||
+      observation.variableId == null ||
+      observation.period?.projectId !== projectId
+    ) {
       throw new NotFoundException('Observación no encontrada');
     }
 
@@ -462,38 +497,28 @@ export class AdminService {
 
     const valueFields = toObservationValueFields(variable, rawValue);
 
-    try {
-      return await this.prisma.observation.update({
-        where: { id },
-        data: valueFields,
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Observación no encontrada');
-      }
-      throw error;
-    }
+    return this.prisma.observation.update({
+      where: { id },
+      data: valueFields,
+    });
   }
 
-  async deleteObservation(id: number) {
-    try {
-      await this.prisma.observation.delete({ where: { id } });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Observación no encontrada');
-      }
-      throw error;
+  async deleteObservation(id: number, projectId: number) {
+    const observation = await this.prisma.observation.findUnique({
+      where: { id },
+      select: { period: { select: { projectId: true } } },
+    });
+    if (!observation || observation.period?.projectId !== projectId) {
+      throw new NotFoundException('Observación no encontrada');
     }
+
+    await this.prisma.observation.delete({ where: { id } });
   }
 
   // Users
 
+  // Superadmin-only: lista todos los usuarios de la plataforma, no scoped
+  // por proyecto (ver PlatformDashboard, Fase X).
   getUsers() {
     return this.prisma.user.findMany({
       select: { id: true, name: true, email: true, roles: true },
@@ -501,15 +526,21 @@ export class AdminService {
     });
   }
 
+  // Un admin de proyecto crea el User (con roles globales vacíos -- ya no
+  // se otorgan roles admin/monitor/student a nivel global) y queda
+  // adjuntado a su proyecto con los roles de proyecto pedidos, todo en una
+  // transacción.
   async createUser({
     name,
     email,
     password,
+    projectId,
     roles,
   }: {
     name: string;
     email: string;
     password: string;
+    projectId: number;
     roles: string[];
   }) {
     const existingUser = await this.prisma.user.findUnique({
@@ -523,13 +554,38 @@ export class AdminService {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    return this.prisma.user.create({
-      data: { name, email, passwordHash, roles },
-      select: { id: true, name: true, email: true, roles: true },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { name, email, passwordHash, roles: [] },
+        select: { id: true, name: true, email: true, roles: true },
+      });
+
+      await tx.projectMembership.create({
+        data: { projectId, userId: created.id, roles },
+      });
+
+      return created;
     });
+
+    return { ...user, projectRoles: roles };
   }
 
-  async updateUser(userId: number, { name, email, roles }: UpdateUserDto) {
+  // Un admin de proyecto solo puede editar usuarios que sean miembros de SU
+  // proyecto -- evita que un admin del Proyecto A cambie el email/password
+  // de un usuario exclusivo del Proyecto B.
+  private async assertUserInProject(userId: number, projectId: number) {
+    const membership = await this.prisma.projectMembership.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { userId: true },
+    });
+    if (!membership) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+  }
+
+  async updateUser(userId: number, { name, email, projectId }: UpdateUserDto) {
+    await this.assertUserInProject(userId, projectId);
+
     if (email) {
       const existingUser = await this.prisma.user.findFirst({
         where: { email, id: { not: userId } },
@@ -541,45 +597,33 @@ export class AdminService {
       }
     }
 
-    try {
-      return await this.prisma.user.update({
-        where: { id: userId },
-        data: { name, email, roles },
-        select: { id: true, name: true, email: true, roles: true },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Usuario no encontrado');
-      }
-      throw error;
-    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name, email },
+      select: { id: true, name: true, email: true, roles: true },
+    });
   }
 
-  async updateUserPassword(userId: number, newPassword: string) {
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+  async updateUserPassword(
+    userId: number,
+    newPassword: string,
+    projectId: number,
+  ) {
+    await this.assertUserInProject(userId, projectId);
 
-    try {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { passwordHash },
-        select: { id: true },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Usuario no encontrado');
-      }
-      throw error;
-    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+      select: { id: true },
+    });
 
     return { success: true };
   }
 
+  // Superadmin-only: borra el User global, cascadeando en TODOS los
+  // proyectos de los que es miembro -- demasiado destructivo para dejarlo
+  // en manos de un admin de un solo proyecto.
   deleteUser(userId: number) {
     return this.prisma.$transaction(async (tx) => {
       const observationCount = await tx.observation.count({
@@ -592,9 +636,10 @@ export class AdminService {
         );
       }
 
-      // Los borradores sí se pueden eliminar
+      // Los borradores y memberships sí se pueden eliminar
       await tx.draftObservation.deleteMany({ where: { userId } });
       await tx.observationUnitAssignment.deleteMany({ where: { userId } });
+      await tx.projectMembership.deleteMany({ where: { userId } });
 
       try {
         await tx.user.delete({ where: { id: userId } });
@@ -612,6 +657,9 @@ export class AdminService {
     });
   }
 
+  // Superadmin-only: `roles` acá solo puede ser ['superadmin'] o [] (ver
+  // updateUserRolesSchema) -- ya no otorga admin/monitor/student, eso vive
+  // en ProjectMembership.
   async updateUserRoles(userId: number, roles: string[]) {
     try {
       return await this.prisma.user.update({
