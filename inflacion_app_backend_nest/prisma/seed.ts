@@ -10,6 +10,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
 // original) — no pensado para correr automáticamente en producción real,
 // por eso NO está enganchado a `prisma migrate deploy`. Correr a mano con
 // `npx prisma db seed` cuando se quiera esta data de demo/test.
+//
+// Fase M (2026-07-14): accessors renombrados a los modelos de Fase H
+// (studyField/variable/observationUnit/observationUnitAssignment). Los
+// variables sembrados originalmente son todos numéricos-moneda (precios),
+// así que quedan marcados dataType:'numeric', config:{isCurrency:true} —
+// mismo backfill que hizo la migración 20260713150100 para las filas ya
+// existentes en Observation/DraftObservation. Se agrega además un
+// StudyField de demo nuevo con un Variable de cada uno de los 4 dataTypes
+// para que la capacidad multi-tipo sea demostrable sin tener que crearlos
+// a mano desde el admin UI.
 const useSsl = process.env.DB_SSL !== 'false';
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -19,12 +29,12 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  // categories/products/commerces no tienen unique constraint en name (ni
-  // lo tenían en el SQL original), así que skipDuplicates no las protege
-  // de duplicarse en una segunda corrida — a diferencia de users/periods/
-  // commerce_assignments, que sí tienen unique constraints reales. Este
-  // guard hace que correr el seed dos veces sobre la misma base sea un
-  // no-op completo en vez de duplicar esas tres tablas.
+  // study_fields/variables/observation_units no tienen unique constraint en
+  // name (ni lo tenían en el SQL original), así que skipDuplicates no las
+  // protege de duplicarse en una segunda corrida — a diferencia de users/
+  // periods/observation_unit_assignments, que sí tienen unique constraints
+  // reales. Este guard hace que correr el seed dos veces sobre la misma
+  // base sea un no-op completo en vez de duplicar esas tablas.
   const alreadySeeded = await prisma.user.findUnique({
     where: { email: 'admin@portalipc.com' },
   });
@@ -33,7 +43,7 @@ async function main() {
     return;
   }
 
-  await prisma.category.createMany({
+  await prisma.studyField.createMany({
     data: [
       { name: 'Alimentos' },
       { name: 'Bebidas' },
@@ -43,31 +53,71 @@ async function main() {
     ],
     skipDuplicates: true,
   });
-  const categories = await prisma.category.findMany();
-  const categoryIdByName = new Map(categories.map((c) => [c.name, c.id]));
+  const studyFields = await prisma.studyField.findMany();
+  const studyFieldIdByName = new Map(studyFields.map((c) => [c.name, c.id]));
 
-  await prisma.product.createMany({
+  await prisma.variable.createMany({
     data: [
-      { name: 'Arroz', unit: '1 kg', categoryId: categoryIdByName.get('Alimentos') },
-      { name: 'Frijoles', unit: '1 kg', categoryId: categoryIdByName.get('Alimentos') },
-      { name: 'Aceite', unit: '1 L', categoryId: categoryIdByName.get('Alimentos') },
-      { name: 'Azúcar', unit: '1 kg', categoryId: categoryIdByName.get('Alimentos') },
-      { name: 'Pan', unit: '500 g', categoryId: categoryIdByName.get('Alimentos') },
-      { name: 'Leche', unit: '1 L', categoryId: categoryIdByName.get('Lácteos') },
-      { name: 'Queso', unit: '500 g', categoryId: categoryIdByName.get('Lácteos') },
-      { name: 'Yogurt', unit: '1 L', categoryId: categoryIdByName.get('Lácteos') },
-      { name: 'Coca Cola', unit: '2 L', categoryId: categoryIdByName.get('Bebidas') },
-      { name: 'Agua', unit: '1.5 L', categoryId: categoryIdByName.get('Bebidas') },
-      { name: 'Jugo', unit: '1 L', categoryId: categoryIdByName.get('Bebidas') },
-      { name: 'Detergente', unit: '1 kg', categoryId: categoryIdByName.get('Productos de Limpieza') },
-      { name: 'Jabón', unit: '1 unidad', categoryId: categoryIdByName.get('Productos de Limpieza') },
-      { name: 'Champú', unit: '400 ml', categoryId: categoryIdByName.get('Productos de Cuidado Personal') },
-      { name: 'Pasta Dental', unit: '1 unidad', categoryId: categoryIdByName.get('Productos de Cuidado Personal') },
+      { name: 'Arroz', unit: '1 kg', studyFieldId: studyFieldIdByName.get('Alimentos') },
+      { name: 'Frijoles', unit: '1 kg', studyFieldId: studyFieldIdByName.get('Alimentos') },
+      { name: 'Aceite', unit: '1 L', studyFieldId: studyFieldIdByName.get('Alimentos') },
+      { name: 'Azúcar', unit: '1 kg', studyFieldId: studyFieldIdByName.get('Alimentos') },
+      { name: 'Pan', unit: '500 g', studyFieldId: studyFieldIdByName.get('Alimentos') },
+      { name: 'Leche', unit: '1 L', studyFieldId: studyFieldIdByName.get('Lácteos') },
+      { name: 'Queso', unit: '500 g', studyFieldId: studyFieldIdByName.get('Lácteos') },
+      { name: 'Yogurt', unit: '1 L', studyFieldId: studyFieldIdByName.get('Lácteos') },
+      { name: 'Coca Cola', unit: '2 L', studyFieldId: studyFieldIdByName.get('Bebidas') },
+      { name: 'Agua', unit: '1.5 L', studyFieldId: studyFieldIdByName.get('Bebidas') },
+      { name: 'Jugo', unit: '1 L', studyFieldId: studyFieldIdByName.get('Bebidas') },
+      { name: 'Detergente', unit: '1 kg', studyFieldId: studyFieldIdByName.get('Productos de Limpieza') },
+      { name: 'Jabón', unit: '1 unidad', studyFieldId: studyFieldIdByName.get('Productos de Limpieza') },
+      { name: 'Champú', unit: '400 ml', studyFieldId: studyFieldIdByName.get('Productos de Cuidado Personal') },
+      { name: 'Pasta Dental', unit: '1 unidad', studyFieldId: studyFieldIdByName.get('Productos de Cuidado Personal') },
+    ].map((v) => ({ ...v, dataType: 'numeric', config: { isCurrency: true } })),
+    skipDuplicates: true,
+  });
+
+  // StudyField de demo para mostrar los otros 3 dataTypes (categórico,
+  // booleano, texto) además del numérico-moneda de arriba.
+  await prisma.studyField.createMany({
+    data: [{ name: 'Percepción y Contexto del Relevamiento' }],
+    skipDuplicates: true,
+  });
+  const perceptionField = await prisma.studyField.findFirst({
+    where: { name: 'Percepción y Contexto del Relevamiento' },
+  });
+
+  await prisma.variable.createMany({
+    data: [
+      {
+        name: 'Temperatura ambiente',
+        unit: '°C',
+        dataType: 'numeric',
+        config: { isCurrency: false, min: -10, max: 50, decimals: 1 },
+        studyFieldId: perceptionField?.id,
+      },
+      {
+        name: 'Nivel de afluencia percibido',
+        dataType: 'categorical',
+        config: { options: ['Bajo', 'Medio', 'Alto'] },
+        studyFieldId: perceptionField?.id,
+      },
+      {
+        name: '¿El local tenía cartel de precios visible?',
+        dataType: 'boolean',
+        studyFieldId: perceptionField?.id,
+      },
+      {
+        name: 'Observaciones adicionales',
+        dataType: 'text',
+        config: { maxLength: 500 },
+        studyFieldId: perceptionField?.id,
+      },
     ],
     skipDuplicates: true,
   });
 
-  await prisma.commerce.createMany({
+  await prisma.observationUnit.createMany({
     data: [
       { name: 'Supermercado Central', address: 'Av. Principal 123' },
       { name: 'Tienda La Economía', address: 'Calle 5 # 45-67' },
@@ -125,13 +175,13 @@ async function main() {
     skipDuplicates: true,
   });
 
-  // Asignar todos los comercios a todos los estudiantes (por defecto),
-  // igual que el SELECT ... CROSS JOIN del SQL original.
+  // Asignar todas las unidades de observación a todos los estudiantes (por
+  // defecto), igual que el SELECT ... CROSS JOIN del SQL original.
   const students = await prisma.user.findMany({ where: { roles: { has: 'student' } } });
-  const commerces = await prisma.commerce.findMany();
-  await prisma.commerceAssignment.createMany({
+  const observationUnits = await prisma.observationUnit.findMany();
+  await prisma.observationUnitAssignment.createMany({
     data: students.flatMap((student) =>
-      commerces.map((commerce) => ({ userId: student.id, commerceId: commerce.id })),
+      observationUnits.map((unit) => ({ userId: student.id, observationUnitId: unit.id })),
     ),
     skipDuplicates: true,
   });
