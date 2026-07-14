@@ -5,9 +5,40 @@ import LoadingOverlay from './LoadingOverlay';
 import { DashboardSkeleton } from './Skeleton';
 import { apiFetch } from '../api';
 import { useToast } from './Toast';
-import type { AuthUser, Category, PriceMap, Product, StudentDashboardPeriod, StudentTasksResponse } from '../types/api';
+import type {
+    AuthUser,
+    NumericVariableConfig,
+    ObservationValueMap,
+    StudentDashboardPeriod,
+    StudentTasksResponse,
+    StudyField,
+    Variable,
+    ValueEntryPayload,
+} from '../types/api';
 
-const hasValidPrice = (price: unknown): price is number | string => price != null && price !== '' && price !== undefined;
+// `false` (booleano) es una respuesta válida, no la ausencia de una.
+const hasValidValue = (value: unknown): value is number | string | boolean => value != null && value !== '';
+
+function formatValuePreview(variable: Variable, value: unknown): string {
+    if (!hasValidValue(value)) return 'N/A';
+    switch (variable.dataType) {
+        case 'numeric': {
+            const isCurrency = !!(variable.config as NumericVariableConfig | null)?.isCurrency;
+            const num = Number(value);
+            return isCurrency ? new Intl.NumberFormat('es-PY').format(num) : new Intl.NumberFormat('es-PY').format(num);
+        }
+        case 'boolean':
+            return value ? 'Sí' : 'No';
+        default:
+            return String(value);
+    }
+}
+
+function toValueEntries(values: ObservationValueMap): ValueEntryPayload[] {
+    return Object.entries(values)
+        .filter(([, value]) => hasValidValue(value))
+        .map(([variableId, value]) => ({ variableId: Number(variableId), value }));
+}
 
 // Lazy load RegistrationWizard con recarga automática si el chunk cambió tras un deploy
 const RegistrationWizard = lazy(() =>
@@ -58,23 +89,23 @@ const CircularProgress = memo(({ percentage }: { percentage: number }) => {
 CircularProgress.displayName = 'CircularProgress';
 
 interface RegistrationSummaryProps {
-    products: Product[];
-    categories: Category[];
-    prices: PriceMap;
+    variables: Variable[];
+    studyFields: StudyField[];
+    values: ObservationValueMap;
     title: string;
 }
 
-const RegistrationSummary = ({ products, categories, prices, title }: RegistrationSummaryProps) => {
-    const [activeCategory, setActiveCategory] = useState<number | null>(null);
+const RegistrationSummary = ({ variables, studyFields, values, title }: RegistrationSummaryProps) => {
+    const [activeStudyField, setActiveStudyField] = useState<number | null>(null);
 
     const summaryData = useMemo(() => {
-        return categories.map(category => {
-            const categoryProducts = products.filter(p => p.categoryId === category.id);
-            const completedCount = categoryProducts.filter(p => hasValidPrice(prices[p.id])).length;
-            const percentage = categoryProducts.length > 0 ? (completedCount / categoryProducts.length) * 100 : 0;
-            return { ...category, products: categoryProducts, completedCount, percentage };
+        return studyFields.map(field => {
+            const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
+            const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+            const percentage = fieldVariables.length > 0 ? (completedCount / fieldVariables.length) * 100 : 0;
+            return { ...field, variables: fieldVariables, completedCount, percentage };
         });
-    }, [categories, products, prices]);
+    }, [studyFields, variables, values]);
 
     return (
         <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-700 p-4 rounded-2xl space-y-3 mt-4 border border-slate-200 dark:border-gray-600">
@@ -82,65 +113,65 @@ const RegistrationSummary = ({ products, categories, prices, title }: Registrati
                 <div className="h-1 w-1 rounded-full bg-blue-500 dark:bg-blue-400"></div>
                 {title}
             </h4>
-            {summaryData.map(category => {
-                const isComplete = category.completedCount === category.products.length && category.products.length > 0;
-                const isCategoryActive = activeCategory === category.id;
+            {summaryData.map(field => {
+                const isComplete = field.completedCount === field.variables.length && field.variables.length > 0;
+                const isFieldActive = activeStudyField === field.id;
 
                 return (
                     <div
-                        key={category.id}
+                        key={field.id}
                         className={`transition-all duration-200 rounded-xl overflow-hidden ${
-                            isCategoryActive
+                            isFieldActive
                                 ? 'bg-white dark:bg-gray-700 shadow-md ring-2 ring-blue-200 dark:ring-blue-500'
                                 : 'bg-white dark:bg-gray-700 hover:shadow-sm'
                         }`}
                     >
                         <button
-                            onClick={() => setActiveCategory(prev => prev === category.id ? null : category.id)}
+                            onClick={() => setActiveStudyField(prev => prev === field.id ? null : field.id)}
                             className="w-full flex justify-between items-start p-3 text-left rounded-xl transition-colors focus:outline-none"
-                            aria-expanded={isCategoryActive}
-                            aria-label={`${category.name} - ${category.completedCount} de ${category.products.length} productos completados`}
+                            aria-expanded={isFieldActive}
+                            aria-label={`${field.name} - ${field.completedCount} de ${field.variables.length} variables completadas`}
                         >
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                                     isComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-blue-100 dark:bg-blue-900'
                                 }`}>
                                     <span className={`text-sm font-bold ${isComplete ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300'}`}>
-                                        {Math.round(category.percentage)}%
+                                        {Math.round(field.percentage)}%
                                     </span>
                                 </div>
-                                <h3 className="font-bold text-md text-gray-800 dark:text-gray-100 break-words">{category.name}</h3>
+                                <h3 className="font-bold text-md text-gray-800 dark:text-gray-100 break-words">{field.name}</h3>
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0">
                                 <span className={`text-sm font-semibold px-2 py-1 rounded-md ${
                                     isComplete ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200'
                                 }`}>
-                                    {category.completedCount} / {category.products.length}
+                                    {field.completedCount} / {field.variables.length}
                                 </span>
-                                <ChevronRight size={20} className={`transition-transform text-gray-400 dark:text-gray-300 ${isCategoryActive ? 'rotate-90' : ''}`} aria-hidden="true" />
+                                <ChevronRight size={20} className={`transition-transform text-gray-400 dark:text-gray-300 ${isFieldActive ? 'rotate-90' : ''}`} aria-hidden="true" />
                             </div>
                         </button>
-                        {isCategoryActive && (
+                        {isFieldActive && (
                             <ul className="space-y-2 p-3 pt-0 animate-fade-in">
-                                {category.products.map(p => {
-                                    const hasPrice = hasValidPrice(prices[p.id]);
+                                {field.variables.map(v => {
+                                    const hasValue = hasValidValue(values[v.id]);
                                     return (
                                         <li
-                                            key={p.id}
+                                            key={v.id}
                                             className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
-                                                hasPrice ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-600 border border-gray-200 dark:border-gray-500'
+                                                hasValue ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-600 border border-gray-200 dark:border-gray-500'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${hasPrice ? 'bg-blue-500 dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-500'}`}></div>
-                                                <p className={`font-medium text-sm truncate ${hasPrice ? 'text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                    {p.name}
+                                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${hasValue ? 'bg-blue-500 dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-500'}`}></div>
+                                                <p className={`font-medium text-sm truncate ${hasValue ? 'text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                    {v.name}
                                                 </p>
                                             </div>
                                             <p className={`font-mono font-bold text-sm ml-2 flex-shrink-0 ${
-                                                hasPrice ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
+                                                hasValue ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
                                             }`}>
-                                                {hasPrice ? new Intl.NumberFormat('es-PY').format(Number(prices[p.id])) : 'N/A'}
+                                                {formatValuePreview(v, values[v.id])}
                                             </p>
                                         </li>
                                     );
@@ -160,22 +191,22 @@ interface PeriodOption {
     status: string;
 }
 
-interface EditingCommerce {
+interface EditingObservationUnit {
     id: number;
     name: string;
-    initialDraft: PriceMap;
+    initialDraft: ObservationValueMap;
 }
 
 function StudentDashboard({ user: _user }: { user: AuthUser }) {
     const toast = useToast();
     const [dashboardData, setDashboardData] = useState<StudentDashboardPeriod[]>([]);
-    const [staticData, setStaticData] = useState<StudentTasksResponse>({ products: [], categories: [], assignedCommerces: [] });
+    const [staticData, setStaticData] = useState<StudentTasksResponse>({ variables: [], studyFields: [], assignedObservationUnits: [] });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption | null>(null);
-    const [editingCommerce, setEditingCommerce] = useState<EditingCommerce | null>(null);
-    const [activeCommerce, setActiveCommerce] = useState<number | null>(null);
+    const [editingObservationUnit, setEditingObservationUnit] = useState<EditingObservationUnit | null>(null);
+    const [activeObservationUnit, setActiveObservationUnit] = useState<number | null>(null);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -202,13 +233,13 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
         fetchInitialData();
     }, []);
 
-    const handleCloseWizard = async (draftData: PriceMap) => {
-        if (editingCommerce) {
+    const handleCloseWizard = async (draftData: ObservationValueMap) => {
+        if (editingObservationUnit) {
             setIsSaving(true);
             try {
-                await apiFetch('/api/save-draft', {
+                await apiFetch('/api/draft-observations', {
                     method: 'POST',
-                    body: JSON.stringify({ commerceId: editingCommerce.id, prices: draftData }),
+                    body: JSON.stringify({ observationUnitId: editingObservationUnit.id, values: toValueEntries(draftData) }),
                     skipAuthRedirect: true,
                 });
                 const newData = await apiFetch<StudentDashboardPeriod[]>('/api/student/dashboard', { skipAuthRedirect: true });
@@ -221,16 +252,16 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                 setIsSaving(false);
             }
         }
-        setEditingCommerce(null);
+        setEditingObservationUnit(null);
     };
 
     const handleSubmissionSuccess = async () => {
-        setEditingCommerce(null);
+        setEditingObservationUnit(null);
         setIsSaving(true);
         try {
             const newData = await apiFetch<StudentDashboardPeriod[]>('/api/student/dashboard');
             setDashboardData(newData);
-            toast.success('¡Precios enviados exitosamente!');
+            toast.success('¡Registro enviado exitosamente!');
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Error al actualizar los datos');
         } finally {
@@ -349,32 +380,32 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                 {activePeriodData && (
                     <div className="space-y-3">
                         {activePeriodData.tasks.map((task, index) => {
-                            let prices: PriceMap = task.status === 'Completado' ? task.submittedPrices : task.draftPrices;
+                            let values: ObservationValueMap = task.status === 'Completado' ? task.submittedValues : task.draftValues;
                             // Fusionar borradores de localStorage si tienen más progreso que el backend
                             if (task.status !== 'Completado') {
                                 try {
-                                    const localDraft: PriceMap = JSON.parse(localStorage.getItem(`draft_${task.commerceId}`) || '{}');
-                                    const localCount = Object.values(localDraft).filter(hasValidPrice).length;
-                                    const serverCount = Object.values(prices).filter(hasValidPrice).length;
-                                    if (localCount > serverCount) prices = localDraft;
+                                    const localDraft: ObservationValueMap = JSON.parse(localStorage.getItem(`draft_${task.observationUnitId}`) || '{}');
+                                    const localCount = Object.values(localDraft).filter(hasValidValue).length;
+                                    const serverCount = Object.values(values).filter(hasValidValue).length;
+                                    if (localCount > serverCount) values = localDraft;
                                 } catch { /* ignorar errores de parse */ }
                             }
-                            const completedCount = Object.values(prices).filter(hasValidPrice).length;
-                            const totalCount = staticData.products.length;
+                            const completedCount = Object.values(values).filter(hasValidValue).length;
+                            const totalCount = staticData.variables.length;
                             const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-                            const isTaskActive = activeCommerce === task.commerceId;
+                            const isTaskActive = activeObservationUnit === task.observationUnitId;
 
                             const ActionButton = () => {
                                 if (activePeriodData.status !== 'Open') return null;
                                 if (task.status === 'Completado') {
                                     return <button disabled className="w-full px-4 py-3 mb-4 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-md cursor-not-allowed"><CheckCircle size={16} className="mr-2"/> Registro Enviado</button>;
                                 }
-                                return <button onClick={() => setEditingCommerce({ id: task.commerceId, name: task.commerceName, initialDraft: task.draftPrices })} className="w-full px-4 py-3 mb-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition flex items-center justify-center shadow-md"><Edit3 size={16} className="mr-2"/> {task.status === 'En Proceso' ? 'Continuar Registro' : 'Iniciar Registro'}</button>;
+                                return <button onClick={() => setEditingObservationUnit({ id: task.observationUnitId, name: task.observationUnitName, initialDraft: task.draftValues })} className="w-full px-4 py-3 mb-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition flex items-center justify-center shadow-md"><Edit3 size={16} className="mr-2"/> {task.status === 'En Proceso' ? 'Continuar Registro' : 'Iniciar Registro'}</button>;
                             };
 
                             return (
                                 <div
-                                    key={task.commerceId}
+                                    key={task.observationUnitId}
                                     className={`transition-all duration-300 p-2 rounded-2xl animate-fade-in ${
                                         isTaskActive
                                             ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 shadow-lg ring-2 ring-blue-300 dark:ring-blue-500'
@@ -383,16 +414,16 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                                     style={{ animationDelay: `${index * 0.1}s` }}
                                 >
                                     <button
-                                        onClick={() => setActiveCommerce(prev => prev === task.commerceId ? null : task.commerceId)}
+                                        onClick={() => setActiveObservationUnit(prev => prev === task.observationUnitId ? null : task.observationUnitId)}
                                         className="w-full flex justify-between items-center p-3 text-left rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         aria-expanded={isTaskActive}
-                                        aria-label={`${task.commerceName} - ${task.status} - ${completedCount} de ${totalCount} productos registrados`}
+                                        aria-label={`${task.observationUnitName} - ${task.status} - ${completedCount} de ${totalCount} variables registradas`}
                                     >
                                         <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                                             <CircularProgress percentage={percentage} />
                                             <div className="min-w-0 flex-1">
-                                                <h3 className="font-bold text-base sm:text-lg text-gray-800 dark:text-gray-100 truncate">{task.commerceName}</h3>
-                                                <p className={`font-semibold text-xs sm:text-sm ${task.status === 'Completado' ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>{completedCount} / {totalCount} productos</p>
+                                                <h3 className="font-bold text-base sm:text-lg text-gray-800 dark:text-gray-100 truncate">{task.observationUnitName}</h3>
+                                                <p className={`font-semibold text-xs sm:text-sm ${task.status === 'Completado' ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>{completedCount} / {totalCount} variables</p>
                                             </div>
                                         </div>
                                         <ChevronRight size={20} className={`transition-transform text-gray-500 dark:text-gray-400 flex-shrink-0 ${isTaskActive ? 'rotate-90' : ''}`} aria-hidden="true" />
@@ -401,10 +432,10 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                                         <div className="p-3 animate-fade-in">
                                             <ActionButton />
                                             <RegistrationSummary
-                                                products={staticData.products}
-                                                categories={staticData.categories}
-                                                prices={prices}
-                                                title={task.status === 'Completado' ? 'Precios Enviados' : 'Progreso de Registro'}
+                                                variables={staticData.variables}
+                                                studyFields={staticData.studyFields}
+                                                values={values}
+                                                title={task.status === 'Completado' ? 'Valores Enviados' : 'Progreso de Registro'}
                                             />
                                         </div>
                                     )}
@@ -415,13 +446,13 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                 )}
             </div>
 
-            {editingCommerce && (
+            {editingObservationUnit && (
                 <Suspense fallback={<LoadingOverlay message="Cargando formulario..." />}>
                     <RegistrationWizard
-                        commerce={editingCommerce}
-                        products={staticData.products}
-                        categories={staticData.categories}
-                        initialDraft={editingCommerce.initialDraft}
+                        observationUnit={editingObservationUnit}
+                        variables={staticData.variables}
+                        studyFields={staticData.studyFields}
+                        initialDraft={editingObservationUnit.initialDraft}
                         onClose={handleCloseWizard}
                         onSubmitSuccess={handleSubmissionSuccess}
                     />

@@ -6,15 +6,34 @@ import { useTheme } from '../contexts/ThemeContext';
 import { getReactSelectStyles } from '../utils/reactSelectStyles';
 import type {
     AuthUser,
-    Category,
     CompletionLevel,
     MonitorPeriod,
     MonitorStudent,
     MonitorTaskStatus,
-    PriceMap,
-    Product,
+    ObservationValueMap,
     StudentTasksResponse,
+    StudyField,
+    Variable,
 } from '../types/api';
+
+// `false` (booleano) es una respuesta válida, no la ausencia de una -- el
+// código pre-rename usaba `prices[p.id] || prices[p.id] === 0`, que
+// funcionaba para 0 pero no para `false` (Fase L, bug corregido de paso).
+const hasValidValue = (value: unknown): value is number | string | boolean => value != null && value !== '';
+
+function formatValuePreview(variable: Variable, value: unknown): string {
+    if (!hasValidValue(value)) return 'N/A';
+    switch (variable.dataType) {
+        case 'numeric': {
+            const num = Number(value);
+            return new Intl.NumberFormat('es-PY').format(num);
+        }
+        case 'boolean':
+            return value ? 'Sí' : 'No';
+        default:
+            return String(value);
+    }
+}
 
 // --- Componentes de UI Reutilizables ---
 
@@ -74,44 +93,44 @@ const ProgressBar = ({ current, total, size = 'md' }: ProgressBarProps) => {
 };
 
 interface RegistrationSummaryProps {
-    products: Product[];
-    categories: Category[];
-    prices: PriceMap;
+    variables: Variable[];
+    studyFields: StudyField[];
+    values: ObservationValueMap;
 }
 
-const RegistrationSummary = ({ products, categories, prices }: RegistrationSummaryProps) => {
-    const [activeCategory, setActiveCategory] = useState<number | null>(null);
+const RegistrationSummary = ({ variables, studyFields, values }: RegistrationSummaryProps) => {
+    const [activeStudyField, setActiveStudyField] = useState<number | null>(null);
 
     const summaryData = useMemo(() => {
-        return categories.map(category => {
-            const categoryProducts = products.filter(p => p.categoryId === category.id);
-            const completedCount = categoryProducts.filter(p => prices[p.id] || prices[p.id] === 0).length;
-            return { ...category, products: categoryProducts, completedCount };
+        return studyFields.map(field => {
+            const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
+            const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+            return { ...field, variables: fieldVariables, completedCount };
         });
-    }, [categories, products, prices]);
+    }, [studyFields, variables, values]);
 
     return (
         <div className="bg-gray-100 dark:bg-gray-900/30 p-4 rounded-2xl space-y-3 mt-4 border border-gray-200 dark:border-gray-700">
-            <h4 className="font-bold text-md text-gray-700 dark:text-gray-300 mb-2 px-2">Detalle de Productos</h4>
-            {summaryData.map(category => (
-                <div key={category.id} className="bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div onClick={() => setActiveCategory(prev => prev === category.id ? null : category.id)} className="w-full flex justify-between items-center p-3 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition">
+            <h4 className="font-bold text-md text-gray-700 dark:text-gray-300 mb-2 px-2">Detalle de Variables</h4>
+            {summaryData.map(field => (
+                <div key={field.id} className="bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div onClick={() => setActiveStudyField(prev => prev === field.id ? null : field.id)} className="w-full flex justify-between items-center p-3 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition">
                         <div className="flex-1">
-                            <h3 className="font-bold text-md text-gray-700 dark:text-gray-200 mb-1">{category.name}</h3>
-                            <ProgressBar current={category.completedCount} total={category.products.length} size="sm" />
+                            <h3 className="font-bold text-md text-gray-700 dark:text-gray-200 mb-1">{field.name}</h3>
+                            <ProgressBar current={field.completedCount} total={field.variables.length} size="sm" />
                         </div>
                         <div className="flex items-center gap-3 ml-4">
-                            <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{category.completedCount} / {category.products.length}</span>
-                            <ChevronRight size={20} className={`transition-transform text-gray-400 dark:text-gray-500 ${activeCategory === category.id ? 'rotate-90' : ''}`} />
+                            <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{field.completedCount} / {field.variables.length}</span>
+                            <ChevronRight size={20} className={`transition-transform text-gray-400 dark:text-gray-500 ${activeStudyField === field.id ? 'rotate-90' : ''}`} />
                         </div>
                     </div>
-                    {activeCategory === category.id && (
+                    {activeStudyField === field.id && (
                         <ul className="space-y-2 p-3 pt-0">
-                            {category.products.map(p => (
-                                <li key={p.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-md border border-gray-100 dark:border-gray-700">
-                                    <p className="font-medium text-gray-600 dark:text-gray-300 text-sm">{p.name}</p>
+                            {field.variables.map(v => (
+                                <li key={v.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-md border border-gray-100 dark:border-gray-700">
+                                    <p className="font-medium text-gray-600 dark:text-gray-300 text-sm">{v.name}</p>
                                     <p className="font-mono font-semibold text-sm text-blue-600 dark:text-blue-400">
-                                        {(prices[p.id] || prices[p.id] === 0) ? new Intl.NumberFormat('es-PY').format(Number(prices[p.id])) : 'N/A'}
+                                        {formatValuePreview(v, values[v.id])}
                                     </p>
                                 </li>
                             ))}
@@ -248,7 +267,7 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   const isDark = theme === 'dark';
 
   const [monitorData, setMonitorData] = useState<MonitorPeriod[]>([]);
-  const [staticData, setStaticData] = useState<{ products: Product[]; categories: Category[] }>({ products: [], categories: [] });
+  const [staticData, setStaticData] = useState<{ variables: Variable[]; studyFields: StudyField[] }>({ variables: [], studyFields: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -273,7 +292,7 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
           apiFetch<StudentTasksResponse>('/api/student-tasks')
         ]);
         setMonitorData(progressData);
-        setStaticData({ products: catalogData.products, categories: catalogData.categories });
+        setStaticData({ variables: catalogData.variables, studyFields: catalogData.studyFields });
 
         const openPeriod = progressData.find(p => p.status === 'Open');
         if (openPeriod) {
@@ -677,24 +696,24 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
                     <div className="bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700 p-4">
                       <div className="space-y-3">
                         {student.tasks.map(task => {
-                          const currentTaskId = `${student.studentId}-${task.commerceId}`;
+                          const currentTaskId = `${student.studentId}-${task.observationUnitId}`;
                           const isTaskActive = activeTaskId === currentTaskId;
                           const taskPercentage = task.progress.total > 0 ? (task.progress.current / task.progress.total) * 100 : 0;
 
                           return (
-                            <div key={task.commerceId} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div key={task.observationUnitId} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                               <div
                                 onClick={() => setActiveTaskId(prev => prev === currentTaskId ? null : currentTaskId)}
                                 className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
                               >
                                 <div className="flex-1 min-w-0 mr-4">
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{task.commerceName}</p>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{task.observationUnitName}</p>
                                     {getStatusChip(task.status, task.completionLevel)}
                                   </div>
                                   <div className="flex items-center gap-2 mb-2">
                                     <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
-                                      {task.progress.current} / {task.progress.total} productos
+                                      {task.progress.current} / {task.progress.total} variables
                                     </span>
                                     <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                                       {taskPercentage.toFixed(0)}%
@@ -711,9 +730,9 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
                               {isTaskActive && (
                                   <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50">
                                       <RegistrationSummary
-                                          products={staticData.products}
-                                          categories={staticData.categories}
-                                          prices={task.status === 'Completado' ? (task.submittedPrices || {}) : (task.draftPrices || {})}
+                                          variables={staticData.variables}
+                                          studyFields={staticData.studyFields}
+                                          values={task.status === 'Completado' ? (task.submittedValues || {}) : (task.draftValues || {})}
                                       />
                                   </div>
                               )}

@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../api';
 import type {
-    PriceEntryPayload,
     SaveDraftPayload,
     StudentDashboardPeriod,
     StudentTasksResponse,
+    SubmitObservationsPayload,
 } from '../types/api';
 
 // Query keys
@@ -35,10 +35,10 @@ export function useSaveDraft() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ commerceId, prices }: SaveDraftPayload) =>
-            apiFetch('/api/save-draft', {
+        mutationFn: (payload: SaveDraftPayload) =>
+            apiFetch('/api/draft-observations', {
                 method: 'POST',
-                body: JSON.stringify({ commerceId, prices }),
+                body: JSON.stringify(payload),
             }),
         onSuccess: () => {
             // Invalidate and refetch student dashboard
@@ -47,15 +47,15 @@ export function useSaveDraft() {
     });
 }
 
-// Submit prices mutation
-export function useSubmitPrices() {
+// Submit observations mutation
+export function useSubmitObservations() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (pricesData: PriceEntryPayload[]) =>
-            apiFetch('/api/submit-prices', {
+        mutationFn: (payload: SubmitObservationsPayload) =>
+            apiFetch('/api/observations', {
                 method: 'POST',
-                body: JSON.stringify(pricesData),
+                body: JSON.stringify(payload),
             }),
         onSuccess: () => {
             // Invalidate and refetch student dashboard

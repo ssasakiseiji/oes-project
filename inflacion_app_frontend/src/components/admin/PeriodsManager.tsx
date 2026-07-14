@@ -179,8 +179,8 @@ export const PeriodsManager = () => {
             'Scheduled': 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
         };
         const tooltips: Record<string, string> = {
-            'Open': 'Período activo - Los estudiantes pueden registrar precios',
-            'Closed': 'Período cerrado - Ya no se pueden registrar precios',
+            'Open': 'Período activo - Los estudiantes pueden registrar observaciones',
+            'Closed': 'Período cerrado - Ya no se pueden registrar observaciones',
             'Scheduled': 'Período programado - Aún no está activo'
         };
         return (
@@ -343,7 +343,7 @@ export const PeriodsManager = () => {
                     <EmptyState
                         icon={Calendar}
                         title="No hay períodos registrados"
-                        description="Crea tu primer período para comenzar a recopilar datos de precios."
+                        description="Crea tu primer período para comenzar a recopilar datos de variables."
                     />
                 ) : (
                     <>

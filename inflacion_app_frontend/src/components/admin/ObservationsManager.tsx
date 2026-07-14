@@ -4,7 +4,7 @@ import { Filter, MoreVertical, Download, Search, Check, X, Edit, Trash2, AlertTr
 import { useHotkeys } from 'react-hotkeys-hook';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
-import { exportToCSV, exportToExcel } from '../../utils/exportUtils';
+import { exportToCSV, exportToExcel, formatObservationValue } from '../../utils/exportUtils';
 import { getReactSelectStyles } from '../../utils/reactSelectStyles';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
@@ -12,7 +12,7 @@ import { Pagination } from '../ui/Pagination';
 import { TableSkeleton } from '../ui/TableSkeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmModal } from '../ui/ConfirmModal';
-import type { Commerce, Category, Period, PriceRow, Product, StudentTasksResponse, User } from '../../types/api';
+import type { ObservationUnit, StudyField, ObservationRow, Period, StudentTasksResponse, User, Variable, VariableDataType } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -24,45 +24,66 @@ interface FilterPeriodOption {
 
 interface SelectedFilters {
     periodId: number | string | null;
-    categoryId: number | null;
-    productId: number | null;
+    studyFieldId: number | null;
+    variableId: number | null;
     userId: number | null;
-    commerceId: number | null;
+    observationUnitId: number | null;
     showOutliersOnly: boolean;
 }
 
 interface FilterOptions {
     periods: FilterPeriodOption[];
-    categories: Category[];
-    products: Product[];
+    studyFields: StudyField[];
+    variables: Variable[];
     users: User[];
-    commerces: Commerce[];
+    observationUnits: ObservationUnit[];
 }
 
-interface EditingPriceState {
+interface EditingObservationState {
     id: number | null;
+    dataType: VariableDataType | null;
+    isCurrency: boolean;
     value: string;
-    originalValue: number | null;
+    booleanValue: boolean;
+    originalValue: string;
 }
 
-export const PricesManager = () => {
-    const [prices, setPrices] = useState<PriceRow[]>([]);
+const emptyEditingState: EditingObservationState = { id: null, dataType: null, isCurrency: false, value: '', booleanValue: false, originalValue: '' };
+
+const EXPORT_HEADERS = [
+    { key: 'variableName' as const, label: 'Variable' },
+    { key: 'studyFieldName' as const, label: 'Campo de Estudio' },
+    { key: 'formattedValue' as const, label: 'Valor' },
+    { key: 'observationUnitName' as const, label: 'Unidad de Observación' },
+    { key: 'userName' as const, label: 'Estudiante' },
+    { key: 'createdAt' as const, label: 'Fecha' }
+];
+
+type ExportRow = ObservationRow & { formattedValue: string };
+
+// Solo columnas de texto/no-nulas son ordenables -- el valor en sí es
+// polimórfico (numericValue/textValue/booleanValue/choiceValue, varias
+// nullable) y no tiene un único campo comparable con < / >.
+type SortableKey = 'variableName' | 'studyFieldName' | 'observationUnitName' | 'userName' | 'periodName';
+
+export const ObservationsManager = () => {
+    const [observations, setObservations] = useState<ObservationRow[]>([]);
     const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
     const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({
         periodId: null,
-        categoryId: null,
-        productId: null,
+        studyFieldId: null,
+        variableId: null,
         userId: null,
-        commerceId: null,
+        observationUnitId: null,
         showOutliersOnly: false
     });
-    const [filterOptions, setFilterOptions] = useState<FilterOptions>({ periods: [], categories: [], products: [], users: [], commerces: [] });
+    const [filterOptions, setFilterOptions] = useState<FilterOptions>({ periods: [], studyFields: [], variables: [], users: [], observationUnits: [] });
     const [isLoading, setIsLoading] = useState(true);
-    const [editingPrice, setEditingPrice] = useState<EditingPriceState>({ id: null, value: '', originalValue: null });
+    const [editingObservation, setEditingObservation] = useState<EditingObservationState>(emptyEditingState);
     const [showFilters, setShowFilters] = useState(false);
-    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; priceId: number | null }>({ isOpen: false, priceId: null });
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; observationId: number | null }>({ isOpen: false, observationId: null });
     const [currentPage, setCurrentPage] = useState(1);
-    const [sortConfig, setSortConfig] = useState<{ key: keyof PriceRow | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState<{ key: SortableKey | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
     const [searchTerm, setSearchTerm] = useState('');
     const [showExportMenu, setShowExportMenu] = useState(false);
     const itemsPerPage = 10;
@@ -72,17 +93,20 @@ export const PricesManager = () => {
     const exportMenuRef = useRef<HTMLDivElement>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
 
-    const sortedPrices = useMemo(() => {
-        let sorted = [...prices];
+    const toExportRows = (rows: ObservationRow[]): ExportRow[] =>
+        rows.map(r => ({ ...r, formattedValue: formatObservationValue(r) }));
+
+    const sortedObservations = useMemo(() => {
+        let sorted = [...observations];
 
         // Apply search filter
         if (searchTerm.trim()) {
             const search = searchTerm.toLowerCase();
-            sorted = sorted.filter(p =>
-                p.productName?.toLowerCase().includes(search) ||
-                p.commerceName?.toLowerCase().includes(search) ||
-                p.userName?.toLowerCase().includes(search) ||
-                String(p.price).includes(search)
+            sorted = sorted.filter(o =>
+                o.variableName?.toLowerCase().includes(search) ||
+                o.observationUnitName?.toLowerCase().includes(search) ||
+                o.userName?.toLowerCase().includes(search) ||
+                formatObservationValue(o).toLowerCase().includes(search)
             );
         }
 
@@ -96,7 +120,7 @@ export const PricesManager = () => {
             });
         }
         return sorted;
-    }, [prices, sortConfig, searchTerm]);
+    }, [observations, sortConfig, searchTerm]);
 
     // Keyboard shortcuts
     useHotkeys('ctrl+k, cmd+k', (e) => {
@@ -106,16 +130,8 @@ export const PricesManager = () => {
 
     useHotkeys('ctrl+e, cmd+e', (e) => {
         e.preventDefault();
-        if (prices.length > 0) {
-            const headers = [
-                { key: 'productName' as const, label: 'Producto' },
-                { key: 'categoryName' as const, label: 'Categoría' },
-                { key: 'price' as const, label: 'Precio (₲)' },
-                { key: 'commerceName' as const, label: 'Comercio' },
-                { key: 'userName' as const, label: 'Estudiante' },
-                { key: 'createdAt' as const, label: 'Fecha' }
-            ];
-            exportToCSV(sortedPrices, 'precios_registrados', headers);
+        if (observations.length > 0) {
+            exportToCSV(toExportRows(sortedObservations), 'observaciones_registradas', EXPORT_HEADERS);
             toast.success('Datos exportados a CSV (Ctrl+E)');
         }
     });
@@ -143,10 +159,10 @@ export const PricesManager = () => {
 
             setFilterOptions({
                 periods: allPeriods,
-                categories: t.categories,
-                products: t.products,
+                studyFields: t.studyFields,
+                variables: t.variables,
                 users: u,
-                commerces: t.assignedCommerces
+                observationUnits: t.assignedObservationUnits
             });
 
             // Configurar "Último Período" por defecto
@@ -174,14 +190,14 @@ export const PricesManager = () => {
 
     // Focus input when editing starts
     useEffect(() => {
-        if (editingPrice.id && editInputRef.current) {
+        if (editingObservation.id && editInputRef.current) {
             editInputRef.current.focus();
             editInputRef.current.select();
         }
-    }, [editingPrice.id]);
+    }, [editingObservation.id]);
 
     useEffect(() => {
-        const fetchPrices = async () => {
+        const fetchObservations = async () => {
             setIsLoading(true);
             const validFilters = Object.fromEntries(
                 Object.entries(filters)
@@ -190,15 +206,15 @@ export const PricesManager = () => {
             );
             const params = new URLSearchParams(validFilters);
             try {
-                const data = await apiFetch<PriceRow[]>(`/api/prices?${params.toString()}`);
-                setPrices(data);
+                const data = await apiFetch<ObservationRow[]>(`/api/observations?${params.toString()}`);
+                setObservations(data);
             } catch (err) {
-                toast.error(`Error al cargar precios: ${getErrorMessage(err)}`);
+                toast.error(`Error al cargar observaciones: ${getErrorMessage(err)}`);
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchPrices();
+        fetchObservations();
     }, [filters]);
 
     const handleFilterChange = <K extends keyof SelectedFilters>(key: K, value: SelectedFilters[K]) => {
@@ -238,10 +254,10 @@ export const PricesManager = () => {
 
         setSelectedFilters({
             periodId: defaultPeriodId,
-            categoryId: null,
-            productId: null,
+            studyFieldId: null,
+            variableId: null,
             userId: null,
-            commerceId: null,
+            observationUnitId: null,
             showOutliersOnly: false
         });
         setFilters(defaultPeriodId !== null ? { periodId: defaultPeriodId } : {});
@@ -253,75 +269,100 @@ export const PricesManager = () => {
         return Object.values(filters).filter(v => v !== null && v !== false && v !== '').length;
     }, [filters]);
 
-    const handleSort = (key: keyof PriceRow) => {
+    const handleSort = (key: SortableKey) => {
         setSortConfig(prev => ({
             key,
             direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
         }));
     };
 
-    const paginatedPrices = useMemo(() => {
+    const paginatedObservations = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
-        return sortedPrices.slice(start, start + itemsPerPage);
-    }, [sortedPrices, currentPage]);
+        return sortedObservations.slice(start, start + itemsPerPage);
+    }, [sortedObservations, currentPage]);
 
-    const totalPages = Math.ceil(sortedPrices.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedObservations.length / itemsPerPage);
 
-    const handleSaveEdit = async (priceId: number) => {
-        const newValue = parseInt(editingPrice.value);
+    const startEditing = (row: ObservationRow) => {
+        if (row.dataType === 'numeric') {
+            const intValue = Math.floor(Number(row.numericValue));
+            setEditingObservation({ id: row.id, dataType: 'numeric', isCurrency: row.isCurrency, value: intValue.toString(), booleanValue: false, originalValue: intValue.toString() });
+        } else if (row.dataType === 'boolean') {
+            setEditingObservation({ id: row.id, dataType: 'boolean', isCurrency: false, value: '', booleanValue: !!row.booleanValue, originalValue: row.booleanValue ? 'true' : 'false' });
+        } else if (row.dataType === 'categorical') {
+            setEditingObservation({ id: row.id, dataType: 'categorical', isCurrency: false, value: row.choiceValue ?? '', booleanValue: false, originalValue: row.choiceValue ?? '' });
+        } else {
+            setEditingObservation({ id: row.id, dataType: 'text', isCurrency: false, value: row.textValue ?? '', booleanValue: false, originalValue: row.textValue ?? '' });
+        }
+    };
 
-        // Validar que el valor cambió
-        if (newValue === editingPrice.originalValue) {
-            toast.info('No se detectaron cambios');
-            setEditingPrice({ id: null, value: '', originalValue: null });
-            return;
+    const cancelEditing = () => setEditingObservation(emptyEditingState);
+
+    const handleSaveEdit = async (observationId: number) => {
+        const { dataType, value, booleanValue, originalValue } = editingObservation;
+        if (!dataType) return;
+
+        let payloadValue: number | string | boolean;
+        let comparableValue: string;
+
+        if (dataType === 'numeric') {
+            const newValue = parseInt(value);
+            if (isNaN(newValue) || newValue <= 0) {
+                toast.error('El valor debe ser un número mayor a 0');
+                return;
+            }
+            payloadValue = newValue;
+            comparableValue = newValue.toString();
+        } else if (dataType === 'boolean') {
+            payloadValue = booleanValue;
+            comparableValue = booleanValue ? 'true' : 'false';
+        } else {
+            if (!value.trim()) {
+                toast.error('El valor no puede estar vacío');
+                return;
+            }
+            payloadValue = value.trim();
+            comparableValue = value.trim();
         }
 
-        // Validar que el valor es válido
-        if (isNaN(newValue) || newValue <= 0) {
-            toast.error('El precio debe ser un número mayor a 0');
+        if (comparableValue === originalValue) {
+            toast.info('No se detectaron cambios');
+            setEditingObservation(emptyEditingState);
             return;
         }
 
         try {
-            await apiFetch(`/api/prices/${priceId}`, { method: 'PUT', body: JSON.stringify({ price: newValue }) });
+            await apiFetch(`/api/observations/${observationId}`, { method: 'PUT', body: JSON.stringify({ value: payloadValue }) });
 
-            // Actualizar el precio localmente sin recargar toda la tabla
-            setPrices(prevPrices =>
-                prevPrices.map(p =>
-                    p.id === priceId ? { ...p, price: newValue } : p
-                )
+            setObservations(prev =>
+                prev.map(o => {
+                    if (o.id !== observationId) return o;
+                    if (dataType === 'numeric') return { ...o, numericValue: payloadValue as number };
+                    if (dataType === 'boolean') return { ...o, booleanValue: payloadValue as boolean };
+                    if (dataType === 'categorical') return { ...o, choiceValue: payloadValue as string };
+                    return { ...o, textValue: payloadValue as string };
+                })
             );
 
-            toast.success('Precio actualizado exitosamente');
-            setEditingPrice({ id: null, value: '', originalValue: null });
+            toast.success('Observación actualizada exitosamente');
+            setEditingObservation(emptyEditingState);
         } catch (err) {
-            toast.error(`Error al actualizar precio: ${getErrorMessage(err)}`);
+            toast.error(`Error al actualizar observación: ${getErrorMessage(err)}`);
         }
     };
 
-    const startEditing = (price: PriceRow) => {
-        const intPrice = Math.floor(Number(price.price));
-        setEditingPrice({ id: price.id, value: intPrice.toString(), originalValue: intPrice });
-    };
-
-    const cancelEditing = () => {
-        setEditingPrice({ id: null, value: '', originalValue: null });
-    };
-
-    const handleDelete = async (priceId: number) => {
-        setConfirmModal({ isOpen: true, priceId });
+    const handleDelete = async (observationId: number) => {
+        setConfirmModal({ isOpen: true, observationId });
     };
 
     const confirmDelete = async () => {
         try {
-            await apiFetch(`/api/prices/${confirmModal.priceId}`, { method: 'DELETE' });
+            await apiFetch(`/api/observations/${confirmModal.observationId}`, { method: 'DELETE' });
 
-            // Eliminar el registro localmente sin recargar toda la tabla
-            setPrices(prevPrices => prevPrices.filter(p => p.id !== confirmModal.priceId));
+            setObservations(prev => prev.filter(o => o.id !== confirmModal.observationId));
 
             toast.success('Registro eliminado exitosamente');
-            setConfirmModal({ isOpen: false, priceId: null });
+            setConfirmModal({ isOpen: false, observationId: null });
         } catch (err) {
             toast.error(`Error al eliminar registro: ${getErrorMessage(err)}`);
         }
@@ -333,12 +374,12 @@ export const PricesManager = () => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in">
                 {/* Header con título y botones de acción */}
                 <div className="flex justify-between items-center flex-wrap gap-3">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Auditoría de Registros</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Auditoría de Observaciones</h3>
                     <div className="flex items-center gap-2">
-                        <Tooltip content={editingPrice.id ? "Finaliza la edición para usar filtros" : "Toggle Filtros (Ctrl+/)"}>
+                        <Tooltip content={editingObservation.id ? "Finaliza la edición para usar filtros" : "Toggle Filtros (Ctrl+/)"}>
                             <button
                                 onClick={() => setShowFilters(!showFilters)}
-                                disabled={editingPrice.id !== null}
+                                disabled={editingObservation.id !== null}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition relative disabled:opacity-50 disabled:cursor-not-allowed ${
                                     showFilters
                                         ? 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
@@ -355,10 +396,10 @@ export const PricesManager = () => {
                         </Tooltip>
                         {/* Dropdown menu for export */}
                         <div className="relative" ref={exportMenuRef}>
-                            <Tooltip content={editingPrice.id ? "Finaliza la edición para exportar" : "Opciones de exportación"}>
+                            <Tooltip content={editingObservation.id ? "Finaliza la edición para exportar" : "Opciones de exportación"}>
                                 <button
                                     onClick={() => setShowExportMenu(!showExportMenu)}
-                                    disabled={prices.length === 0 || editingPrice.id !== null}
+                                    disabled={observations.length === 0 || editingObservation.id !== null}
                                     className="p-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <MoreVertical size={20} />
@@ -368,15 +409,7 @@ export const PricesManager = () => {
                                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 overflow-hidden z-50 animate-scale-in">
                                     <button
                                         onClick={() => {
-                                            const headers = [
-                                                { key: 'productName' as const, label: 'Producto' },
-                                                { key: 'categoryName' as const, label: 'Categoría' },
-                                                { key: 'price' as const, label: 'Precio (₲)' },
-                                                { key: 'commerceName' as const, label: 'Comercio' },
-                                                { key: 'userName' as const, label: 'Estudiante' },
-                                                { key: 'createdAt' as const, label: 'Fecha' }
-                                            ];
-                                            exportToCSV(sortedPrices, 'precios_registrados', headers);
+                                            exportToCSV(toExportRows(sortedObservations), 'observaciones_registradas', EXPORT_HEADERS);
                                             toast.success('Datos exportados a CSV');
                                             setShowExportMenu(false);
                                         }}
@@ -387,15 +420,7 @@ export const PricesManager = () => {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            const headers = [
-                                                { key: 'productName' as const, label: 'Producto' },
-                                                { key: 'categoryName' as const, label: 'Categoría' },
-                                                { key: 'price' as const, label: 'Precio (₲)' },
-                                                { key: 'commerceName' as const, label: 'Comercio' },
-                                                { key: 'userName' as const, label: 'Estudiante' },
-                                                { key: 'createdAt' as const, label: 'Fecha' }
-                                            ];
-                                            exportToExcel(sortedPrices, 'precios_registrados', headers, 'Precios');
+                                            exportToExcel(toExportRows(sortedObservations), 'observaciones_registradas', EXPORT_HEADERS, 'Observaciones');
                                             toast.success('Datos exportados a Excel');
                                             setShowExportMenu(false);
                                         }}
@@ -417,13 +442,13 @@ export const PricesManager = () => {
                         <input
                             ref={searchInputRef}
                             type="text"
-                            placeholder={editingPrice.id ? "Finaliza la edición para buscar" : "Buscar por producto, comercio o estudiante... (Ctrl+K)"}
+                            placeholder={editingObservation.id ? "Finaliza la edición para buscar" : "Buscar por variable, unidad o estudiante... (Ctrl+K)"}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            disabled={editingPrice.id !== null}
+                            disabled={editingObservation.id !== null}
                             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
                         />
-                        {searchTerm && !editingPrice.id && (
+                        {searchTerm && !editingObservation.id && (
                             <button
                                 onClick={() => setSearchTerm('')}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -434,7 +459,7 @@ export const PricesManager = () => {
                     </div>
                     {searchTerm && (
                         <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                            {sortedPrices.length} resultado{sortedPrices.length !== 1 ? 's' : ''}
+                            {sortedObservations.length} resultado{sortedObservations.length !== 1 ? 's' : ''}
                         </span>
                     )}
                 </div>
@@ -465,23 +490,23 @@ export const PricesManager = () => {
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Categoría</label>
+                                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Campo de Estudio</label>
                                 <Select<{ value: number; label?: string }>
-                                    placeholder="Seleccionar categoría..."
-                                    value={filterOptions.categories.find(o => o.id === selectedFilters.categoryId) ? {value: selectedFilters.categoryId!, label: filterOptions.categories.find(o => o.id === selectedFilters.categoryId)?.name} : null}
-                                    options={filterOptions.categories.map(o=>({value:o.id, label:o.name}))}
-                                    onChange={v => handleFilterChange('categoryId', v?.value ?? null)}
+                                    placeholder="Seleccionar campo de estudio..."
+                                    value={filterOptions.studyFields.find(o => o.id === selectedFilters.studyFieldId) ? {value: selectedFilters.studyFieldId!, label: filterOptions.studyFields.find(o => o.id === selectedFilters.studyFieldId)?.name} : null}
+                                    options={filterOptions.studyFields.map(o=>({value:o.id, label:o.name}))}
+                                    onChange={v => handleFilterChange('studyFieldId', v?.value ?? null)}
                                     isClearable
                                     styles={getReactSelectStyles(isDark)}
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Producto</label>
+                                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Variable</label>
                                 <Select<{ value: number; label?: string }>
-                                    placeholder="Seleccionar producto..."
-                                    value={filterOptions.products.find(o => o.id === selectedFilters.productId) ? {value: selectedFilters.productId!, label: filterOptions.products.find(o => o.id === selectedFilters.productId)?.name} : null}
-                                    options={filterOptions.products.map(o=>({value:o.id, label:o.name}))}
-                                    onChange={v => handleFilterChange('productId', v?.value ?? null)}
+                                    placeholder="Seleccionar variable..."
+                                    value={filterOptions.variables.find(o => o.id === selectedFilters.variableId) ? {value: selectedFilters.variableId!, label: filterOptions.variables.find(o => o.id === selectedFilters.variableId)?.name} : null}
+                                    options={filterOptions.variables.map(o=>({value:o.id, label:o.name}))}
+                                    onChange={v => handleFilterChange('variableId', v?.value ?? null)}
                                     isClearable
                                     styles={getReactSelectStyles(isDark)}
                                 />
@@ -498,12 +523,12 @@ export const PricesManager = () => {
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Comercio</label>
+                                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Unidad de Observación</label>
                                 <Select<{ value: number; label?: string }>
-                                    placeholder="Seleccionar comercio..."
-                                    value={filterOptions.commerces?.find(o => o.id === selectedFilters.commerceId) ? {value: selectedFilters.commerceId!, label: filterOptions.commerces?.find(o => o.id === selectedFilters.commerceId)?.name} : null}
-                                    options={filterOptions.commerces?.map(o=>({value:o.id, label:o.name})) || []}
-                                    onChange={v => handleFilterChange('commerceId', v?.value ?? null)}
+                                    placeholder="Seleccionar unidad..."
+                                    value={filterOptions.observationUnits?.find(o => o.id === selectedFilters.observationUnitId) ? {value: selectedFilters.observationUnitId!, label: filterOptions.observationUnits?.find(o => o.id === selectedFilters.observationUnitId)?.name} : null}
+                                    options={filterOptions.observationUnits?.map(o=>({value:o.id, label:o.name})) || []}
+                                    onChange={v => handleFilterChange('observationUnitId', v?.value ?? null)}
                                     isClearable
                                     styles={getReactSelectStyles(isDark)}
                                 />
@@ -546,11 +571,11 @@ export const PricesManager = () => {
                 )}
                 {isLoading ? (
                     <TableSkeleton rows={5} columns={6} />
-                ) : prices.length === 0 ? (
+                ) : observations.length === 0 ? (
                     <EmptyState
                         icon={Database}
-                        title="No hay registros de precios"
-                        description="Los estudiantes aún no han registrado precios, o los filtros aplicados no coinciden con ningún registro."
+                        title="No hay observaciones registradas"
+                        description="Los estudiantes aún no han registrado observaciones, o los filtros aplicados no coinciden con ningún registro."
                     />
                 ) : (
                     <>
@@ -558,40 +583,31 @@ export const PricesManager = () => {
                             <table className="min-w-full text-left text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-200 dark:border-gray-700">
-                                        <th onClick={() => handleSort('productName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                        <th onClick={() => handleSort('variableName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
                                             <div className="flex items-center gap-2">
-                                                Producto
-                                                {sortConfig.key === 'productName' ? (
+                                                Variable
+                                                {sortConfig.key === 'variableName' ? (
                                                     sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
                                                 ) : (
                                                     <ArrowUpDown size={14} className="opacity-40" />
                                                 )}
                                             </div>
                                         </th>
-                                        <th onClick={() => handleSort('categoryName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                        <th onClick={() => handleSort('studyFieldName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
                                             <div className="flex items-center gap-2">
-                                                Categoría
-                                                {sortConfig.key === 'categoryName' ? (
+                                                Campo de Estudio
+                                                {sortConfig.key === 'studyFieldName' ? (
                                                     sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
                                                 ) : (
                                                     <ArrowUpDown size={14} className="opacity-40" />
                                                 )}
                                             </div>
                                         </th>
-                                        <th onClick={() => handleSort('price')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                        <th className="p-3 text-gray-500 dark:text-gray-400">Valor</th>
+                                        <th onClick={() => handleSort('observationUnitName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
                                             <div className="flex items-center gap-2">
-                                                Precio
-                                                {sortConfig.key === 'price' ? (
-                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('commerceName')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                                            <div className="flex items-center gap-2">
-                                                Comercio
-                                                {sortConfig.key === 'commerceName' ? (
+                                                Unidad de Observación
+                                                {sortConfig.key === 'observationUnitName' ? (
                                                     sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
                                                 ) : (
                                                     <ArrowUpDown size={14} className="opacity-40" />
@@ -622,57 +638,79 @@ export const PricesManager = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                {paginatedPrices.map(p => (
-                            <tr key={p.id} className={`border-b border-gray-100 dark:border-gray-700 last:border-none transition-all ${
-                                editingPrice.id === p.id
+                                {paginatedObservations.map(o => (
+                            <tr key={o.id} className={`border-b border-gray-100 dark:border-gray-700 last:border-none transition-all ${
+                                editingObservation.id === o.id
                                     ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 dark:ring-blue-400 ring-inset'
-                                    : p.isOutlier
+                                    : o.isOutlier
                                         ? 'bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30'
                                         : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                             }`}>
-                                <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{p.productName}</td>
+                                <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{o.variableName}</td>
                                 <td className="p-3 text-gray-600 dark:text-gray-400">
                                     <span className="text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                                        {p.categoryName}
+                                        {o.studyFieldName}
                                     </span>
                                 </td>
                                 <td className="p-3 font-mono text-gray-800 dark:text-gray-100">
-                                    {editingPrice.id === p.id ? (
-                                        <input
-                                            ref={editInputRef}
-                                            type="text"
-                                            inputMode="numeric"
-                                            pattern="[0-9]*"
-                                            value={editingPrice.value ? new Intl.NumberFormat('es-PY').format(parseInt(editingPrice.value) || 0) : ''}
-                                            onChange={e => {
-                                                const value = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-                                                setEditingPrice({...editingPrice, value: value});
-                                            }}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter') handleSaveEdit(p.id);
-                                                if (e.key === 'Escape') cancelEditing();
-                                            }}
-                                            className="w-32 p-1 border-2 border-blue-500 dark:border-blue-400 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                        />
+                                    {editingObservation.id === o.id ? (
+                                        editingObservation.dataType === 'numeric' ? (
+                                            <input
+                                                ref={editInputRef}
+                                                type="text"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                value={editingObservation.value ? new Intl.NumberFormat('es-PY').format(parseInt(editingObservation.value) || 0) : ''}
+                                                onChange={e => {
+                                                    const value = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                                                    setEditingObservation({...editingObservation, value});
+                                                }}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleSaveEdit(o.id);
+                                                    if (e.key === 'Escape') cancelEditing();
+                                                }}
+                                                className="w-32 p-1 border-2 border-blue-500 dark:border-blue-400 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            />
+                                        ) : editingObservation.dataType === 'boolean' ? (
+                                            <select
+                                                value={editingObservation.booleanValue ? 'true' : 'false'}
+                                                onChange={e => setEditingObservation({...editingObservation, booleanValue: e.target.value === 'true'})}
+                                                className="p-1 border-2 border-blue-500 dark:border-blue-400 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="true">Sí</option>
+                                                <option value="false">No</option>
+                                            </select>
+                                        ) : (
+                                            <input
+                                                ref={editInputRef}
+                                                type="text"
+                                                value={editingObservation.value}
+                                                onChange={e => setEditingObservation({...editingObservation, value: e.target.value})}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleSaveEdit(o.id);
+                                                    if (e.key === 'Escape') cancelEditing();
+                                                }}
+                                                className="w-40 p-1 border-2 border-blue-500 dark:border-blue-400 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        )
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            <span>{new Intl.NumberFormat('es-PY').format(Number(p.price))}</span>
-                                            {p.isOutlier && <AlertTriangle size={16} className="text-yellow-500 dark:text-yellow-400"/>}
+                                            <span>{formatObservationValue(o) || <span className="text-gray-400 italic">Sin valor</span>}</span>
+                                            {o.isOutlier && <AlertTriangle size={16} className="text-yellow-500 dark:text-yellow-400"/>}
                                         </div>
                                     )}
                                 </td>
-                                <td className="p-3 text-gray-700 dark:text-gray-300">{p.commerceName}</td>
-                                <td className="p-3 text-gray-700 dark:text-gray-300">{p.userName}</td>
-                                <td className="p-3 text-gray-700 dark:text-gray-300">{p.periodName}</td>
+                                <td className="p-3 text-gray-700 dark:text-gray-300">{o.observationUnitName}</td>
+                                <td className="p-3 text-gray-700 dark:text-gray-300">{o.userName}</td>
+                                <td className="p-3 text-gray-700 dark:text-gray-300">{o.periodName}</td>
                                 <td className="p-3">
                                     <div className="flex gap-1">
-                                        {editingPrice.id === p.id ? (
+                                        {editingObservation.id === o.id ? (
                                             <>
                                                 <Tooltip content="Guardar (Enter)">
                                                     <button
-                                                        onClick={() => handleSaveEdit(p.id)}
-                                                        disabled={parseInt(editingPrice.value) === editingPrice.originalValue}
-                                                        className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        onClick={() => handleSaveEdit(o.id)}
+                                                        className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-full transition"
                                                     >
                                                         <Check size={16} className="text-green-600 dark:text-green-400"/>
                                                     </button>
@@ -688,10 +726,10 @@ export const PricesManager = () => {
                                             </>
                                         ) : (
                                             <>
-                                                <Tooltip content="Editar precio">
+                                                <Tooltip content="Editar valor">
                                                     <button
-                                                        onClick={() => startEditing(p)}
-                                                        disabled={editingPrice.id !== null}
+                                                        onClick={() => startEditing(o)}
+                                                        disabled={editingObservation.id !== null}
                                                         className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full transition disabled:opacity-30 disabled:cursor-not-allowed"
                                                     >
                                                         <Edit size={16} className="text-blue-600 dark:text-blue-400"/>
@@ -699,8 +737,8 @@ export const PricesManager = () => {
                                                 </Tooltip>
                                                 <Tooltip content="Eliminar registro">
                                                     <button
-                                                        onClick={() => handleDelete(p.id)}
-                                                        disabled={editingPrice.id !== null}
+                                                        onClick={() => handleDelete(o.id)}
+                                                        disabled={editingObservation.id !== null}
                                                         className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full transition disabled:opacity-30 disabled:cursor-not-allowed"
                                                     >
                                                         <Trash2 size={16} className="text-red-600 dark:text-red-400"/>
@@ -718,7 +756,7 @@ export const PricesManager = () => {
                         <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}
-                            totalItems={sortedPrices.length}
+                            totalItems={sortedObservations.length}
                             itemsPerPage={itemsPerPage}
                             onPageChange={setCurrentPage}
                         />
@@ -727,7 +765,7 @@ export const PricesManager = () => {
             </div>
             <ConfirmModal
                 isOpen={confirmModal.isOpen}
-                onClose={() => setConfirmModal({ isOpen: false, priceId: null })}
+                onClose={() => setConfirmModal({ isOpen: false, observationId: null })}
                 onConfirm={confirmDelete}
                 title="Confirmar eliminación"
                 message="¿Estás seguro de que quieres eliminar este registro? Esta acción no se puede deshacer."

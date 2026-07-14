@@ -10,7 +10,7 @@ export interface PopoverItem {
 
 export interface StudentCommercePopoverProps {
     items?: PopoverItem[];
-    type?: 'students' | 'commerces';
+    type?: 'students' | 'observationUnits';
 }
 
 export const StudentCommercePopover = ({ items = [], type = 'students' }: StudentCommercePopoverProps) => {
@@ -43,7 +43,7 @@ export const StudentCommercePopover = ({ items = [], type = 'students' }: Studen
                 className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-medium"
             >
                 <Icon size={14} />
-                <span>{count} {type === 'students' ? 'estudiantes' : 'comercios'}</span>
+                <span>{count} {type === 'students' ? 'estudiantes' : 'unidades'}</span>
             </button>
 
             {/* Floating Modal */}
@@ -60,7 +60,7 @@ export const StudentCommercePopover = ({ items = [], type = 'students' }: Studen
                         <div className="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700">
                             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                                 <Icon size={20} />
-                                {type === 'students' ? 'Estudiantes Asignados' : 'Comercios Asignados'}
+                                {type === 'students' ? 'Estudiantes Asignados' : 'Unidades Asignadas'}
                             </h3>
                             <button
                                 onClick={() => setIsModalOpen(false)}
@@ -97,7 +97,7 @@ export const StudentCommercePopover = ({ items = [], type = 'students' }: Studen
                         {/* Footer */}
                         <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
                             <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                                Total: <span className="font-semibold text-gray-800 dark:text-gray-200">{count}</span> {type === 'students' ? 'estudiante(s)' : 'comercio(s)'}
+                                Total: <span className="font-semibold text-gray-800 dark:text-gray-200">{count}</span> {type === 'students' ? 'estudiante(s)' : 'unidad(es)'}
                             </p>
                         </div>
                     </div>

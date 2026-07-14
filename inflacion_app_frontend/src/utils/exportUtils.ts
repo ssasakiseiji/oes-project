@@ -166,15 +166,45 @@ export const exportMultipleSheetsToExcel = (datasets: ExportDataset<any>[], file
 };
 
 /**
- * Formatea un precio en guaraníes
+ * Formatea un monto en guaraníes
  */
-export const formatPrice = (price: number | string | null | undefined) => {
-    if (price === null || price === undefined) return '';
+export const formatCurrency = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return '';
     return new Intl.NumberFormat('es-PY', {
         style: 'currency',
         currency: 'PYG',
         minimumFractionDigits: 0
-    }).format(Number(price));
+    }).format(Number(value));
+};
+
+/**
+ * Formatea el valor de una observación según el dataType/config de su
+ * variable -- reemplaza el formatPrice() de antes del rename (Fase K),
+ * que asumía que todo valor era un precio en guaraníes.
+ */
+export const formatObservationValue = (row: {
+    dataType: string;
+    isCurrency: boolean;
+    numericValue: number | string | null;
+    textValue: string | null;
+    booleanValue: boolean | null;
+    choiceValue: string | null;
+}): string => {
+    switch (row.dataType) {
+        case 'numeric':
+            if (row.numericValue === null) return '';
+            return row.isCurrency
+                ? formatCurrency(row.numericValue)
+                : new Intl.NumberFormat('es-PY').format(Number(row.numericValue));
+        case 'boolean':
+            return row.booleanValue === null ? '' : (row.booleanValue ? 'Sí' : 'No');
+        case 'categorical':
+            return row.choiceValue ?? '';
+        case 'text':
+            return row.textValue ?? '';
+        default:
+            return '';
+    }
 };
 
 /**

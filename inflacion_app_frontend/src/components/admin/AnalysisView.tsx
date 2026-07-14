@@ -9,7 +9,7 @@ import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { StatCard } from '../ui/StatCard';
 import { HistoricalChartModal } from '../ui/HistoricalChartModal';
-import type { AnalysisResult, Category, Period, Product } from '../../types/api';
+import type { AnalysisResult, Period, StudyField, Variable } from '../../types/api';
 
 interface PeriodOption {
     value: number;
@@ -18,7 +18,7 @@ interface PeriodOption {
 
 interface ChartModalState {
     isOpen: boolean;
-    type: 'product' | 'category' | null;
+    type: 'variable' | 'studyField' | null;
     id: number | null;
     name: string;
 }
@@ -31,18 +31,18 @@ export const AnalysisView = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [activeAccordion, setActiveAccordion] = useState<number | null>(null);
     const [chartModal, setChartModal] = useState<ChartModalState>({ isOpen: false, type: null, id: null, name: '' });
-    const [_filterOptions, setFilterOptions] = useState<{ categories: Category[]; products: Product[] }>({ categories: [], products: [] });
+    const [_filterOptions, setFilterOptions] = useState<{ studyFields: StudyField[]; variables: Variable[] }>({ studyFields: [], variables: [] });
     const isDark = document.documentElement.classList.contains('dark');
 
     useEffect(() => {
         const fetchData = async () => {
             const [periodsData, tasksData] = await Promise.all([
                 apiFetch<Period[]>('/api/periods'),
-                apiFetch<{ categories: Category[]; products: Product[] }>('/api/student-tasks'),
+                apiFetch<{ studyFields: StudyField[]; variables: Variable[] }>('/api/student-tasks'),
             ]);
             const closedPeriods = periodsData.filter(p => p.status === 'Closed').map(p => ({ value: p.id, label: p.name }));
             setPeriods(closedPeriods);
-            setFilterOptions({ categories: tasksData.categories, products: tasksData.products });
+            setFilterOptions({ studyFields: tasksData.studyFields, variables: tasksData.variables });
             if (closedPeriods.length >= 2) {
                 setPeriodA(closedPeriods[0]);
                 setPeriodB(closedPeriods[1]);
@@ -79,6 +79,10 @@ export const AnalysisView = () => {
                 <button onClick={generateReport} disabled={isLoading || !periodA || !periodB} className="w-full py-2.5 bg-blue-600 dark:bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 transition">Analizar</button>
             </div>
 
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-4">
+                Este análisis solo considera variables numéricas de tipo monetario (₲). Variables no monetarias, categóricas, booleanas o de texto no participan del cálculo de "canasta".
+            </p>
+
             {isLoading && <LoadingSpinner />}
             {!isLoading && !reportData && (
                 <EmptyState
@@ -99,7 +103,7 @@ export const AnalysisView = () => {
                     { value: reportData.totalCostB * 0.97 },
                     { value: reportData.totalCostB }
                 ];
-                const variationSparkline = reportData.categoryAnalysis.slice(0, 6).map(cat => ({ value: cat.variation }));
+                const variationSparkline = reportData.studyFieldAnalysis.slice(0, 6).map(field => ({ value: field.variation }));
 
                 return (
                 <div className="space-y-6">
@@ -128,18 +132,18 @@ export const AnalysisView = () => {
                     </div>
 
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in">
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Análisis por Categoría</h3>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Análisis por Campo de Estudio</h3>
                         <div className="space-y-2">
-                        {reportData.categoryAnalysis.map((cat, index) => (
-                            <div key={cat.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        {reportData.studyFieldAnalysis.map((field, index) => (
+                            <div key={field.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                 <div onClick={() => setActiveAccordion(activeAccordion === index ? null : index)} className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900/70 cursor-pointer transition">
                                     <div className="flex items-center gap-4">
-                                        <span className="font-bold text-gray-800 dark:text-gray-100">{cat.name}</span>
-                                        <span className={`font-bold ${cat.variation >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{cat.variation.toFixed(2)}%</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-100">{field.name}</span>
+                                        <span className={`font-bold ${field.variation >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{field.variation.toFixed(2)}%</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <Tooltip content="Ver evolución histórica">
-                                            <div onClick={(e) => { e.stopPropagation(); setChartModal({isOpen: true, type: 'category', id: cat.id, name: cat.name})}} className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full transition cursor-pointer"><AreaChart size={16}/></div>
+                                            <div onClick={(e) => { e.stopPropagation(); setChartModal({isOpen: true, type: 'studyField', id: field.id, name: field.name})}} className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full transition cursor-pointer"><AreaChart size={16}/></div>
                                         </Tooltip>
                                         <ChevronRight size={20} className={`text-gray-400 dark:text-gray-500 transition-transform ${activeAccordion === index ? 'rotate-90' : ''}`} />
                                     </div>
@@ -150,23 +154,23 @@ export const AnalysisView = () => {
                                             <table className="min-w-full text-sm">
                                                 <thead>
                                                     <tr className="border-b border-gray-200 dark:border-gray-700">
-                                                        <th className="text-left p-2 font-medium text-gray-500 dark:text-gray-400">Producto</th>
-                                                        <th className="text-right p-2 font-medium text-gray-500 dark:text-gray-400">Precio Anterior</th>
-                                                        <th className="text-right p-2 font-medium text-gray-500 dark:text-gray-400">Precio Actual</th>
+                                                        <th className="text-left p-2 font-medium text-gray-500 dark:text-gray-400">Variable</th>
+                                                        <th className="text-right p-2 font-medium text-gray-500 dark:text-gray-400">Valor Anterior</th>
+                                                        <th className="text-right p-2 font-medium text-gray-500 dark:text-gray-400">Valor Actual</th>
                                                         <th className="text-right p-2 font-medium text-gray-500 dark:text-gray-400">Variación</th>
                                                         <th className="text-center p-2 font-medium text-gray-500 dark:text-gray-400">Historial</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {cat.products.map(p => (
-                                                        <tr key={p.id} className="border-b border-gray-100 dark:border-gray-700 last:border-none">
-                                                            <td className="p-2 text-gray-800 dark:text-gray-200">{p.name}</td>
-                                                            <td className="text-right p-2 font-mono text-gray-800 dark:text-gray-200">{formatCurrency(p.priceB)}</td>
-                                                            <td className="text-right p-2 font-mono text-gray-800 dark:text-gray-200">{formatCurrency(p.priceA)}</td>
-                                                            <td className={`text-right p-2 font-bold ${p.variation >= 0 ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>{p.variation.toFixed(2)}%</td>
+                                                    {field.variables.map(v => (
+                                                        <tr key={v.id} className="border-b border-gray-100 dark:border-gray-700 last:border-none">
+                                                            <td className="p-2 text-gray-800 dark:text-gray-200">{v.name}</td>
+                                                            <td className="text-right p-2 font-mono text-gray-800 dark:text-gray-200">{formatCurrency(v.valueB)}</td>
+                                                            <td className="text-right p-2 font-mono text-gray-800 dark:text-gray-200">{formatCurrency(v.valueA)}</td>
+                                                            <td className={`text-right p-2 font-bold ${v.variation >= 0 ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>{v.variation.toFixed(2)}%</td>
                                                             <td className="text-center p-2">
                                                                 <Tooltip content="Ver evolución histórica">
-                                                                    <div onClick={(e) => { e.stopPropagation(); setChartModal({isOpen: true, type: 'product', id: p.id, name: p.name})}} className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full inline-block cursor-pointer transition">
+                                                                    <div onClick={(e) => { e.stopPropagation(); setChartModal({isOpen: true, type: 'variable', id: v.id, name: v.name})}} className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full inline-block cursor-pointer transition">
                                                                         <AreaChart size={16}/>
                                                                     </div>
                                                                 </Tooltip>

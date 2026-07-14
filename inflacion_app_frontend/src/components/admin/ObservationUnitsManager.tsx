@@ -1,32 +1,32 @@
 import { useState } from 'react';
 import { Store, Users, type LucideIcon } from 'lucide-react';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
-import { CommercesView } from './CommercesView';
+import { ObservationUnitsView } from './ObservationUnitsView';
 import { StudentsAssignmentView } from './StudentsAssignmentView';
 
-type TabId = 'commerces' | 'assignments';
+type TabId = 'observation-units' | 'assignments';
 
-export const CommercesManager = () => {
-    const [activeTab, setActiveTab] = useState<TabId>('commerces');
+export const ObservationUnitsManager = () => {
+    const [activeTab, setActiveTab] = useState<TabId>('observation-units');
 
     const tabs: { id: TabId; label: string; icon: LucideIcon; description: string }[] = [
         {
-            id: 'commerces',
-            label: 'Comercios',
+            id: 'observation-units',
+            label: 'Unidades de Observación',
             icon: Store,
-            description: 'Gestionar comercios y ver estudiantes asignados'
+            description: 'Gestionar unidades de observación y ver estudiantes asignados'
         },
         {
             id: 'assignments',
             label: 'Asignaciones',
             icon: Users,
-            description: 'Asignar comercios a estudiantes'
+            description: 'Asignar unidades de observación a estudiantes'
         }
     ];
 
     return (
         <div className="space-y-6">
-            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Gestión de Comercios' }]} />
+            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Gestión de Unidades de Observación' }]} />
 
             {/* Tabs Navigation */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1">
@@ -57,7 +57,7 @@ export const CommercesManager = () => {
             </div>
             {/* Tab Content */}
             <div className="animate-fade-in">
-                {activeTab === 'commerces' && <CommercesView />}
+                {activeTab === 'observation-units' && <ObservationUnitsView />}
                 {activeTab === 'assignments' && <StudentsAssignmentView />}
             </div>
         </div>

@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { BarChart2, Users, Calendar, Settings, Package, Store, Menu, X } from 'lucide-react';
+import { BarChart2, Users, Calendar, Settings, Variable as VariableIcon, Store, Menu, X } from 'lucide-react';
 import { AnalysisView } from './admin/AnalysisView';
 import { PeriodsManager } from './admin/PeriodsManager';
-import { PricesManager } from './admin/PricesManager';
+import { ObservationsManager } from './admin/ObservationsManager';
 import { UsersManager } from './admin/UsersManager';
-import { ProductsManager } from './admin/ProductsManager';
-import { CommercesManager } from './admin/CommercesManager';
+import { VariablesManager } from './admin/VariablesManager';
+import { ObservationUnitsManager } from './admin/ObservationUnitsManager';
 import type { AuthUser } from '../types/api';
 
-type AdminView = 'analysis' | 'periods' | 'records' | 'products' | 'commerces' | 'users';
+type AdminView = 'analysis' | 'periods' | 'records' | 'variables' | 'observation-units' | 'users';
 
 function AdminDashboard({ user: _user }: { user: AuthUser }) {
     const [view, setView] = useState<AdminView>('analysis');
@@ -18,8 +18,8 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
         { id: 'analysis', label: 'Análisis', icon: BarChart2 },
         { id: 'periods', label: 'Períodos', icon: Calendar },
         { id: 'records', label: 'Registros', icon: Settings },
-        { id: 'products', label: 'Productos', icon: Package },
-        { id: 'commerces', label: 'Comercios', icon: Store },
+        { id: 'variables', label: 'Variables', icon: VariableIcon },
+        { id: 'observation-units', label: 'Unidades de Observación', icon: Store },
         { id: 'users', label: 'Usuarios', icon: Users },
     ];
 
@@ -93,9 +93,9 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
                     <div className="max-w-7xl mx-auto">
                         {view === 'analysis' && <AnalysisView />}
                         {view === 'periods' && <PeriodsManager />}
-                        {view === 'records' && <PricesManager />}
-                        {view === 'products' && <ProductsManager />}
-                        {view === 'commerces' && <CommercesManager />}
+                        {view === 'records' && <ObservationsManager />}
+                        {view === 'variables' && <VariablesManager />}
+                        {view === 'observation-units' && <ObservationUnitsManager />}
                         {view === 'users' && <UsersManager />}
                     </div>
                 </div>

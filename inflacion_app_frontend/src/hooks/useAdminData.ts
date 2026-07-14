@@ -3,23 +3,26 @@ import { apiFetch } from '../api';
 import type {
     AnalysisResult,
     CreatePeriodPayload,
-    HistoricalRow,
+    ObservationFilters,
+    ObservationRow,
     Period,
-    PriceFilters,
-    PriceRow,
     User,
+    VariableDistributionEntry,
+    VariableHistoryRow,
 } from '../types/api';
 
 // Query keys
 export const adminKeys = {
     all: ['admin'] as const,
     periods: () => [...adminKeys.all, 'periods'] as const,
-    prices: (filters: PriceFilters) => [...adminKeys.all, 'prices', filters] as const,
+    observations: (filters: ObservationFilters) => [...adminKeys.all, 'observations', filters] as const,
     users: () => [...adminKeys.all, 'users'] as const,
     analysis: (periodAId?: number | string, periodBId?: number | string) =>
         [...adminKeys.all, 'analysis', periodAId, periodBId] as const,
-    historicalData: (productId?: number | string, categoryId?: number | string) =>
-        [...adminKeys.all, 'historical', { productId, categoryId }] as const,
+    variableHistory: (variableId?: number | string, studyFieldId?: number | string) =>
+        [...adminKeys.all, 'variable-history', { variableId, studyFieldId }] as const,
+    variableDistribution: (variableId?: number | string) =>
+        [...adminKeys.all, 'variable-distribution', variableId] as const,
 };
 
 // Periods
@@ -73,24 +76,33 @@ export function useAnalysis(periodAId?: number | string, periodBId?: number | st
     });
 }
 
-export function useHistoricalData(productId?: number | string, categoryId?: number | string, enabled = true) {
+export function useVariableHistory(variableId?: number | string, studyFieldId?: number | string, enabled = true) {
     return useQuery({
-        queryKey: adminKeys.historicalData(productId, categoryId),
+        queryKey: adminKeys.variableHistory(variableId, studyFieldId),
         queryFn: () => {
             const params = new URLSearchParams();
-            if (productId) params.append('productId', String(productId));
-            if (categoryId) params.append('categoryId', String(categoryId));
+            if (variableId) params.append('variableId', String(variableId));
+            if (studyFieldId) params.append('studyFieldId', String(studyFieldId));
 
-            return apiFetch<HistoricalRow[]>(`/api/historical-data?${params.toString()}`);
+            return apiFetch<VariableHistoryRow[]>(`/api/variable-history?${params.toString()}`);
         },
-        enabled: enabled && (!!productId || !!categoryId),
+        enabled: enabled && (!!variableId || !!studyFieldId),
     });
 }
 
-// Prices
-export function usePrices(filters: PriceFilters = {}) {
+export function useVariableDistribution(variableId?: number | string, enabled = true) {
     return useQuery({
-        queryKey: adminKeys.prices(filters),
+        queryKey: adminKeys.variableDistribution(variableId),
+        queryFn: () =>
+            apiFetch<VariableDistributionEntry[]>(`/api/variable-distribution?variableId=${variableId}`),
+        enabled: enabled && !!variableId,
+    });
+}
+
+// Observations
+export function useObservations(filters: ObservationFilters = {}) {
+    return useQuery({
+        queryKey: adminKeys.observations(filters),
         queryFn: () => {
             const params = new URLSearchParams();
             Object.entries(filters).forEach(([key, value]) => {
@@ -99,19 +111,19 @@ export function usePrices(filters: PriceFilters = {}) {
                 }
             });
 
-            return apiFetch<PriceRow[]>(`/api/prices?${params.toString()}`);
+            return apiFetch<ObservationRow[]>(`/api/observations?${params.toString()}`);
         },
     });
 }
 
-export function useUpdatePrice() {
+export function useUpdateObservation() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, price }: { id: number; price: number }) =>
-            apiFetch(`/api/prices/${id}`, {
+        mutationFn: ({ id, value }: { id: number; value: number | string | boolean }) =>
+            apiFetch(`/api/observations/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ price }),
+                body: JSON.stringify({ value }),
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: adminKeys.all });
@@ -119,12 +131,12 @@ export function useUpdatePrice() {
     });
 }
 
-export function useDeletePrice() {
+export function useDeleteObservation() {
     const queryClient = useQueryClient();
 
     return useMutation({
         mutationFn: (id: number) =>
-            apiFetch(`/api/prices/${id}`, {
+            apiFetch(`/api/observations/${id}`, {
                 method: 'DELETE',
             }),
         onSuccess: () => {

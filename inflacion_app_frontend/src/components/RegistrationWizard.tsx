@@ -3,10 +3,42 @@ import { ChevronLeft, ChevronRight, List, Send, Edit, X, ArrowLeft, Search } fro
 import { apiFetch } from '../api';
 import { useToast } from './Toast';
 import LoadingOverlay from './LoadingOverlay';
-import type { Category, PriceMap, Product } from '../types/api';
+import type {
+    CategoricalVariableConfig,
+    NumericVariableConfig,
+    ObservationValue,
+    ObservationValueMap,
+    StudyField,
+    TextVariableConfig,
+    Variable,
+    ValueEntryPayload,
+} from '../types/api';
 import './RegistrationWizard.css';
 
-const hasValidPrice = (price: unknown): price is number | string => price != null && price !== '' && price !== undefined;
+// `false` (booleano) es una respuesta válida, no la ausencia de una -- por
+// eso se chequea contra null/undefined/'' en vez de truthiness (Fase L).
+const hasValidValue = (value: unknown): value is ObservationValue => value != null && value !== '';
+
+function isCurrencyVariable(variable: Variable): boolean {
+    return variable.dataType === 'numeric' && !!(variable.config as NumericVariableConfig | null)?.isCurrency;
+}
+
+function formatValuePreview(variable: Variable, value: unknown): string {
+    if (!hasValidValue(value)) return '';
+    switch (variable.dataType) {
+        case 'numeric': {
+            const num = Number(value);
+            if (isNaN(num)) return '';
+            return isCurrencyVariable(variable)
+                ? `₲ ${new Intl.NumberFormat('es-PY').format(num)}`
+                : new Intl.NumberFormat('es-PY').format(num);
+        }
+        case 'boolean':
+            return value ? 'Sí' : 'No';
+        default:
+            return String(value);
+    }
+}
 
 interface CustomAlertProps {
     message: string;
@@ -27,14 +59,14 @@ const CustomAlert = ({ message, onConfirm, onCancel }: CustomAlertProps) => (
 );
 
 interface SearchModalProps {
-    products: Product[];
-    categories: Category[];
-    prices: PriceMap;
+    variables: Variable[];
+    studyFields: StudyField[];
+    values: ObservationValueMap;
     onClose: () => void;
-    onSelectProduct: (productId: number) => void;
+    onSelectVariable: (variableId: number) => void;
 }
 
-const SearchModal = ({ products, categories, prices, onClose, onSelectProduct }: SearchModalProps) => {
+const SearchModal = ({ variables, studyFields, values, onClose, onSelectVariable }: SearchModalProps) => {
     const [searchTerm, setSearchTerm] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,39 +76,39 @@ const SearchModal = ({ products, categories, prices, onClose, onSelectProduct }:
         }
     }, []);
 
-    const categoriesMap = useMemo(() => {
-        const map: Record<number, Category> = {};
-        categories.forEach(cat => map[cat.id] = cat);
+    const studyFieldsMap = useMemo(() => {
+        const map: Record<number, StudyField> = {};
+        studyFields.forEach(f => map[f.id] = f);
         return map;
-    }, [categories]);
+    }, [studyFields]);
 
-    const filteredProducts = useMemo(() => {
-        if (!searchTerm) return products;
+    const filteredVariables = useMemo(() => {
+        if (!searchTerm) return variables;
         const term = searchTerm.toLowerCase();
-        return products.filter(p =>
-            p.name.toLowerCase().includes(term) ||
-            (p.categoryId != null && categoriesMap[p.categoryId]?.name.toLowerCase().includes(term))
+        return variables.filter(v =>
+            v.name.toLowerCase().includes(term) ||
+            (v.studyFieldId != null && studyFieldsMap[v.studyFieldId]?.name.toLowerCase().includes(term))
         );
-    }, [products, searchTerm, categoriesMap]);
+    }, [variables, searchTerm, studyFieldsMap]);
 
-    const groupedByCategory = useMemo(() => {
-        const groups: Record<string, Product[]> = {};
-        filteredProducts.forEach(product => {
-            const categoryName = (product.categoryId != null && categoriesMap[product.categoryId]?.name) || 'Sin categoría';
-            if (!groups[categoryName]) {
-                groups[categoryName] = [];
+    const groupedByStudyField = useMemo(() => {
+        const groups: Record<string, Variable[]> = {};
+        filteredVariables.forEach(variable => {
+            const fieldName = (variable.studyFieldId != null && studyFieldsMap[variable.studyFieldId]?.name) || 'Sin campo de estudio';
+            if (!groups[fieldName]) {
+                groups[fieldName] = [];
             }
-            groups[categoryName].push(product);
+            groups[fieldName].push(variable);
         });
         return groups;
-    }, [filteredProducts, categoriesMap]);
+    }, [filteredVariables, studyFieldsMap]);
 
     return (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">Buscar Producto</h2>
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">Buscar Variable</h2>
                     <button
                         onClick={onClose}
                         className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition"
@@ -94,62 +126,64 @@ const SearchModal = ({ products, categories, prices, onClose, onSelectProduct }:
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Buscar por nombre o categoría..."
+                            placeholder="Buscar por nombre o campo de estudio..."
                             className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-xl border-2 border-transparent focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-colors"
                         />
                     </div>
                 </div>
 
-                {/* Product List */}
+                {/* Variable List */}
                 <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
-                    {Object.keys(groupedByCategory).length === 0 ? (
+                    {Object.keys(groupedByStudyField).length === 0 ? (
                         <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                            No se encontraron productos
+                            No se encontraron variables
                         </p>
                     ) : (
-                        Object.entries(groupedByCategory).map(([categoryName, categoryProducts]) => (
-                            <div key={categoryName}>
+                        Object.entries(groupedByStudyField).map(([fieldName, fieldVariables]) => (
+                            <div key={fieldName}>
                                 <h3 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 px-2">
-                                    {categoryName}
+                                    {fieldName}
                                 </h3>
                                 <div className="space-y-2">
-                                    {categoryProducts.map((product) => {
-                                        const hasPrice = hasValidPrice(prices[product.id]);
+                                    {fieldVariables.map((variable) => {
+                                        const hasValue = hasValidValue(values[variable.id]);
                                         return (
                                             <button
-                                                key={product.id}
-                                                onClick={() => onSelectProduct(product.id)}
+                                                key={variable.id}
+                                                onClick={() => onSelectVariable(variable.id)}
                                                 className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
-                                                    hasPrice
+                                                    hasValue
                                                         ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/30'
                                                         : 'bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                                        hasPrice ? 'bg-green-500 dark:bg-green-400' : 'bg-gray-300 dark:bg-gray-500'
+                                                        hasValue ? 'bg-green-500 dark:bg-green-400' : 'bg-gray-300 dark:bg-gray-500'
                                                     }`}></div>
                                                     <div className="text-left min-w-0 flex-1">
                                                         <p className={`font-semibold text-sm truncate ${
-                                                            hasPrice ? 'text-green-800 dark:text-green-200' : 'text-gray-700 dark:text-gray-300'
+                                                            hasValue ? 'text-green-800 dark:text-green-200' : 'text-gray-700 dark:text-gray-300'
                                                         }`}>
-                                                            {product.name}
+                                                            {variable.name}
                                                         </p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {product.unit}
-                                                        </p>
+                                                        {variable.unit && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {variable.unit}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                                    {hasPrice ? (
+                                                    {hasValue ? (
                                                         <div className="text-right">
                                                             <p className="font-mono font-bold text-sm text-green-700 dark:text-green-300">
-                                                                ₲ {new Intl.NumberFormat('es-PY').format(Number(prices[product.id]))}
+                                                                {formatValuePreview(variable, values[variable.id])}
                                                             </p>
                                                             <span className="text-xs font-bold text-green-600 dark:text-green-400">✓</span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-xs text-gray-400 dark:text-gray-500">Sin precio</span>
+                                                        <span className="text-xs text-gray-400 dark:text-gray-500">Sin valor</span>
                                                     )}
                                                     <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
                                                 </div>
@@ -166,18 +200,18 @@ const SearchModal = ({ products, categories, prices, onClose, onSelectProduct }:
     );
 };
 
-interface CategoryViewProps {
-    category: Category;
-    products: Product[];
-    prices: PriceMap;
+interface StudyFieldViewProps {
+    studyField: StudyField;
+    variables: Variable[];
+    values: ObservationValueMap;
     onEdit: (index: number) => void;
     onBack: () => void;
 }
 
-const CategoryView = ({ category, products, prices, onEdit, onBack }: CategoryViewProps) => {
-    const categoryProducts = products.filter(p => p.categoryId === category.id);
-    const completedCount = categoryProducts.filter(p => hasValidPrice(prices[p.id])).length;
-    const percentage = categoryProducts.length > 0 ? Math.round((completedCount / categoryProducts.length) * 100) : 0;
+const StudyFieldView = ({ studyField, variables, values, onEdit, onBack }: StudyFieldViewProps) => {
+    const fieldVariables = variables.filter(v => v.studyFieldId === studyField.id);
+    const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+    const percentage = fieldVariables.length > 0 ? Math.round((completedCount / fieldVariables.length) * 100) : 0;
 
     return (
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-lg max-h-[60vh] overflow-hidden flex flex-col max-w-full">
@@ -189,39 +223,39 @@ const CategoryView = ({ category, products, prices, onEdit, onBack }: CategoryVi
                     <ArrowLeft size={20} />
                     <span className="text-sm font-medium">Volver al resumen</span>
                 </button>
-                <h2 className="text-2xl font-bold text-white mb-2">{category.name}</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">{studyField.name}</h2>
                 <div className="flex items-center gap-4 text-white/90">
                     <span className="text-3xl font-bold">{percentage}%</span>
-                    <span className="text-sm">{completedCount} de {categoryProducts.length} productos completados</span>
+                    <span className="text-sm">{completedCount} de {fieldVariables.length} variables completadas</span>
                 </div>
             </div>
 
             <div className="overflow-y-auto overflow-x-hidden p-4 space-y-2">
-                {categoryProducts.map(product => {
-                    const productIndex = products.findIndex(prod => prod.id === product.id);
-                    const hasPrice = hasValidPrice(prices[product.id]);
+                {fieldVariables.map(variable => {
+                    const variableIndex = variables.findIndex(v => v.id === variable.id);
+                    const hasValue = hasValidValue(values[variable.id]);
 
                     return (
                         <div
-                            key={product.id}
+                            key={variable.id}
                             className={`flex justify-between items-center p-4 rounded-xl shadow-sm transition-all ${
-                                hasPrice
+                                hasValue
                                     ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700'
                                     : 'bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700'
                             }`}
                         >
                             <div className="flex-1 min-w-0">
-                                <p className={`font-semibold text-base ${hasPrice ? 'text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
-                                    {product.name}
+                                <p className={`font-semibold text-base ${hasValue ? 'text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
+                                    {variable.name}
                                 </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">({product.unit})</p>
+                                {variable.unit && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">({variable.unit})</p>}
                             </div>
                             <div className="flex items-center gap-3">
-                                <p className={`font-mono font-bold text-lg ${hasPrice ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                    {hasPrice ? `₲ ${new Intl.NumberFormat('es-PY').format(Number(prices[product.id]))}` : 'Sin precio'}
+                                <p className={`font-mono font-bold text-lg ${hasValue ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                    {hasValue ? formatValuePreview(variable, values[variable.id]) : 'Sin valor'}
                                 </p>
                                 <button
-                                    onClick={() => onEdit(productIndex)}
+                                    onClick={() => onEdit(variableIndex)}
                                     className="p-2.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full transition"
                                 >
                                     <Edit size={18} />
@@ -236,25 +270,25 @@ const CategoryView = ({ category, products, prices, onEdit, onBack }: CategoryVi
 };
 
 interface RegistrationSummaryProps {
-    products: Product[];
-    categories: Category[];
-    prices: PriceMap;
+    variables: Variable[];
+    studyFields: StudyField[];
+    values: ObservationValueMap;
     onEdit?: (index: number) => void;
-    onCategoryClick: (categoryId: number) => void;
+    onStudyFieldClick: (studyFieldId: number) => void;
 }
 
-const RegistrationSummary = ({ products, categories, prices, onCategoryClick }: RegistrationSummaryProps) => {
+const RegistrationSummary = ({ variables, studyFields, values, onStudyFieldClick }: RegistrationSummaryProps) => {
     const summaryData = useMemo(() => {
-        return categories.map(category => {
-            const categoryProducts = products.filter(p => p.categoryId === category.id);
-            const completedCount = categoryProducts.filter(p => hasValidPrice(prices[p.id])).length;
-            const percentage = categoryProducts.length > 0 ? Math.round((completedCount / categoryProducts.length) * 100) : 0;
-            return { ...category, products: categoryProducts, completedCount, totalCount: categoryProducts.length, percentage };
+        return studyFields.map(field => {
+            const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
+            const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+            const percentage = fieldVariables.length > 0 ? Math.round((completedCount / fieldVariables.length) * 100) : 0;
+            return { ...field, variables: fieldVariables, completedCount, totalCount: fieldVariables.length, percentage };
         });
-    }, [categories, products, prices]);
+    }, [studyFields, variables, values]);
 
-    const totalCompleted = Object.values(prices).filter(hasValidPrice).length;
-    const totalPercentage = products.length > 0 ? Math.round((totalCompleted / products.length) * 100) : 0;
+    const totalCompleted = Object.values(values).filter(hasValidValue).length;
+    const totalPercentage = variables.length > 0 ? Math.round((totalCompleted / variables.length) * 100) : 0;
 
     return (
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-4 md:p-6 rounded-3xl shadow-lg max-h-[60vh] overflow-y-auto overflow-x-hidden space-y-4 max-w-full">
@@ -262,16 +296,16 @@ const RegistrationSummary = ({ products, categories, prices, onCategoryClick }: 
                 <p className="text-sm opacity-90 mb-1">Progreso Total</p>
                 <div className="flex items-end gap-3">
                     <span className="text-4xl font-bold">{totalPercentage}%</span>
-                    <span className="text-lg opacity-90 mb-1">{totalCompleted} / {products.length} productos</span>
+                    <span className="text-lg opacity-90 mb-1">{totalCompleted} / {variables.length} variables</span>
                 </div>
             </div>
 
-            {summaryData.map(category => {
-                const isComplete = category.completedCount === category.totalCount && category.totalCount > 0;
+            {summaryData.map(field => {
+                const isComplete = field.completedCount === field.totalCount && field.totalCount > 0;
                 return (
                     <button
-                        key={category.id}
-                        onClick={() => onCategoryClick(category.id)}
+                        key={field.id}
+                        onClick={() => onStudyFieldClick(field.id)}
                         className={`w-full transition-all duration-200 rounded-2xl overflow-hidden p-4 text-left ${
                             isComplete
                                 ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 hover:shadow-md'
@@ -284,12 +318,12 @@ const RegistrationSummary = ({ products, categories, prices, onCategoryClick }: 
                                     isComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-blue-100 dark:bg-blue-900'
                                 }`}>
                                     <span className={`text-sm font-bold ${isComplete ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300'}`}>
-                                        {category.percentage}%
+                                        {field.percentage}%
                                     </span>
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{category.name}</h3>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">{category.completedCount} de {category.totalCount} productos</p>
+                                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{field.name}</h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">{field.completedCount} de {field.totalCount} variables</p>
                                 </div>
                             </div>
                             <ChevronRight size={24} className="text-gray-400 dark:text-gray-500" />
@@ -301,18 +335,18 @@ const RegistrationSummary = ({ products, categories, prices, onCategoryClick }: 
     );
 };
 
-export interface RegistrationWizardCommerce {
+export interface RegistrationWizardObservationUnit {
     id: number;
     name: string;
 }
 
 export interface RegistrationWizardProps {
-    commerce: RegistrationWizardCommerce;
-    products: Product[];
-    categories: Category[];
-    initialDraft?: PriceMap;
-    onClose: (prices: PriceMap) => void;
-    onSubmitSuccess: (commerceId: number) => void;
+    observationUnit: RegistrationWizardObservationUnit;
+    variables: Variable[];
+    studyFields: StudyField[];
+    initialDraft?: ObservationValueMap;
+    onClose: (values: ObservationValueMap) => void;
+    onSubmitSuccess: (observationUnitId: number) => void;
 }
 
 interface TouchPoint {
@@ -320,22 +354,29 @@ interface TouchPoint {
     y: number | null;
 }
 
-export default function RegistrationWizard({ commerce, products, categories, initialDraft, onClose, onSubmitSuccess }: RegistrationWizardProps) {
+function toValueEntries(values: ObservationValueMap): ValueEntryPayload[] {
+    return Object.entries(values)
+        .filter(([, value]) => hasValidValue(value))
+        .map(([variableId, value]) => ({ variableId: Number(variableId), value }));
+}
+
+export default function RegistrationWizard({ observationUnit, variables, studyFields, initialDraft, onClose, onSubmitSuccess }: RegistrationWizardProps) {
     const toast = useToast();
     const [step, setStep] = useState(0);
-    const [localPrices, setLocalPrices] = useState<PriceMap>(() => {
+    const [localValues, setLocalValues] = useState<ObservationValueMap>(() => {
         // Usar initialDraft del servidor; si está vacío, intentar recuperar de localStorage
         if (initialDraft && Object.keys(initialDraft).length > 0) return initialDraft;
         try {
-            const saved = localStorage.getItem(`draft_${commerce.id}`);
+            const saved = localStorage.getItem(`draft_${observationUnit.id}`);
             return saved ? JSON.parse(saved) : {};
         } catch { return {}; }
     });
     const [alertInfo, setAlertInfo] = useState<CustomAlertProps | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+    const [selectedStudyFieldId, setSelectedStudyFieldId] = useState<number | null>(null);
     const [showSearchModal, setShowSearchModal] = useState(false);
-    const priceInputRef = useRef<HTMLInputElement>(null);
+    const numericInputRef = useRef<HTMLInputElement>(null);
+    const textInputRef = useRef<HTMLTextAreaElement>(null);
 
     const [touchStart, setTouchStart] = useState<TouchPoint>({ x: null, y: null });
     const [touchEnd, setTouchEnd] = useState<TouchPoint>({ x: null, y: null });
@@ -349,87 +390,111 @@ export default function RegistrationWizard({ commerce, products, categories, ini
     }, []);
 
     // Guardar borrador en localStorage como respaldo ante pérdida de sesión
-    const draftKey = `draft_${commerce.id}`;
+    const draftKey = `draft_${observationUnit.id}`;
     useEffect(() => {
-        const hasData = Object.values(localPrices).some(hasValidPrice);
+        const hasData = Object.values(localValues).some(hasValidValue);
         if (hasData) {
-            localStorage.setItem(draftKey, JSON.stringify(localPrices));
+            localStorage.setItem(draftKey, JSON.stringify(localValues));
         }
-    }, [localPrices, draftKey]);
+    }, [localValues, draftKey]);
 
-    const categoriesMap = useMemo(() => {
-        const map: Record<number, Category> = {};
-        categories.forEach(cat => map[cat.id] = cat);
+    const studyFieldsMap = useMemo(() => {
+        const map: Record<number, StudyField> = {};
+        studyFields.forEach(f => map[f.id] = f);
         return map;
-    }, [categories]);
+    }, [studyFields]);
 
-    // Sort products by category
-    const sortedProducts = useMemo(() => {
-        return [...products].sort((a, b) => {
-            // First, sort by category
-            const catA = a.categoryId != null ? categoriesMap[a.categoryId] : undefined;
-            const catB = b.categoryId != null ? categoriesMap[b.categoryId] : undefined;
+    // Sort variables by study field
+    const sortedVariables = useMemo(() => {
+        return [...variables].sort((a, b) => {
+            // First, sort by study field
+            const fieldA = a.studyFieldId != null ? studyFieldsMap[a.studyFieldId] : undefined;
+            const fieldB = b.studyFieldId != null ? studyFieldsMap[b.studyFieldId] : undefined;
 
-            if (catA && catB) {
-                const catComparison = catA.name.localeCompare(catB.name);
-                if (catComparison !== 0) return catComparison;
+            if (fieldA && fieldB) {
+                const fieldComparison = fieldA.name.localeCompare(fieldB.name);
+                if (fieldComparison !== 0) return fieldComparison;
             }
 
-            // Then sort by product name within the same category
+            // Then sort by variable name within the same study field
             return a.name.localeCompare(b.name);
         });
-    }, [products, categoriesMap]);
+    }, [variables, studyFieldsMap]);
 
-    const handleCategoryClick = (categoryId: number) => {
-        setSelectedCategoryId(categoryId);
+    const handleStudyFieldClick = (studyFieldId: number) => {
+        setSelectedStudyFieldId(studyFieldId);
     };
 
     const handleBackToSummary = () => {
-        setSelectedCategoryId(null);
+        setSelectedStudyFieldId(null);
     };
 
-    const handleSelectProduct = (productId: number) => {
-        // Find the index of the product in sortedProducts
-        const productIndex = sortedProducts.findIndex(p => p.id === productId);
-        if (productIndex !== -1) {
-            setStep(productIndex);
-            setSelectedCategoryId(null);
+    const handleSelectVariable = (variableId: number) => {
+        const variableIndex = sortedVariables.findIndex(v => v.id === variableId);
+        if (variableIndex !== -1) {
+            setStep(variableIndex);
+            setSelectedStudyFieldId(null);
             setShowSearchModal(false);
         }
     };
 
     useEffect(() => {
-        if (step < sortedProducts.length && priceInputRef.current) {
-            priceInputRef.current.focus();
-        }
-    }, [step, sortedProducts.length]);
+        if (step >= sortedVariables.length) return;
+        numericInputRef.current?.focus();
+        textInputRef.current?.focus();
+    }, [step, sortedVariables.length]);
 
-    // --- ¡LÓGICA DE PRECIOS MEJORADA! ---
-    const handlePriceChange = (productId: number, value: string) => {
-        // Permitir que el campo esté vacío, pero si hay un valor, asegurar que sea un número entero.
-        const numericValue = value.replace(/\D/g, ''); // Eliminar todo lo que no sea dígito
-        setLocalPrices(prev => ({ ...prev, [productId]: numericValue === '' ? '' : parseInt(numericValue, 10) }));
+    const handleValueChange = (variable: Variable, rawValue: string) => {
+        if (variable.dataType === 'numeric') {
+            // Monetario: solo dígitos (sin centavos, igual que antes). No
+            // monetario: dígitos + un único punto decimal (ej. temperatura).
+            const cleaned = isCurrencyVariable(variable)
+                ? rawValue.replace(/\D/g, '')
+                : rawValue.replace(/[^0-9.]/g, '').replace(/(\.\d*)\./g, '$1');
+            setLocalValues(prev => ({ ...prev, [variable.id]: cleaned }));
+        } else {
+            setLocalValues(prev => ({ ...prev, [variable.id]: rawValue }));
+        }
     };
 
-    const validatePrice = (price: number | string | undefined) => {
-        if (!price || price === '') return { valid: true, message: '' };
-        const numPrice = typeof price === 'string' ? parseInt(price, 10) : price;
-        if (numPrice <= 0) return { valid: false, message: 'El precio debe ser mayor a 0' };
-        if (numPrice > 99999999) return { valid: false, message: 'Precio demasiado alto' };
+    const handleCategoricalSelect = (variable: Variable, option: string) => {
+        setLocalValues(prev => ({ ...prev, [variable.id]: prev[variable.id] === option ? '' : option }));
+    };
+
+    const handleBooleanSelect = (variable: Variable, value: boolean) => {
+        setLocalValues(prev => ({ ...prev, [variable.id]: value }));
+    };
+
+    const validateValue = (variable: Variable, rawValue: ObservationValue | undefined) => {
+        if (!hasValidValue(rawValue)) return { valid: true, message: '' };
+        if (variable.dataType === 'numeric') {
+            const num = typeof rawValue === 'string' ? parseFloat(rawValue) : Number(rawValue);
+            const cfg = variable.config as NumericVariableConfig | null;
+            const max = cfg?.max ?? 99999999;
+            if (isNaN(num) || num <= 0) return { valid: false, message: 'El valor debe ser mayor a 0' };
+            if (num > max) return { valid: false, message: `El valor no puede superar ${max}` };
+            return { valid: true, message: '' };
+        }
+        if (variable.dataType === 'text') {
+            const cfg = variable.config as TextVariableConfig | null;
+            if (cfg?.maxLength && String(rawValue).length > cfg.maxLength) {
+                return { valid: false, message: `Máximo ${cfg.maxLength} caracteres` };
+            }
+        }
         return { valid: true, message: '' };
     };
 
     const handleNext = () => {
-        if (step < sortedProducts.length) {
-            // Allow advancing even with invalid price (they can skip products)
+        if (step < sortedVariables.length) {
+            // Allow advancing even with invalid value (they can skip variables)
             setStep(prev => prev + 1);
         }
     };
     const handlePrev = () => { if (step > 0) setStep(prev => Math.max(prev - 1, 0)); };
 
     const confirmSubmission = () => {
-        const filledCount = Object.values(localPrices).filter(hasValidPrice).length;
-        const confirmationMessage = `Has completado ${filledCount} de ${sortedProducts.length} productos. ¿Deseas enviar el formulario?`;
+        const filledCount = Object.values(localValues).filter(hasValidValue).length;
+        const confirmationMessage = `Has completado ${filledCount} de ${sortedVariables.length} variables. ¿Deseas enviar el formulario?`;
         setAlertInfo({
             message: confirmationMessage,
             onConfirm: () => { handleSubmit(); setAlertInfo(null); },
@@ -438,25 +503,19 @@ export default function RegistrationWizard({ commerce, products, categories, ini
     };
 
     const handleSubmit = async () => {
-        const pricesToSubmit = sortedProducts
-            .map(p => ({
-                productId: p.id,
-                price: hasValidPrice(localPrices[p.id]) ? parseInt(String(localPrices[p.id]), 10) : null,
-                commerceId: commerce.id
-            }))
-            .filter((p): p is { productId: number; price: number; commerceId: number } => p.price !== null);
+        const valuesToSubmit = toValueEntries(localValues);
 
         setIsSubmitting(true);
         try {
-            await apiFetch('/api/submit-prices', {
+            await apiFetch('/api/observations', {
                 method: 'POST',
-                body: JSON.stringify(pricesToSubmit),
+                body: JSON.stringify({ observationUnitId: observationUnit.id, values: valuesToSubmit }),
                 skipAuthRedirect: true,
             });
-            localStorage.removeItem(`draft_${commerce.id}`);
-            onSubmitSuccess(commerce.id);
+            localStorage.removeItem(`draft_${observationUnit.id}`);
+            onSubmitSuccess(observationUnit.id);
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'No se pudieron guardar los precios');
+            toast.error(error instanceof Error ? error.message : 'No se pudieron guardar los valores');
             console.error(error);
         } finally {
             setIsSubmitting(false);
@@ -469,14 +528,14 @@ export default function RegistrationWizard({ commerce, products, categories, ini
             if (alertInfo || isSubmitting) return; // Don't trigger shortcuts during alerts or submission
 
             if (e.key === 'Escape') {
-                onClose(localPrices);
+                onClose(localValues);
             } else if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (step >= sortedProducts.length) {
+                if (step >= sortedVariables.length) {
                     // Summary step - submit
                     confirmSubmission();
                 } else {
-                    // Product step - advance to next
+                    // Variable step - advance to next
                     handleNext();
                 }
             }
@@ -485,7 +544,7 @@ export default function RegistrationWizard({ commerce, products, categories, ini
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [step, alertInfo, isSubmitting, localPrices, sortedProducts.length]);
+    }, [step, alertInfo, isSubmitting, localValues, sortedVariables.length]);
 
     const onTouchStart = (e: ReactTouchEvent<HTMLDivElement>) => {
         setTouchEnd({ x: null, y: null });
@@ -520,111 +579,181 @@ export default function RegistrationWizard({ commerce, products, categories, ini
         setTouchEnd({ x: null, y: null });
     };
 
-    const isSummaryStep = step >= sortedProducts.length;
-    const currentProduct = sortedProducts[step];
-    const currentPriceValidation = currentProduct ? validatePrice(localPrices[currentProduct.id]) : { valid: true, message: '' };
+    const isSummaryStep = step >= sortedVariables.length;
+    const currentVariable = sortedVariables[step];
+    const currentValueValidation = currentVariable ? validateValue(currentVariable, localValues[currentVariable.id]) : { valid: true, message: '' };
+    const currentIsCurrency = currentVariable ? isCurrencyVariable(currentVariable) : false;
 
-    // Calculate category breakpoints for progress bar
-    const categoryBreakpoints = useMemo(() => {
-        const breakpoints: { position: number; categoryName: string | undefined }[] = [];
-        let lastCategoryId: number | null = null;
+    // Calculate study field breakpoints for progress bar
+    const studyFieldBreakpoints = useMemo(() => {
+        const breakpoints: { position: number; fieldName: string | undefined }[] = [];
+        let lastStudyFieldId: number | null = null;
 
-        sortedProducts.forEach((product, index) => {
-            if (lastCategoryId !== null && product.categoryId !== lastCategoryId) {
+        sortedVariables.forEach((variable, index) => {
+            if (lastStudyFieldId !== null && variable.studyFieldId !== lastStudyFieldId) {
                 breakpoints.push({
-                    position: (index / sortedProducts.length) * 100,
-                    categoryName: product.categoryId != null ? categoriesMap[product.categoryId]?.name : undefined
+                    position: (index / sortedVariables.length) * 100,
+                    fieldName: variable.studyFieldId != null ? studyFieldsMap[variable.studyFieldId]?.name : undefined
                 });
             }
-            lastCategoryId = product.categoryId;
+            lastStudyFieldId = variable.studyFieldId;
         });
 
         return breakpoints;
-    }, [sortedProducts, categoriesMap]);
+    }, [sortedVariables, studyFieldsMap]);
 
     return (
         <div className="fixed inset-0 bg-gradient-to-br from-gray-900 to-blue-900 flex flex-col z-50 p-4 overflow-hidden" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
             {alertInfo && <CustomAlert {...alertInfo} />}
             {showSearchModal && (
                 <SearchModal
-                    products={sortedProducts}
-                    categories={categories}
-                    prices={localPrices}
+                    variables={sortedVariables}
+                    studyFields={studyFields}
+                    values={localValues}
                     onClose={() => setShowSearchModal(false)}
-                    onSelectProduct={handleSelectProduct}
+                    onSelectVariable={handleSelectVariable}
                 />
             )}
             <header className="flex-shrink-0 w-full max-w-2xl mx-auto flex justify-between items-center pt-2 px-2">
                 <div className="min-w-0 flex-1 mr-2">
                     <p className="text-white/70 text-xs sm:text-sm">Registrando para:</p>
-                    <h2 className="text-white font-bold text-base sm:text-lg truncate">{commerce.name}</h2>
+                    <h2 className="text-white font-bold text-base sm:text-lg truncate">{observationUnit.name}</h2>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                         onClick={() => setShowSearchModal(true)}
                         className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition"
-                        title="Buscar producto"
+                        title="Buscar variable"
                     >
                         <Search size={20}/>
                     </button>
-                    <button onClick={() => onClose(localPrices)} className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition"><X size={20}/></button>
+                    <button onClick={() => onClose(localValues)} className="p-2 sm:p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition"><X size={20}/></button>
                 </div>
             </header>
             <main className="flex-grow w-full flex flex-col justify-center items-center overflow-x-hidden overflow-y-auto">
-                <div key={`${step}-${selectedCategoryId}`} className="w-full max-w-2xl text-center slide-item-enter">
+                <div key={`${step}-${selectedStudyFieldId}`} className="w-full max-w-2xl text-center slide-item-enter">
                     {isSummaryStep ? (
                         <>
                             <h2 className="text-4xl font-bold text-white mb-2">
-                                {selectedCategoryId ? 'Categoría' : 'Resumen Final'}
+                                {selectedStudyFieldId ? 'Campo de Estudio' : 'Resumen Final'}
                             </h2>
                             <p className="text-white/80 mb-8">
-                                {selectedCategoryId ? 'Edita los productos de esta categoría' : 'Revisa los precios antes de enviar.'}
+                                {selectedStudyFieldId ? 'Edita las variables de este campo de estudio' : 'Revisa los valores antes de enviar.'}
                             </p>
-                            {selectedCategoryId ? (
-                                <CategoryView
-                                    category={categoriesMap[selectedCategoryId]}
-                                    products={sortedProducts}
-                                    prices={localPrices}
+                            {selectedStudyFieldId ? (
+                                <StudyFieldView
+                                    studyField={studyFieldsMap[selectedStudyFieldId]}
+                                    variables={sortedVariables}
+                                    values={localValues}
                                     onEdit={(index) => {
-                                        setSelectedCategoryId(null);
+                                        setSelectedStudyFieldId(null);
                                         setStep(index);
                                     }}
                                     onBack={handleBackToSummary}
                                 />
                             ) : (
                                 <RegistrationSummary
-                                    products={sortedProducts}
-                                    categories={categories}
-                                    prices={localPrices}
+                                    variables={sortedVariables}
+                                    studyFields={studyFields}
+                                    values={localValues}
                                     onEdit={(index) => setStep(index)}
-                                    onCategoryClick={handleCategoryClick}
+                                    onStudyFieldClick={handleStudyFieldClick}
                                 />
                             )}
                         </>
                     ) : (
                         <>
-                            <p className="text-base sm:text-lg font-semibold text-white/80 mb-2">{currentProduct.categoryId != null ? categoriesMap[currentProduct.categoryId]?.name : undefined}</p>
-                            <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-3 px-4">{currentProduct.name}</h2>
-                            <p className="text-sm sm:text-base text-white/70 mb-4">({currentProduct.unit})</p>
-                            <div className="relative w-full max-w-xs sm:max-w-sm mx-auto px-4 mb-2">
-                                <span className="absolute left-6 sm:left-8 top-1/2 -translate-y-1/2 text-white/50 text-2xl sm:text-3xl">₲</span>
-                                <input
-                                    ref={priceInputRef}
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={localPrices[currentProduct.id] ? new Intl.NumberFormat('es-PY').format(Number(localPrices[currentProduct.id])) : ''}
-                                    onChange={(e) => handlePriceChange(currentProduct.id, e.target.value)}
-                                    className={`w-full text-center text-4xl sm:text-5xl md:text-6xl font-bold p-3 sm:p-4 pl-12 sm:pl-14 bg-white/20 text-white rounded-2xl border-2 ${
-                                        !currentPriceValidation.valid ? 'border-red-400' : 'border-transparent focus:border-white'
-                                    } outline-none placeholder-white/50 transition-colors`}
-                                    placeholder="0"
-                                />
-                            </div>
-                            {!currentPriceValidation.valid && (
-                                <p className="text-red-300 text-sm font-semibold animate-fade-in">{currentPriceValidation.message}</p>
+                            <p className="text-base sm:text-lg font-semibold text-white/80 mb-2">{currentVariable.studyFieldId != null ? studyFieldsMap[currentVariable.studyFieldId]?.name : undefined}</p>
+                            <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-3 px-4">{currentVariable.name}</h2>
+                            {currentVariable.unit && <p className="text-sm sm:text-base text-white/70 mb-4">({currentVariable.unit})</p>}
+
+                            {currentVariable.dataType === 'numeric' && (
+                                <div className="relative w-full max-w-xs sm:max-w-sm mx-auto px-4 mb-2">
+                                    {currentIsCurrency && (
+                                        <span className="absolute left-6 sm:left-8 top-1/2 -translate-y-1/2 text-white/50 text-2xl sm:text-3xl">₲</span>
+                                    )}
+                                    <input
+                                        ref={numericInputRef}
+                                        type="text"
+                                        inputMode={currentIsCurrency ? 'numeric' : 'decimal'}
+                                        value={
+                                            currentIsCurrency
+                                                ? (localValues[currentVariable.id] ? new Intl.NumberFormat('es-PY').format(Number(localValues[currentVariable.id])) : '')
+                                                : (localValues[currentVariable.id] != null ? String(localValues[currentVariable.id]) : '')
+                                        }
+                                        onChange={(e) => handleValueChange(currentVariable, e.target.value)}
+                                        className={`w-full text-center text-4xl sm:text-5xl md:text-6xl font-bold p-3 sm:p-4 ${currentIsCurrency ? 'pl-12 sm:pl-14' : ''} bg-white/20 text-white rounded-2xl border-2 ${
+                                            !currentValueValidation.valid ? 'border-red-400' : 'border-transparent focus:border-white'
+                                        } outline-none placeholder-white/50 transition-colors`}
+                                        placeholder="0"
+                                    />
+                                </div>
                             )}
-                            {currentPriceValidation.valid && localPrices[currentProduct.id] && (
-                                <p className="text-green-300 text-sm font-semibold animate-fade-in">✓ Precio válido</p>
+
+                            {currentVariable.dataType === 'categorical' && (
+                                <div className="flex flex-wrap justify-center gap-3 px-4 mb-2">
+                                    {((currentVariable.config as CategoricalVariableConfig | null)?.options ?? []).map(option => {
+                                        const isSelected = localValues[currentVariable.id] === option;
+                                        return (
+                                            <button
+                                                key={option}
+                                                onClick={() => handleCategoricalSelect(currentVariable, option)}
+                                                className={`px-5 py-3 rounded-2xl text-lg font-semibold border-2 transition ${
+                                                    isSelected
+                                                        ? 'bg-white text-blue-600 border-white'
+                                                        : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                                                }`}
+                                            >
+                                                {option}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {currentVariable.dataType === 'boolean' && (
+                                <div className="flex justify-center gap-4 px-4 mb-2">
+                                    <button
+                                        onClick={() => handleBooleanSelect(currentVariable, true)}
+                                        className={`px-8 py-4 rounded-2xl text-2xl font-bold border-2 transition ${
+                                            localValues[currentVariable.id] === true
+                                                ? 'bg-white text-blue-600 border-white'
+                                                : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        Sí
+                                    </button>
+                                    <button
+                                        onClick={() => handleBooleanSelect(currentVariable, false)}
+                                        className={`px-8 py-4 rounded-2xl text-2xl font-bold border-2 transition ${
+                                            localValues[currentVariable.id] === false
+                                                ? 'bg-white text-blue-600 border-white'
+                                                : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        No
+                                    </button>
+                                </div>
+                            )}
+
+                            {currentVariable.dataType === 'text' && (
+                                <div className="w-full max-w-md mx-auto px-4 mb-2">
+                                    <textarea
+                                        ref={textInputRef}
+                                        value={typeof localValues[currentVariable.id] === 'string' ? localValues[currentVariable.id] as string : ''}
+                                        onChange={(e) => handleValueChange(currentVariable, e.target.value)}
+                                        rows={4}
+                                        className="w-full text-white bg-white/20 rounded-2xl p-4 text-lg outline-none border-2 border-transparent focus:border-white placeholder-white/50 resize-none"
+                                        placeholder="Escribe tu respuesta..."
+                                    />
+                                </div>
+                            )}
+
+                            {!currentValueValidation.valid && (
+                                <p className="text-red-300 text-sm font-semibold animate-fade-in">{currentValueValidation.message}</p>
+                            )}
+                            {currentValueValidation.valid && hasValidValue(localValues[currentVariable.id]) && (
+                                <p className="text-green-300 text-sm font-semibold animate-fade-in">✓ Valor registrado</p>
                             )}
                         </>
                     )}
@@ -634,28 +763,28 @@ export default function RegistrationWizard({ commerce, products, categories, ini
                 <div className="w-full max-w-md mx-auto flex flex-col items-center gap-3 sm:gap-4">
                     <div className="w-full space-y-2">
                         <div className="flex justify-between items-center text-white/90 text-sm font-semibold">
-                            <span>{isSummaryStep ? 'Resumen' : `${step + 1} de ${sortedProducts.length}`}</span>
-                            <span>{Math.round((step / sortedProducts.length) * 100)}%</span>
+                            <span>{isSummaryStep ? 'Resumen' : `${step + 1} de ${sortedVariables.length}`}</span>
+                            <span>{Math.round((step / sortedVariables.length) * 100)}%</span>
                         </div>
                         <div className="w-full bg-white/20 rounded-full h-2.5 relative overflow-visible">
-                            {/* Category breakpoint markers */}
-                            {categoryBreakpoints.map((breakpoint, index) => (
+                            {/* Study field breakpoint markers */}
+                            {studyFieldBreakpoints.map((breakpoint, index) => (
                                 <div
                                     key={index}
                                     className="absolute top-0 bottom-0 w-0.5 bg-white/60 z-10"
                                     style={{ left: `${breakpoint.position}%` }}
-                                    title={breakpoint.categoryName}
+                                    title={breakpoint.fieldName}
                                 >
                                     <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white"></div>
                                 </div>
                             ))}
                             {/* Progress bar */}
-                            <div className="bg-gradient-to-r from-white to-blue-200 h-2.5 rounded-full transition-all duration-300 shadow-lg" style={{ width: `${(step / sortedProducts.length) * 100}%` }}></div>
+                            <div className="bg-gradient-to-r from-white to-blue-200 h-2.5 rounded-full transition-all duration-300 shadow-lg" style={{ width: `${(step / sortedVariables.length) * 100}%` }}></div>
                         </div>
                     </div>
                     <div className="flex justify-between items-center w-full gap-2">
                         <button onClick={handlePrev} disabled={step === 0} className="px-3 sm:px-6 py-2 sm:py-3 rounded-full bg-white/20 text-white hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center gap-1 sm:gap-2 text-sm sm:text-base"><ChevronLeft size={18} /> <span className="hidden sm:inline">Anterior</span></button>
-                        <button onClick={() => setStep(sortedProducts.length)} className="p-2 sm:p-3 rounded-full bg-white/20 text-white hover:bg-white/30 transition" title="Ver resumen"><List size={18} /></button>
+                        <button onClick={() => setStep(sortedVariables.length)} className="p-2 sm:p-3 rounded-full bg-white/20 text-white hover:bg-white/30 transition" title="Ver resumen"><List size={18} /></button>
                         {isSummaryStep ? (
                             <button onClick={confirmSubmission} className="px-3 sm:px-6 py-2 sm:py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 transition flex items-center shadow-lg gap-1 sm:gap-2 text-sm sm:text-base"><Send size={16} /> Enviar</button>
                         ) : (
@@ -665,7 +794,7 @@ export default function RegistrationWizard({ commerce, products, categories, ini
                 </div>
             </footer>
 
-            {isSubmitting && <LoadingOverlay message="Enviando precios..." />}
+            {isSubmitting && <LoadingOverlay message="Enviando registro..." />}
         </div>
     );
 }

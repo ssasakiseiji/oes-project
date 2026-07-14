@@ -1,12 +1,43 @@
 // Formas de las respuestas del backend NestJS (inflacion_app_backend_nest).
 // Reconstruidas a partir de los servicios reales (admin/students/monitor/etc.),
 // no de un contrato formal — ver memoria de migración para el porqué.
+//
+// Fase H/I: renombrado de dominio (Category/Product/Commerce/Price ->
+// StudyField/Variable/ObservationUnit/Observation) + soporte real para
+// variables de tipos distintos a numérico (categorical/boolean/text), ver
+// VariableDataType/VariableConfig más abajo.
 
 export type Role = 'admin' | 'monitor' | 'student';
 
-// Mapa productId -> precio, usado en el estado local del asistente de
-// registro y en los draftPrices/submittedPrices de tareas de estudiante.
-export type PriceMap = Record<string, number | string>;
+export type VariableDataType = 'numeric' | 'categorical' | 'boolean' | 'text';
+
+// Config por dataType -- ver inflacion_app_backend_nest/src/variables/dto/variable.schema.ts.
+export interface NumericVariableConfig {
+  isCurrency?: boolean;
+  min?: number;
+  max?: number;
+  decimals?: number;
+}
+export interface CategoricalVariableConfig {
+  options: string[];
+}
+export interface TextVariableConfig {
+  maxLength?: number;
+}
+export type VariableConfig =
+  | NumericVariableConfig
+  | CategoricalVariableConfig
+  | TextVariableConfig
+  | null;
+
+// Valor observado, ya resuelto a su tipo real (numericValue/textValue/
+// booleanValue/choiceValue "aplanado" a un único campo por el backend en
+// algunos endpoints, o expuesto en las 4 columnas en otros -- ver los tipos
+// de fila específicos más abajo).
+export type ObservationValue = number | string | boolean | null;
+
+// Mapa variableId -> valor, usado en drafts/tareas de estudiante y monitor.
+export type ObservationValueMap = Record<string, ObservationValue>;
 
 export interface AuthUser {
   id: number;
@@ -26,28 +57,30 @@ export interface User {
   roles: string[];
 }
 
-export interface Category {
+export interface StudyField {
   id: number;
   name: string;
   createdAt?: string | null;
 }
 
-export interface Product {
+export interface Variable {
   id: number;
   name: string;
-  unit: string;
-  categoryId: number | null;
+  unit: string | null;
+  dataType: VariableDataType;
+  config: VariableConfig;
+  studyFieldId: number | null;
   createdAt?: string | null;
 }
 
-export interface Commerce {
+export interface ObservationUnit {
   id: number;
   name: string;
   address: string | null;
   createdAt?: string | null;
 }
 
-export interface CommerceWithStudents extends Commerce {
+export interface ObservationUnitWithStudents extends ObservationUnit {
   assigned_students_count: number;
   assigned_students: User[];
 }
@@ -72,42 +105,52 @@ export interface PeriodSummary {
   status: string;
 }
 
-export interface PriceRow {
+export interface ObservationRow {
   id: number;
-  price: number | string;
   createdAt: string;
+  numericValue: number | string | null;
+  textValue: string | null;
+  booleanValue: boolean | null;
+  choiceValue: string | null;
+  dataType: VariableDataType;
+  isCurrency: boolean;
   periodName: string;
-  productName: string;
-  categoryName: string;
+  variableName: string;
+  studyFieldName: string;
   userName: string;
-  commerceName: string;
+  observationUnitName: string;
   isOutlier: boolean;
 }
 
-export interface HistoricalRow {
+export interface VariableHistoryRow {
   name: string;
-  avgPrice: number | string | null;
+  avgValue: number | string | null;
 }
 
-export interface ProductAnalysis {
+export interface VariableDistributionEntry {
+  periodName: string;
+  counts: Record<string, number>;
+}
+
+export interface VariableAnalysis {
   id: number;
   name: string;
-  priceA: number;
-  priceB: number;
+  valueA: number;
+  valueB: number;
   variation: number;
 }
 
-export interface CategoryAnalysis {
+export interface StudyFieldAnalysis {
   id: number;
   name: string;
   costA: number;
   costB: number;
   variation: number;
-  products: ProductAnalysis[];
+  variables: VariableAnalysis[];
 }
 
 export interface AnalysisResult {
-  categoryAnalysis: CategoryAnalysis[];
+  studyFieldAnalysis: StudyFieldAnalysis[];
   totalCostA: number;
   totalCostB: number;
   totalVariation: number;
@@ -116,19 +159,19 @@ export interface AnalysisResult {
 // Students module
 
 export interface StudentTasksResponse {
-  products: Product[];
-  categories: Category[];
-  assignedCommerces: Commerce[];
+  variables: Variable[];
+  studyFields: StudyField[];
+  assignedObservationUnits: ObservationUnit[];
 }
 
 export type StudentTaskStatus = 'Pendiente' | 'Completado' | 'En Proceso';
 
 export interface StudentTask {
-  commerceId: number;
-  commerceName: string;
+  observationUnitId: number;
+  observationUnitName: string;
   status: StudentTaskStatus;
-  draftPrices: Record<string, number | string>;
-  submittedPrices: Record<string, number | string>;
+  draftValues: ObservationValueMap;
+  submittedValues: ObservationValueMap;
 }
 
 export interface StudentDashboardPeriod {
@@ -144,13 +187,13 @@ export type MonitorTaskStatus = 'Completado' | 'En Proceso' | 'Pendiente' | 'No 
 export type CompletionLevel = 'bajo' | 'medio' | 'alto' | null;
 
 export interface MonitorTask {
-  commerceId: number;
-  commerceName: string;
+  observationUnitId: number;
+  observationUnitName: string;
   status: MonitorTaskStatus;
   completionLevel: CompletionLevel;
   progress: { current: number; total: number };
-  submittedPrices: Record<string, number | string>;
-  draftPrices: Record<string, number | string>;
+  submittedValues: ObservationValueMap;
+  draftValues: ObservationValueMap;
 }
 
 export interface MonitorStudent {
@@ -166,37 +209,37 @@ export interface MonitorPeriod {
   students: MonitorStudent[];
 }
 
-// Commerce assignments module
+// Observation unit assignments module
 
 export interface StudentWithAssignments {
   id: number;
   name: string;
   email: string;
-  assignedCommerces: number[];
-  assignedCommercesData: Commerce[];
+  assignedObservationUnits: number[];
+  assignedObservationUnitsData: ObservationUnit[];
 }
 
 export interface StudentsWithAssignmentsResponse {
   students: StudentWithAssignments[];
-  allCommerces: Commerce[];
+  allObservationUnits: ObservationUnit[];
 }
 
 export interface StudentAssignment {
   id: number;
-  commerce_id: number;
-  commerce_name: string;
-  commerce_address: string | null;
+  observation_unit_id: number;
+  observation_unit_name: string;
+  observation_unit_address: string | null;
   assigned_at: string | null;
 }
 
 export interface AssignmentsSummaryRow {
-  commerce_id: number;
-  commerce_name: string;
+  observation_unit_id: number;
+  observation_unit_name: string;
   assigned_students: number;
   student_names: string[];
 }
 
-export interface CommerceStudent {
+export interface ObservationUnitStudent {
   id: number;
   name: string;
   email: string;
@@ -204,7 +247,30 @@ export interface CommerceStudent {
 }
 
 // Request payloads (deben calzar con los zod schemas del backend, ver
-// admin/dto/admin.schema.ts, students/dto/student.schema.ts, etc.)
+// variables/dto/variable.schema.ts, students/dto/student.schema.ts, etc.)
+
+export interface CreateStudyFieldPayload {
+  name: string;
+}
+
+export interface CreateVariablePayload {
+  name: string;
+  unit?: string;
+  studyFieldId: number;
+  dataType: VariableDataType;
+  config?: VariableConfig;
+}
+
+export interface UpdateVariablePayload {
+  name: string;
+  unit?: string;
+  config?: VariableConfig;
+}
+
+export interface ObservationUnitPayload {
+  name: string;
+  address: string;
+}
 
 export interface CreatePeriodPayload {
   name: string;
@@ -227,22 +293,30 @@ export interface CreateUserPayload {
   roles: string[];
 }
 
-export interface PriceFilters {
+export interface ObservationFilters {
   periodId?: number | string;
-  categoryId?: number | string;
-  productId?: number | string;
+  studyFieldId?: number | string;
+  variableId?: number | string;
   userId?: number | string;
-  commerceId?: number | string;
+  observationUnitId?: number | string;
   showOutliersOnly?: boolean;
 }
 
-export interface SaveDraftPayload {
-  commerceId: number;
-  prices?: Record<string, number | string | null>;
+export interface ValueEntryPayload {
+  variableId: number;
+  value: ObservationValue;
 }
 
-export interface PriceEntryPayload {
-  productId: number;
-  commerceId: number;
-  price: number;
+export interface SaveDraftPayload {
+  observationUnitId: number;
+  values?: ValueEntryPayload[];
+}
+
+export interface SubmitObservationsPayload {
+  observationUnitId: number;
+  values: ValueEntryPayload[];
+}
+
+export interface UpdateObservationPayload {
+  value: number | string | boolean;
 }
