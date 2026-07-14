@@ -58,24 +58,73 @@ model User {
   name         String    @db.VarChar(255)
   email        String    @unique @db.VarChar(255)
   passwordHash String    @map("password_hash") @db.VarChar(255)
-  roles        String[]  @default(["student"])
+  // Fase O (2026-07-14): deja de contener admin/monitor/student (eso ahora
+  // vive en ProjectMembership.roles, por proyecto) — el único valor global
+  // que sobrevive es 'superadmin'. Fase T retiró los roles legacy de todas
+  // las filas existentes y cambió el default: un usuario nuevo ya no nace
+  // con 'student' global (ese rol ahora se otorga vía ProjectMembership).
+  roles        String[]  @default([])
   createdAt    DateTime? @default(now()) @map("created_at")
 
   observations               Observation[]
   draftObservations          DraftObservation[]
   observationUnitAssignments ObservationUnitAssignment[] @relation("AssignedUser")
   assignmentsMade            ObservationUnitAssignment[] @relation("AssignedByUser")
+  projectMemberships         ProjectMembership[]
 
   @@map("users")
+}
+
+// Fase O (2026-07-14): un Project agrupa un conjunto de recolección de datos
+// completamente aislado (StudyFields/Variables/ObservationUnits/Periods/
+// Observations propios) — soporte para correr múltiples campañas de
+// recolección en la misma instancia (no es multi-tenancy: una sola DB, un
+// solo deploy, sin aislamiento de infraestructura).
+model Project {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  description String?
+  isArchived  Boolean   @default(false) @map("is_archived")
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  memberships      ProjectMembership[]
+  studyFields      StudyField[]
+  observationUnits ObservationUnit[]
+  periods          Period[]
+
+  @@map("projects")
+}
+
+// Reemplaza el rol global de User para todo lo scoped a un proyecto: un
+// usuario puede ser 'admin' en un Project y solo 'student' en otro. roles
+// reusa la misma forma (String[]) que User.roles tenía antes de Fase O, para
+// que el backfill (Fase O) sea una copia directa columna-a-columna.
+model ProjectMembership {
+  id        Int       @id @default(autoincrement())
+  projectId Int       @map("project_id")
+  userId    Int       @map("user_id")
+  roles     String[]  @default([])
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([projectId, userId])
+  @@index([userId], map: "idx_project_memberships_user")
+  @@index([projectId], map: "idx_project_memberships_project")
+  @@map("project_memberships")
 }
 
 model StudyField {
   id        Int       @id @default(autoincrement())
   name      String    @db.VarChar(255)
+  projectId Int       @map("project_id")
   createdAt DateTime? @default(now()) @map("created_at")
 
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   variables Variable[]
 
+  @@index([projectId], map: "idx_study_fields_project")
   @@map("study_fields")
 }
 
@@ -111,12 +160,15 @@ model ObservationUnit {
   id        Int       @id @default(autoincrement())
   name      String    @db.VarChar(255)
   address   String?
+  projectId Int       @map("project_id")
   createdAt DateTime? @default(now()) @map("created_at")
 
+  project                    Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   observations               Observation[]
   draftObservations          DraftObservation[]
   observationUnitAssignments ObservationUnitAssignment[]
 
+  @@index([projectId], map: "idx_observation_units_project")
   @@map("observation_units")
 }
 
@@ -128,12 +180,17 @@ model Period {
   startDate DateTime  @map("start_date") @db.Date
   endDate   DateTime  @map("end_date") @db.Date
   status    String    @default("Scheduled") @db.VarChar(50)
+  projectId Int       @map("project_id")
   createdAt DateTime? @default(now()) @map("created_at")
 
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   observations      Observation[]
   draftObservations DraftObservation[]
 
-  @@unique([month, year])
+  // Scoped por proyecto (Fase O) -- dos proyectos distintos pueden cada uno
+  // tener su propio período "Julio 2026".
+  @@unique([projectId, month, year])
+  @@index([projectId], map: "idx_periods_project")
   @@map("periods")
 }
 
