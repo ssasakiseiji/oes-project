@@ -49,6 +49,7 @@ const baseFields = {
   name: z.string().trim().min(1, 'El nombre es requerido'),
   unit: z.string().trim().min(1).optional(),
   studyFieldId: z.number({ error: 'studyFieldId es requerido' }),
+  projectId: z.number({ error: 'projectId es requerido' }),
 };
 
 export const createVariableSchema = z.discriminatedUnion('dataType', [
@@ -82,6 +83,7 @@ export const updateVariableSchema = z.object({
   name: z.string().trim().min(1, 'El nombre es requerido'),
   unit: z.string().trim().min(1).optional(),
   config: z.unknown().optional(),
+  projectId: z.number({ error: 'projectId es requerido' }),
 });
 
 export type CreateVariableDto = z.infer<typeof createVariableSchema>;

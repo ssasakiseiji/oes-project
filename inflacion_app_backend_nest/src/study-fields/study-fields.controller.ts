@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { StudyFieldsService } from './study-fields.service';
@@ -14,48 +15,49 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { createStudyFieldSchema } from './dto/study-field.schema';
 import type { CreateStudyFieldDto } from './dto/study-field.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { ProjectRolesGuard } from '../auth/guards/project-roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
-// Fase H: renombrado de dominio, categories -> study-fields (port 1:1 de
-// categories.controller.ts). Lectura para cualquier usuario autenticado,
-// escritura solo para admin.
+// Fase H: renombrado de dominio, categories -> study-fields. Fase Q: scoped
+// por proyecto -- lectura para cualquier miembro del proyecto (sin
+// @Roles(), ProjectRolesGuard igual exige membership), escritura solo para
+// admin del proyecto.
 @Controller('study-fields')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProjectRolesGuard)
 export class StudyFieldsController {
   constructor(private readonly studyFieldsService: StudyFieldsService) {}
 
   @Get()
-  findAll() {
-    return this.studyFieldsService.findAll();
+  findAll(@Query('projectId', ParseIntPipe) projectId: number) {
+    return this.studyFieldsService.findAll(projectId);
   }
 
   @Post()
-  @UseGuards(RolesGuard)
   @Roles('admin')
   create(
     @Body(new ZodValidationPipe(createStudyFieldSchema))
     body: CreateStudyFieldDto,
   ) {
-    return this.studyFieldsService.create(body.name);
+    return this.studyFieldsService.create(body.name, body.projectId);
   }
 
   @Put(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body(new ZodValidationPipe(createStudyFieldSchema))
     body: CreateStudyFieldDto,
   ) {
-    return this.studyFieldsService.update(id, body.name);
+    return this.studyFieldsService.update(id, body.name, body.projectId);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.studyFieldsService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('projectId', ParseIntPipe) projectId: number,
+  ) {
+    await this.studyFieldsService.remove(id, projectId);
     return { message: 'Campo de estudio eliminado exitosamente' };
   }
 }

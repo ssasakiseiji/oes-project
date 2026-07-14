@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { VariablesService } from './variables.service';
@@ -21,12 +22,18 @@ import type {
   UpdateVariableDto,
 } from './dto/variable.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProjectRolesGuard } from '../auth/guards/project-roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
-// Fase H: renombrado de dominio, products -> variables (port 1:1 de
-// products.controller.ts). Solo requiere estar autenticado (no hay
-// restricción de rol admin, se replica tal cual del Express original).
+// Fase H: renombrado de dominio, products -> variables. Fase Q: además de
+// scoped por proyecto, cierra un gap de roles preexistente -- el Express
+// original (y el port 1:1 de Fase H) no restringía estas rutas a admin,
+// cualquier usuario autenticado (incluso un estudiante) podía crear/editar/
+// borrar Variables. Se agrega @Roles('admin') acá porque de todos modos hay
+// que tocar este controller para el projectId.
 @Controller('variables')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProjectRolesGuard)
+@Roles('admin')
 export class VariablesController {
   constructor(private readonly variablesService: VariablesService) {}
 
@@ -47,7 +54,10 @@ export class VariablesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.variablesService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('projectId', ParseIntPipe) projectId: number,
+  ) {
+    await this.variablesService.remove(id, projectId);
   }
 }

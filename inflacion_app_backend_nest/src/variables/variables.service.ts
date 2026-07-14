@@ -15,11 +15,32 @@ import type {
 // Fase H: renombrado de dominio, Product -> Variable (port de
 // products.service.ts), más soporte real para tipos de dato distintos de
 // numérico (dataType/config, ver dto/variable.schema.ts).
+//
+// Fase Q: scoped por proyecto. Variable no tiene columna projectId propia
+// (se deriva de studyField.projectId) -- por eso cada método valida que el
+// studyFieldId recibido pertenezca efectivamente al projectId recibido
+// ("chequeo IDOR"), en vez de confiar en que ambos valores enviados por el
+// cliente sean consistentes entre sí.
 @Injectable()
 export class VariablesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateVariableDto) {
+  private async assertStudyFieldInProject(
+    studyFieldId: number,
+    projectId: number,
+  ) {
+    const studyField = await this.prisma.studyField.findUnique({
+      where: { id: studyFieldId },
+      select: { projectId: true },
+    });
+    if (!studyField || studyField.projectId !== projectId) {
+      throw new NotFoundException('Campo de estudio no encontrado');
+    }
+  }
+
+  async create(dto: CreateVariableDto) {
+    await this.assertStudyFieldInProject(dto.studyFieldId, dto.projectId);
+
     return this.prisma.variable.create({
       data: {
         name: dto.name,
@@ -34,10 +55,10 @@ export class VariablesService {
   async update(id: number, dto: UpdateVariableDto) {
     const existing = await this.prisma.variable.findUnique({
       where: { id },
-      select: { dataType: true },
+      select: { dataType: true, studyField: { select: { projectId: true } } },
     });
 
-    if (!existing) {
+    if (!existing || existing.studyField?.projectId !== dto.projectId) {
       throw new NotFoundException('Variable no encontrada');
     }
 
@@ -56,27 +77,25 @@ export class VariablesService {
       config = (parsed.data ?? Prisma.JsonNull) as Prisma.InputJsonValue;
     }
 
-    try {
-      return await this.prisma.variable.update({
-        where: { id },
-        data: {
-          name: dto.name,
-          unit: dto.unit,
-          ...(config !== undefined ? { config } : {}),
-        },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Variable no encontrada');
-      }
-      throw error;
-    }
+    return this.prisma.variable.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        unit: dto.unit,
+        ...(config !== undefined ? { config } : {}),
+      },
+    });
   }
 
-  async remove(id: number) {
+  async remove(id: number, projectId: number) {
+    const existing = await this.prisma.variable.findUnique({
+      where: { id },
+      select: { studyField: { select: { projectId: true } } },
+    });
+    if (!existing || existing.studyField?.projectId !== projectId) {
+      throw new NotFoundException('Variable no encontrada');
+    }
+
     // Guard agregado en Fase H/I: products.service.ts no lo tenía (a
     // diferencia de AdminService#deleteUser, que sí protege datos
     // históricos) -- se extiende acá el mismo patrón por consistencia, ver
@@ -91,16 +110,6 @@ export class VariablesService {
       );
     }
 
-    try {
-      await this.prisma.variable.delete({ where: { id } });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Variable no encontrada');
-      }
-      throw error;
-    }
+    await this.prisma.variable.delete({ where: { id } });
   }
 }

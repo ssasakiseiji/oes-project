@@ -8,6 +8,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -25,14 +26,14 @@ import type {
 } from './dto/observation-unit-assignment.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { ProjectRolesGuard } from '../auth/guards/project-roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
 // Fase H: renombrado de dominio, commerce-assignments -> observation-unit-
-// assignments (port 1:1 de commerce-assignments.controller.ts). Todas las
-// rutas requieren admin.
+// assignments. Fase Q: scoped por proyecto, todas las rutas requieren admin
+// DE ESE PROYECTO.
 @Controller('observation-unit-assignments')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ProjectRolesGuard)
 @Roles('admin')
 export class ObservationUnitAssignmentsController {
   constructor(
@@ -40,14 +41,22 @@ export class ObservationUnitAssignmentsController {
   ) {}
 
   @Get('students')
-  getStudentsWithAssignments() {
-    return this.observationUnitAssignmentsService.getStudentsWithAssignments();
+  getStudentsWithAssignments(
+    @Query('projectId', ParseIntPipe) projectId: number,
+  ) {
+    return this.observationUnitAssignmentsService.getStudentsWithAssignments(
+      projectId,
+    );
   }
 
   @Get('student/:studentId')
-  getStudentAssignments(@Param('studentId', ParseIntPipe) studentId: number) {
+  getStudentAssignments(
+    @Param('studentId', ParseIntPipe) studentId: number,
+    @Query('projectId', ParseIntPipe) projectId: number,
+  ) {
     return this.observationUnitAssignmentsService.getStudentAssignments(
       studentId,
+      projectId,
     );
   }
 
@@ -64,6 +73,7 @@ export class ObservationUnitAssignmentsController {
         studentId,
         body.observationUnitIds,
         request.user.id,
+        body.projectId,
       );
 
     return {
@@ -83,6 +93,7 @@ export class ObservationUnitAssignmentsController {
       body.studentIds,
       body.observationUnitIds,
       request.user.id,
+      body.projectId,
     );
 
     return {
@@ -91,8 +102,10 @@ export class ObservationUnitAssignmentsController {
   }
 
   @Get('summary')
-  getAssignmentsSummary() {
-    return this.observationUnitAssignmentsService.getAssignmentsSummary();
+  getAssignmentsSummary(@Query('projectId', ParseIntPipe) projectId: number) {
+    return this.observationUnitAssignmentsService.getAssignmentsSummary(
+      projectId,
+    );
   }
 
   @Post('assign')
@@ -107,6 +120,7 @@ export class ObservationUnitAssignmentsController {
         body.observationUnitId,
         body.studentIds,
         request.user.id,
+        body.projectId,
       );
 
     return {
@@ -119,10 +133,12 @@ export class ObservationUnitAssignmentsController {
   async removeAssignment(
     @Param('studentId', ParseIntPipe) studentId: number,
     @Param('observationUnitId', ParseIntPipe) observationUnitId: number,
+    @Query('projectId', ParseIntPipe) projectId: number,
   ) {
     await this.observationUnitAssignmentsService.removeAssignment(
       studentId,
       observationUnitId,
+      projectId,
     );
     return { message: 'Asignación eliminada exitosamente' };
   }
