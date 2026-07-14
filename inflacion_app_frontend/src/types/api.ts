@@ -57,6 +57,34 @@ export interface User {
   roles: string[];
 }
 
+// Projects module (Fase O-U). Ver ProjectsService/ProjectMembershipsService
+// en inflacion_app_backend_nest/src/projects/ para las formas exactas.
+export interface Project {
+  id: number;
+  name: string;
+  description: string | null;
+  isArchived: boolean;
+  createdAt?: string | null;
+}
+
+// Devuelto por GET /api/projects/mine -- alimenta ProjectContext. roles acá
+// son los de la ProjectMembership del usuario en ese proyecto (o ['admin']
+// sintético si el usuario es superadmin, ver ProjectsService#findMine).
+export interface ProjectMembershipSummary {
+  projectId: number;
+  projectName: string;
+  isArchived: boolean;
+  roles: string[];
+}
+
+// Devuelto por GET /api/project-memberships?projectId=.
+export interface ProjectMember {
+  userId: number;
+  name: string;
+  email: string;
+  roles: string[];
+}
+
 export interface StudyField {
   id: number;
   name: string;

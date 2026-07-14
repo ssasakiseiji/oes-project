@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, type ComponentType } from 'react';
-import { LogOut, User, Shield, UserCog, GraduationCap, ChevronDown, Check, type LucideIcon } from 'lucide-react';
+import { useState, useRef, useMemo, useEffect, type ComponentType } from 'react';
+import { LogOut, User, Shield, UserCog, GraduationCap, FolderKanban, ChevronDown, Check, type LucideIcon } from 'lucide-react';
 import StudentDashboard from '../components/StudentDashboard';
 import MonitorDashboard from '../components/MonitorDashboard';
 import AdminDashboard from '../components/AdminDashboard';
 import { RoleProvider, useRole } from '../contexts/RoleContext';
+import { ProjectProvider, useProject } from '../contexts/ProjectContext';
 import type { AuthUser } from '../types/api';
 
 interface RoleConfigEntry {
@@ -51,10 +52,13 @@ interface DashboardContentProps {
 // Internal component that uses the role context
 const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
     const { activeRole, switchRole, hasMultipleRoles, availableRoles } = useRole();
+    const { activeProjectId, switchProject, hasMultipleProjects, availableProjects } = useProject();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+    const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const roleMenuRef = useRef<HTMLDivElement>(null);
+    const projectMenuRef = useRef<HTMLDivElement>(null);
 
     // Cerrar menús cuando se hace click fuera
     useEffect(() => {
@@ -65,16 +69,24 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
             if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
                 setIsRoleMenuOpen(false);
             }
+            if (projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) {
+                setIsProjectMenuOpen(false);
+            }
         };
 
-        if (isMenuOpen || isRoleMenuOpen) {
+        if (isMenuOpen || isRoleMenuOpen || isProjectMenuOpen) {
             document.addEventListener('mousedown', handleClickOutside);
         }
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [isMenuOpen, isRoleMenuOpen]);
+    }, [isMenuOpen, isRoleMenuOpen, isProjectMenuOpen]);
+
+    const activeProject = useMemo(
+        () => availableProjects.find(p => p.projectId === activeProjectId) ?? null,
+        [availableProjects, activeProjectId]
+    );
 
     const renderDashboardByRole = () => {
         // Los dashboards ahora son "sin fondo" para flotar sobre el fondo principal
@@ -99,6 +111,62 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                 <header className="flex justify-between items-center mb-6 sm:mb-8 gap-4">
                     <div className="min-w-0 flex-1">
                         <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">{user.name}</h1>
+
+                        {/* Selector de Proyecto -- solo visible si el usuario pertenece a más de uno */}
+                        {hasMultipleProjects && activeProject && (
+                            <div className="relative mt-2" ref={projectMenuRef}>
+                                <button
+                                    onClick={() => setIsProjectMenuOpen(!isProjectMenuOpen)}
+                                    className="text-sm font-semibold bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full inline-flex items-center gap-2 border border-indigo-400/30 hover:bg-indigo-500/30 transition-all cursor-pointer"
+                                >
+                                    <FolderKanban size={16} />
+                                    <span className="truncate max-w-[10rem]">{activeProject.projectName}</span>
+                                    <ChevronDown
+                                        size={14}
+                                        className={`transition-transform duration-200 ${isProjectMenuOpen ? 'rotate-180' : ''}`}
+                                    />
+                                </button>
+
+                                {isProjectMenuOpen && (
+                                    <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[100] animate-scale-in overflow-hidden">
+                                        <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+                                            <div className="flex items-center gap-2 px-2 py-1 text-xs text-gray-500 dark:text-gray-400">
+                                                <FolderKanban size={14} />
+                                                <span className="font-semibold">Cambiar proyecto activo</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-2">
+                                            {availableProjects.map((project) => {
+                                                const isActive = project.projectId === activeProjectId;
+
+                                                return (
+                                                    <button
+                                                        key={project.projectId}
+                                                        onClick={() => {
+                                                            switchProject(project.projectId);
+                                                            setIsProjectMenuOpen(false);
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                                                            isActive
+                                                                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                        }`}
+                                                    >
+                                                        <div className="p-1.5 rounded-md bg-indigo-500/20 text-indigo-300">
+                                                            <FolderKanban size={18} />
+                                                        </div>
+                                                        <span className="flex-1 text-left truncate">{project.projectName}</span>
+                                                        {isActive && (
+                                                            <Check size={18} className="text-indigo-600 dark:text-indigo-400" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Badge de Rol con Dropdown Integrado */}
                         {currentRoleConfig && (
@@ -221,12 +289,55 @@ interface DashboardPageProps {
     onLogout: () => void;
 }
 
-// Wrapper component that provides the role context
-function DashboardPage({ user, onLogout }: DashboardPageProps) {
+// Puente: tras Fase T, user.roles (el JWT) solo puede contener 'superadmin'
+// o estar vacío -- los roles reales de trabajo (admin/monitor/student) viven
+// en la ProjectMembership del proyecto activo, así que RoleContext pasa a
+// derivarse de ahí en vez del JWT. Debe vivir dentro de ProjectProvider para
+// poder leer activeProjectId/availableProjects.
+const ProjectRoleBridge = ({ user, onLogout }: DashboardPageProps) => {
+    const { activeProjectId, availableProjects, isLoading } = useProject();
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 to-blue-900 flex items-center justify-center">
+                <p className="text-white text-lg font-semibold">Cargando proyectos...</p>
+            </div>
+        );
+    }
+
+    if (availableProjects.length === 0) {
+        return (
+            <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 to-blue-900 flex flex-col items-center justify-center gap-4 text-white text-center p-4">
+                <p className="text-lg font-semibold">No tenés acceso a ningún proyecto todavía.</p>
+                <p className="text-white/70 max-w-md">Contactá a un administrador para que te asigne a un proyecto de recolección.</p>
+                <button
+                    onClick={onLogout}
+                    className="px-4 py-2 bg-white/10 rounded-lg border border-white/20 hover:bg-white/20 transition-all"
+                >
+                    Cerrar sesión
+                </button>
+            </div>
+        );
+    }
+
+    // ProjectsService#findMine devuelve rol 'admin' sintético por cada
+    // proyecto para un superadmin, sin necesitar su propia membership.
+    const activeMembership = availableProjects.find(p => p.projectId === activeProjectId);
+    const roleUser: Pick<AuthUser, 'roles'> = { roles: activeMembership?.roles ?? [] };
+
     return (
-        <RoleProvider user={user}>
+        <RoleProvider user={roleUser}>
             <DashboardContent user={user} onLogout={onLogout} />
         </RoleProvider>
+    );
+};
+
+// Wrapper component that provides the project + role context
+function DashboardPage({ user, onLogout }: DashboardPageProps) {
+    return (
+        <ProjectProvider>
+            <ProjectRoleBridge user={user} onLogout={onLogout} />
+        </ProjectProvider>
     );
 }
 
