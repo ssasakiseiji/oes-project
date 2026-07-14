@@ -5,92 +5,90 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Port de inflacion_app_backend/services/commerceAssignmentService.js.
-// Igual que en commerces.service.ts: los "no encontrado" que en Express
-// caían como 500 (Error genérico sin statusCode) acá usan NotFoundException
-// (404) a propósito.
+// Fase H: renombrado de dominio, CommerceAssignment -> ObservationUnitAssignment
+// (port 1:1 de commerce-assignments.service.ts).
 @Injectable()
-export class CommerceAssignmentsService {
+export class ObservationUnitAssignmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getStudentsWithAssignments() {
-    const [students, allCommerces, assignments] = await Promise.all([
+    const [students, allObservationUnits, assignments] = await Promise.all([
       this.prisma.user.findMany({
         where: { roles: { has: 'student' } },
         select: { id: true, name: true, email: true },
         orderBy: { name: 'asc' },
       }),
-      this.prisma.commerce.findMany({
+      this.prisma.observationUnit.findMany({
         select: { id: true, name: true, address: true },
         orderBy: { name: 'asc' },
       }),
-      this.prisma.commerceAssignment.findMany({
-        select: { userId: true, commerceId: true },
+      this.prisma.observationUnitAssignment.findMany({
+        select: { userId: true, observationUnitId: true },
       }),
     ]);
 
     const studentsWithAssignments = students.map((student) => {
-      const assignedCommerceIds = assignments
+      const assignedObservationUnitIds = assignments
         .filter((a) => a.userId === student.id)
-        .map((a) => a.commerceId);
+        .map((a) => a.observationUnitId);
 
       return {
         id: student.id,
         name: student.name,
         email: student.email,
-        assignedCommerces: assignedCommerceIds,
-        assignedCommercesData: allCommerces.filter((c) =>
-          assignedCommerceIds.includes(c.id),
+        assignedObservationUnits: assignedObservationUnitIds,
+        assignedObservationUnitsData: allObservationUnits.filter((u) =>
+          assignedObservationUnitIds.includes(u.id),
         ),
       };
     });
 
-    return { students: studentsWithAssignments, allCommerces };
+    return { students: studentsWithAssignments, allObservationUnits };
   }
 
   async getStudentAssignments(userId: number) {
-    const assignments = await this.prisma.commerceAssignment.findMany({
+    const assignments = await this.prisma.observationUnitAssignment.findMany({
       where: { userId },
-      include: { commerce: true },
-      orderBy: { commerce: { name: 'asc' } },
+      include: { observationUnit: true },
+      orderBy: { observationUnit: { name: 'asc' } },
     });
 
     return assignments.map((a) => ({
       id: a.id,
-      commerce_id: a.commerceId,
-      commerce_name: a.commerce.name,
-      commerce_address: a.commerce.address,
+      observation_unit_id: a.observationUnitId,
+      observation_unit_name: a.observationUnit.name,
+      observation_unit_address: a.observationUnit.address,
       assigned_at: a.assignedAt,
     }));
   }
 
-  async assignCommercesToStudent(
+  async assignObservationUnitsToStudent(
     userId: number,
-    commerceIds: number[],
+    observationUnitIds: number[],
     assignedBy: number,
   ) {
     await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.commerceAssignment.findMany({
+      const existing = await tx.observationUnitAssignment.findMany({
         where: { userId },
-        select: { commerceId: true },
+        select: { observationUnitId: true },
       });
-      const existingIds = existing.map((e) => e.commerceId);
-      const newIds = commerceIds ?? [];
+      const existingIds = existing.map((e) => e.observationUnitId);
+      const newIds = observationUnitIds ?? [];
       const unassignedIds = existingIds.filter((id) => !newIds.includes(id));
 
       if (unassignedIds.length > 0) {
-        await tx.draftPrice.deleteMany({
-          where: { userId, commerceId: { in: unassignedIds } },
+        await tx.draftObservation.deleteMany({
+          where: { userId, observationUnitId: { in: unassignedIds } },
         });
       }
 
-      await tx.commerceAssignment.deleteMany({ where: { userId } });
+      await tx.observationUnitAssignment.deleteMany({ where: { userId } });
 
       if (newIds.length > 0) {
-        await tx.commerceAssignment.createMany({
-          data: newIds.map((commerceId) => ({
+        await tx.observationUnitAssignment.createMany({
+          data: newIds.map((observationUnitId) => ({
             userId,
-            commerceId,
+            observationUnitId,
             assignedBy,
           })),
         });
@@ -100,20 +98,20 @@ export class CommerceAssignmentsService {
     return this.getStudentAssignments(userId);
   }
 
-  async bulkAssignCommerces(
+  async bulkAssignObservationUnits(
     userIds: number[],
-    commerceIds: number[],
+    observationUnitIds: number[],
     assignedBy: number,
   ) {
     await this.prisma.$transaction(async (tx) => {
       for (const userId of userIds) {
-        await tx.commerceAssignment.deleteMany({ where: { userId } });
+        await tx.observationUnitAssignment.deleteMany({ where: { userId } });
 
-        if (commerceIds && commerceIds.length > 0) {
-          await tx.commerceAssignment.createMany({
-            data: commerceIds.map((commerceId) => ({
+        if (observationUnitIds && observationUnitIds.length > 0) {
+          await tx.observationUnitAssignment.createMany({
+            data: observationUnitIds.map((observationUnitId) => ({
               userId,
-              commerceId,
+              observationUnitId,
               assignedBy,
             })),
           });
@@ -123,10 +121,10 @@ export class CommerceAssignmentsService {
   }
 
   async getAssignmentsSummary() {
-    const commerces = await this.prisma.commerce.findMany({
+    const observationUnits = await this.prisma.observationUnit.findMany({
       orderBy: { name: 'asc' },
       include: {
-        commerceAssignments: {
+        observationUnitAssignments: {
           where: { user: { roles: { has: 'student' } } },
           include: { user: { select: { name: true } } },
           orderBy: { user: { name: 'asc' } },
@@ -134,22 +132,22 @@ export class CommerceAssignmentsService {
       },
     });
 
-    return commerces.map((c) => ({
-      commerce_id: c.id,
-      commerce_name: c.name,
-      assigned_students: c.commerceAssignments.length,
-      student_names: c.commerceAssignments.map((a) => a.user.name),
+    return observationUnits.map((u) => ({
+      observation_unit_id: u.id,
+      observation_unit_name: u.name,
+      assigned_students: u.observationUnitAssignments.length,
+      student_names: u.observationUnitAssignments.map((a) => a.user.name),
     }));
   }
 
-  async assignCommerceToStudents(
-    commerceId: number,
+  async assignObservationUnitToStudents(
+    observationUnitId: number,
     studentIds: number[],
     assignedBy: number,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.commerceAssignment.findMany({
-        where: { commerceId, userId: { in: studentIds } },
+      const existing = await tx.observationUnitAssignment.findMany({
+        where: { observationUnitId, userId: { in: studentIds } },
         include: { user: { select: { name: true } } },
       });
 
@@ -162,10 +160,10 @@ export class CommerceAssignmentsService {
       }
 
       if (studentIds.length > 0) {
-        await tx.commerceAssignment.createMany({
+        await tx.observationUnitAssignment.createMany({
           data: studentIds.map((userId) => ({
             userId,
-            commerceId,
+            observationUnitId,
             assignedBy,
           })),
         });
@@ -175,12 +173,14 @@ export class CommerceAssignmentsService {
     });
   }
 
-  async removeAssignment(userId: number, commerceId: number) {
+  async removeAssignment(userId: number, observationUnitId: number) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.draftPrice.deleteMany({ where: { userId, commerceId } });
+      await tx.draftObservation.deleteMany({
+        where: { userId, observationUnitId },
+      });
 
-      const deleted = await tx.commerceAssignment.deleteMany({
-        where: { userId, commerceId },
+      const deleted = await tx.observationUnitAssignment.deleteMany({
+        where: { userId, observationUnitId },
       });
 
       if (deleted.count === 0) {

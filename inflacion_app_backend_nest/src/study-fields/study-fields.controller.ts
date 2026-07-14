@@ -9,33 +9,35 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { CategoriesService } from './categories.service';
+import { StudyFieldsService } from './study-fields.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { createCategorySchema } from './dto/category.schema';
-import type { CreateCategoryDto } from './dto/category.schema';
+import { createStudyFieldSchema } from './dto/study-field.schema';
+import type { CreateStudyFieldDto } from './dto/study-field.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
-// Port 1:1 de inflacion_app_backend/routes/categoryRoutes.js: lectura para
-// cualquier usuario autenticado, escritura solo para admin.
-@Controller('categories')
+// Fase H: renombrado de dominio, categories -> study-fields (port 1:1 de
+// categories.controller.ts). Lectura para cualquier usuario autenticado,
+// escritura solo para admin.
+@Controller('study-fields')
 @UseGuards(JwtAuthGuard)
-export class CategoriesController {
-  constructor(private readonly categoriesService: CategoriesService) {}
+export class StudyFieldsController {
+  constructor(private readonly studyFieldsService: StudyFieldsService) {}
 
   @Get()
   findAll() {
-    return this.categoriesService.findAll();
+    return this.studyFieldsService.findAll();
   }
 
   @Post()
   @UseGuards(RolesGuard)
   @Roles('admin')
   create(
-    @Body(new ZodValidationPipe(createCategorySchema)) body: CreateCategoryDto,
+    @Body(new ZodValidationPipe(createStudyFieldSchema))
+    body: CreateStudyFieldDto,
   ) {
-    return this.categoriesService.create(body.name);
+    return this.studyFieldsService.create(body.name);
   }
 
   @Put(':id')
@@ -43,16 +45,17 @@ export class CategoriesController {
   @Roles('admin')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body(new ZodValidationPipe(createCategorySchema)) body: CreateCategoryDto,
+    @Body(new ZodValidationPipe(createStudyFieldSchema))
+    body: CreateStudyFieldDto,
   ) {
-    return this.categoriesService.update(id, body.name);
+    return this.studyFieldsService.update(id, body.name);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('admin')
   async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.categoriesService.remove(id);
-    return { message: 'Categoría eliminada exitosamente' };
+    await this.studyFieldsService.remove(id);
+    return { message: 'Campo de estudio eliminado exitosamente' };
   }
 }

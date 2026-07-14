@@ -10,38 +10,44 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ProductsService } from './products.service';
+import { VariablesService } from './variables.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { createProductSchema, updateProductSchema } from './dto/product.schema';
-import type { CreateProductDto, UpdateProductDto } from './dto/product.schema';
+import {
+  createVariableSchema,
+  updateVariableSchema,
+} from './dto/variable.schema';
+import type {
+  CreateVariableDto,
+  UpdateVariableDto,
+} from './dto/variable.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-// Port 1:1 de inflacion_app_backend/routes/productRoutes.js: solo requiere
-// estar autenticado (no hay restricción de rol admin en el Express actual,
-// se replica tal cual).
-@Controller('products')
+// Fase H: renombrado de dominio, products -> variables (port 1:1 de
+// products.controller.ts). Solo requiere estar autenticado (no hay
+// restricción de rol admin, se replica tal cual del Express original).
+@Controller('variables')
 @UseGuards(JwtAuthGuard)
-export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+export class VariablesController {
+  constructor(private readonly variablesService: VariablesService) {}
 
   @Post()
   create(
-    @Body(new ZodValidationPipe(createProductSchema)) body: CreateProductDto,
+    @Body(new ZodValidationPipe(createVariableSchema)) body: CreateVariableDto,
   ) {
-    return this.productsService.create(body.name, body.unit, body.categoryId);
+    return this.variablesService.create(body);
   }
 
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body(new ZodValidationPipe(updateProductSchema)) body: UpdateProductDto,
+    @Body(new ZodValidationPipe(updateVariableSchema)) body: UpdateVariableDto,
   ) {
-    return this.productsService.update(id, body.name, body.unit);
+    return this.variablesService.update(id, body);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.productsService.remove(id);
+    await this.variablesService.remove(id);
   }
 }

@@ -10,17 +10,20 @@ import {
 } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { saveDraftSchema, submitPricesSchema } from './dto/student.schema';
-import type { SaveDraftDto, SubmitPricesDto } from './dto/student.schema';
+import {
+  saveDraftSchema,
+  submitObservationsSchema,
+} from './dto/student.schema';
+import type { SaveDraftDto, SubmitObservationsDto } from './dto/student.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from '../auth/guards/jwt-auth.guard';
 import { CollectionPeriodGuard } from '../common/guards/collection-period.guard';
 import type { RequestWithActivePeriod } from '../common/guards/collection-period.guard';
 
-// Port 1:1 de inflacion_app_backend/routes/studentRoutes.js: las rutas se
-// mantienen "planas" (sin prefijo /students) para que el frontend, que las
-// llama como /api/student-tasks, /api/student/dashboard, /api/save-draft y
-// /api/submit-prices, no necesite cambios al hacer el corte.
+// Fase H/I: renombrado de dominio + rutas nuevas (/draft-observations,
+// /observations en vez de /save-draft, /submit-prices -- ver plan de
+// Fase I, no hay consumidores externos de la API así que es seguro
+// renombrarlas). Las rutas se mantienen "planas" (sin prefijo /students).
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class StudentsController {
@@ -36,7 +39,7 @@ export class StudentsController {
     return this.studentsService.getStudentDashboard(request.user.id);
   }
 
-  @Post('save-draft')
+  @Post('draft-observations')
   @UseGuards(CollectionPeriodGuard)
   @HttpCode(HttpStatus.OK)
   async saveDraft(
@@ -45,23 +48,25 @@ export class StudentsController {
   ) {
     await this.studentsService.saveDraft(
       request.user.id,
-      body.commerceId,
+      body.observationUnitId,
       request.activePeriodId,
-      body.prices,
+      body.values,
     );
     return { message: 'Borrador guardado con éxito' };
   }
 
-  @Post('submit-prices')
+  @Post('observations')
   @UseGuards(CollectionPeriodGuard)
-  async submitPrices(
-    @Body(new ZodValidationPipe(submitPricesSchema)) body: SubmitPricesDto,
+  async submitObservations(
+    @Body(new ZodValidationPipe(submitObservationsSchema))
+    body: SubmitObservationsDto,
     @Req() request: RequestWithActivePeriod,
   ) {
-    await this.studentsService.submitPrices(
+    await this.studentsService.submitObservations(
       request.user.id,
       request.activePeriodId,
-      body,
+      body.observationUnitId,
+      body.values,
     );
     return { message: '¡Registro completado con éxito!' };
   }

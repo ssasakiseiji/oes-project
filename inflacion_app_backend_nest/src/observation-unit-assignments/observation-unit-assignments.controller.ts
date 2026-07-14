@@ -11,113 +11,118 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { CommerceAssignmentsService } from './commerce-assignments.service';
+import { ObservationUnitAssignmentsService } from './observation-unit-assignments.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
-  assignCommercesToStudentSchema,
-  bulkAssignCommercesSchema,
-  assignCommerceToStudentsSchema,
-} from './dto/commerce-assignment.schema';
+  assignObservationUnitsToStudentSchema,
+  bulkAssignObservationUnitsSchema,
+  assignObservationUnitToStudentsSchema,
+} from './dto/observation-unit-assignment.schema';
 import type {
-  AssignCommercesToStudentDto,
-  BulkAssignCommercesDto,
-  AssignCommerceToStudentsDto,
-} from './dto/commerce-assignment.schema';
+  AssignObservationUnitsToStudentDto,
+  BulkAssignObservationUnitsDto,
+  AssignObservationUnitToStudentsDto,
+} from './dto/observation-unit-assignment.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
-// Port 1:1 de inflacion_app_backend/routes/commerceAssignmentRoutes.js: todas
-// las rutas requieren admin (igual que el router.use(authorizeAdmin) global
-// del archivo original).
-@Controller('commerce-assignments')
+// Fase H: renombrado de dominio, commerce-assignments -> observation-unit-
+// assignments (port 1:1 de commerce-assignments.controller.ts). Todas las
+// rutas requieren admin.
+@Controller('observation-unit-assignments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
-export class CommerceAssignmentsController {
+export class ObservationUnitAssignmentsController {
   constructor(
-    private readonly commerceAssignmentsService: CommerceAssignmentsService,
+    private readonly observationUnitAssignmentsService: ObservationUnitAssignmentsService,
   ) {}
 
   @Get('students')
   getStudentsWithAssignments() {
-    return this.commerceAssignmentsService.getStudentsWithAssignments();
+    return this.observationUnitAssignmentsService.getStudentsWithAssignments();
   }
 
   @Get('student/:studentId')
   getStudentAssignments(@Param('studentId', ParseIntPipe) studentId: number) {
-    return this.commerceAssignmentsService.getStudentAssignments(studentId);
+    return this.observationUnitAssignmentsService.getStudentAssignments(
+      studentId,
+    );
   }
 
   @Post('student/:studentId')
   @HttpCode(HttpStatus.OK)
-  async assignCommercesToStudent(
+  async assignObservationUnitsToStudent(
     @Param('studentId', ParseIntPipe) studentId: number,
-    @Body(new ZodValidationPipe(assignCommercesToStudentSchema))
-    body: AssignCommercesToStudentDto,
+    @Body(new ZodValidationPipe(assignObservationUnitsToStudentSchema))
+    body: AssignObservationUnitsToStudentDto,
     @Req() request: RequestWithUser,
   ) {
     const assignments =
-      await this.commerceAssignmentsService.assignCommercesToStudent(
+      await this.observationUnitAssignmentsService.assignObservationUnitsToStudent(
         studentId,
-        body.commerceIds,
+        body.observationUnitIds,
         request.user.id,
       );
 
-    return { message: 'Comercios asignados exitosamente', assignments };
+    return {
+      message: 'Unidades de observación asignadas exitosamente',
+      assignments,
+    };
   }
 
   @Post('bulk')
   @HttpCode(HttpStatus.OK)
-  async bulkAssignCommerces(
-    @Body(new ZodValidationPipe(bulkAssignCommercesSchema))
-    body: BulkAssignCommercesDto,
+  async bulkAssignObservationUnits(
+    @Body(new ZodValidationPipe(bulkAssignObservationUnitsSchema))
+    body: BulkAssignObservationUnitsDto,
     @Req() request: RequestWithUser,
   ) {
-    await this.commerceAssignmentsService.bulkAssignCommerces(
+    await this.observationUnitAssignmentsService.bulkAssignObservationUnits(
       body.studentIds,
-      body.commerceIds,
+      body.observationUnitIds,
       request.user.id,
     );
 
     return {
-      message: `Comercios asignados a ${body.studentIds.length} estudiante(s) exitosamente`,
+      message: `Unidades de observación asignadas a ${body.studentIds.length} estudiante(s) exitosamente`,
     };
   }
 
   @Get('summary')
   getAssignmentsSummary() {
-    return this.commerceAssignmentsService.getAssignmentsSummary();
+    return this.observationUnitAssignmentsService.getAssignmentsSummary();
   }
 
   @Post('assign')
   @HttpCode(HttpStatus.OK)
-  async assignCommerceToStudents(
-    @Body(new ZodValidationPipe(assignCommerceToStudentsSchema))
-    body: AssignCommerceToStudentsDto,
+  async assignObservationUnitToStudents(
+    @Body(new ZodValidationPipe(assignObservationUnitToStudentsSchema))
+    body: AssignObservationUnitToStudentsDto,
     @Req() request: RequestWithUser,
   ) {
     const result =
-      await this.commerceAssignmentsService.assignCommerceToStudents(
-        body.commerceId,
+      await this.observationUnitAssignmentsService.assignObservationUnitToStudents(
+        body.observationUnitId,
         body.studentIds,
         request.user.id,
       );
 
     return {
-      message: `Comercio asignado a ${result.assigned} estudiante(s) exitosamente`,
+      message: `Unidad de observación asignada a ${result.assigned} estudiante(s) exitosamente`,
       ...result,
     };
   }
 
-  @Delete('student/:studentId/commerce/:commerceId')
+  @Delete('student/:studentId/observation-unit/:observationUnitId')
   async removeAssignment(
     @Param('studentId', ParseIntPipe) studentId: number,
-    @Param('commerceId', ParseIntPipe) commerceId: number,
+    @Param('observationUnitId', ParseIntPipe) observationUnitId: number,
   ) {
-    await this.commerceAssignmentsService.removeAssignment(
+    await this.observationUnitAssignmentsService.removeAssignment(
       studentId,
-      commerceId,
+      observationUnitId,
     );
     return { message: 'Asignación eliminada exitosamente' };
   }

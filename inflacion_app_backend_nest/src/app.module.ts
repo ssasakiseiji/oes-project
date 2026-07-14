@@ -3,10 +3,10 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { CategoriesModule } from './categories/categories.module';
-import { ProductsModule } from './products/products.module';
-import { CommercesModule } from './commerces/commerces.module';
-import { CommerceAssignmentsModule } from './commerce-assignments/commerce-assignments.module';
+import { StudyFieldsModule } from './study-fields/study-fields.module';
+import { VariablesModule } from './variables/variables.module';
+import { ObservationUnitsModule } from './observation-units/observation-units.module';
+import { ObservationUnitAssignmentsModule } from './observation-unit-assignments/observation-unit-assignments.module';
 import { StudentsModule } from './students/students.module';
 import { MonitorModule } from './monitor/monitor.module';
 import { AdminModule } from './admin/admin.module';
@@ -16,10 +16,10 @@ import { AdminModule } from './admin/admin.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
-    CategoriesModule,
-    ProductsModule,
-    CommercesModule,
-    CommerceAssignmentsModule,
+    StudyFieldsModule,
+    VariablesModule,
+    ObservationUnitsModule,
+    ObservationUnitAssignmentsModule,
     StudentsModule,
     MonitorModule,
     AdminModule,

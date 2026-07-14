@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { CommerceAssignmentsController } from './commerce-assignments.controller';
-import { CommerceAssignmentsService } from './commerce-assignments.service';
+import { ObservationUnitAssignmentsController } from './observation-unit-assignments.controller';
+import { ObservationUnitAssignmentsService } from './observation-unit-assignments.service';
 
 @Module({
-  controllers: [CommerceAssignmentsController],
-  providers: [CommerceAssignmentsService],
+  controllers: [ObservationUnitAssignmentsController],
+  providers: [ObservationUnitAssignmentsService],
 })
-export class CommerceAssignmentsModule {}
+export class ObservationUnitAssignmentsModule {}

@@ -19,7 +19,7 @@ import {
   updatePeriodSchema,
   updatePeriodStatusSchema,
   getAnalysisSchema,
-  updatePriceSchema,
+  updateObservationSchema,
   createUserSchema,
   updateUserSchema,
   updateUserPasswordSchema,
@@ -30,7 +30,7 @@ import type {
   UpdatePeriodDto,
   UpdatePeriodStatusDto,
   GetAnalysisDto,
-  UpdatePriceDto,
+  UpdateObservationDto,
   CreateUserDto,
   UpdateUserDto,
   UpdateUserPasswordDto,
@@ -40,10 +40,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
-// Port 1:1 de inflacion_app_backend/routes/adminRoutes.js: todas las rutas
-// requieren admin (router.use(authenticateToken); router.use(authorizeAdmin);
-// en el original) y se mantienen "planas" (/api/periods, /api/users, etc.,
-// sin prefijo /admin) para que el frontend no necesite cambios.
+// Fase H: renombrado de dominio + rutas (/historical-data -> /variable-
+// history, /prices -> /observations, más /variable-distribution nueva --
+// ver plan de Fase I). Todas las rutas requieren admin y se mantienen
+// "planas" (sin prefijo /admin), igual que antes del rename.
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
@@ -91,50 +91,59 @@ export class AdminController {
     return this.adminService.getAnalysis(body.periodAId, body.periodBId);
   }
 
-  @Get('historical-data')
-  getHistoricalData(
-    @Query('productId') productId?: string,
-    @Query('categoryId') categoryId?: string,
+  @Get('variable-history')
+  getVariableHistory(
+    @Query('variableId') variableId?: string,
+    @Query('studyFieldId') studyFieldId?: string,
   ) {
-    return this.adminService.getHistoricalData(
-      productId != null ? Number(productId) : undefined,
-      categoryId != null ? Number(categoryId) : undefined,
+    return this.adminService.getVariableHistory(
+      variableId != null ? Number(variableId) : undefined,
+      studyFieldId != null ? Number(studyFieldId) : undefined,
     );
   }
 
-  // Prices
+  @Get('variable-distribution')
+  getVariableDistribution(
+    @Query('variableId', ParseIntPipe) variableId: number,
+  ) {
+    return this.adminService.getVariableDistribution(variableId);
+  }
 
-  @Get('prices')
-  getPrices(
+  // Observations
+
+  @Get('observations')
+  getObservations(
     @Query('periodId') periodId?: string,
-    @Query('categoryId') categoryId?: string,
-    @Query('productId') productId?: string,
+    @Query('studyFieldId') studyFieldId?: string,
+    @Query('variableId') variableId?: string,
     @Query('userId') userId?: string,
-    @Query('commerceId') commerceId?: string,
+    @Query('observationUnitId') observationUnitId?: string,
     @Query('showOutliersOnly') showOutliersOnly?: string,
   ) {
-    return this.adminService.getPrices({
+    return this.adminService.getObservations({
       periodId: periodId != null ? Number(periodId) : undefined,
-      categoryId: categoryId != null ? Number(categoryId) : undefined,
-      productId: productId != null ? Number(productId) : undefined,
+      studyFieldId: studyFieldId != null ? Number(studyFieldId) : undefined,
+      variableId: variableId != null ? Number(variableId) : undefined,
       userId: userId != null ? Number(userId) : undefined,
-      commerceId: commerceId != null ? Number(commerceId) : undefined,
+      observationUnitId:
+        observationUnitId != null ? Number(observationUnitId) : undefined,
       showOutliersOnly: showOutliersOnly === 'true',
     });
   }
 
-  @Put('prices/:id')
-  updatePrice(
+  @Put('observations/:id')
+  updateObservation(
     @Param('id', ParseIntPipe) id: number,
-    @Body(new ZodValidationPipe(updatePriceSchema)) body: UpdatePriceDto,
+    @Body(new ZodValidationPipe(updateObservationSchema))
+    body: UpdateObservationDto,
   ) {
-    return this.adminService.updatePrice(id, body.price);
+    return this.adminService.updateObservation(id, body.value);
   }
 
-  @Delete('prices/:id')
+  @Delete('observations/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deletePrice(@Param('id', ParseIntPipe) id: number) {
-    await this.adminService.deletePrice(id);
+  async deleteObservation(@Param('id', ParseIntPipe) id: number) {
+    await this.adminService.deleteObservation(id);
   }
 
   // Users

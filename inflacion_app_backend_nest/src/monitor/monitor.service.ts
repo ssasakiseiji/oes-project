@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { pickObservationValue } from '../common/validation/variable-value';
 
 type TaskStatus = 'Completado' | 'En Proceso' | 'Pendiente' | 'No completado';
 type CompletionLevel = 'bajo' | 'medio' | 'alto' | null;
 
-// Port de inflacion_app_backend/services/monitorService.js.
+// Fase H: renombrado de dominio (port 1:1 de monitor.service.ts pre-rename)
+// -- la lógica de progreso ya era agnóstica al tipo de valor (cuenta
+// observaciones enviadas, no las suma ni promedia), así que el único
+// cambio real acá es de nombres.
 @Injectable()
 export class MonitorService {
   constructor(private readonly prisma: PrismaService) {}
@@ -13,11 +17,11 @@ export class MonitorService {
     const [
       periods,
       students,
-      totalProducts,
+      totalVariables,
       currentAssignments,
-      allPrices,
-      allDraftPrices,
-      allCommerces,
+      allObservations,
+      allDraftObservations,
+      allObservationUnits,
     ] = await Promise.all([
       this.prisma.period.findMany({
         select: { id: true, name: true, status: true },
@@ -28,82 +32,94 @@ export class MonitorService {
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }),
-      this.prisma.product.count(),
-      this.prisma.commerceAssignment.findMany({
-        select: { userId: true, commerceId: true },
+      this.prisma.variable.count(),
+      this.prisma.observationUnitAssignment.findMany({
+        select: { userId: true, observationUnitId: true },
       }),
-      this.prisma.price.findMany({
+      this.prisma.observation.findMany({
         select: {
           userId: true,
-          commerceId: true,
+          observationUnitId: true,
           periodId: true,
-          productId: true,
-          price: true,
+          variableId: true,
+          numericValue: true,
+          textValue: true,
+          booleanValue: true,
+          choiceValue: true,
         },
       }),
-      this.prisma.draftPrice.findMany({
+      this.prisma.draftObservation.findMany({
         select: {
           userId: true,
-          commerceId: true,
+          observationUnitId: true,
           periodId: true,
-          productId: true,
-          price: true,
+          variableId: true,
+          numericValue: true,
+          textValue: true,
+          booleanValue: true,
+          choiceValue: true,
         },
       }),
-      this.prisma.commerce.findMany({ select: { id: true, name: true } }),
+      this.prisma.observationUnit.findMany({
+        select: { id: true, name: true },
+      }),
     ]);
 
-    const commercesMap = new Map(allCommerces.map((c) => [c.id, c.name]));
+    const observationUnitsMap = new Map(
+      allObservationUnits.map((u) => [u.id, u.name]),
+    );
 
     const monitorDataByPeriod = periods.map((period) => {
       const isCurrentPeriodOpen = period.status === 'Open';
 
       const studentProgress = students.map((student) => {
-        const relevantCommerceIds = new Set<number>();
+        const relevantUnitIds = new Set<number>();
 
         currentAssignments
           .filter((a) => a.userId === student.id)
-          .forEach((a) => relevantCommerceIds.add(a.commerceId));
+          .forEach((a) => relevantUnitIds.add(a.observationUnitId));
 
         if (!isCurrentPeriodOpen) {
-          allPrices
-            .filter((p) => p.periodId === period.id && p.userId === student.id)
-            .forEach((p) => {
-              if (p.commerceId != null) relevantCommerceIds.add(p.commerceId);
+          allObservations
+            .filter((o) => o.periodId === period.id && o.userId === student.id)
+            .forEach((o) => {
+              if (o.observationUnitId != null) {
+                relevantUnitIds.add(o.observationUnitId);
+              }
             });
         }
 
-        const tasks = Array.from(relevantCommerceIds)
-          .map((commerceId) => {
-            const commerceName =
-              commercesMap.get(commerceId) ?? `Comercio ID ${commerceId}`;
+        const tasks = Array.from(relevantUnitIds)
+          .map((observationUnitId) => {
+            const observationUnitName =
+              observationUnitsMap.get(observationUnitId) ??
+              `Unidad de observación ID ${observationUnitId}`;
 
-            const submittedPrices = allPrices.filter(
-              (p) =>
-                p.periodId === period.id &&
-                p.userId === student.id &&
-                p.commerceId === commerceId,
+            const submitted = allObservations.filter(
+              (o) =>
+                o.periodId === period.id &&
+                o.userId === student.id &&
+                o.observationUnitId === observationUnitId,
             );
-            const draftPricesForTask = allDraftPrices.filter(
+            const draftsForTask = allDraftObservations.filter(
               (d) =>
                 d.periodId === period.id &&
                 d.userId === student.id &&
-                d.commerceId === commerceId,
+                d.observationUnitId === observationUnitId,
             );
 
             let status: TaskStatus;
-            if (submittedPrices.length > 0) {
+            if (submitted.length > 0) {
               status = 'Completado';
             } else if (isCurrentPeriodOpen) {
-              status =
-                draftPricesForTask.length > 0 ? 'En Proceso' : 'Pendiente';
+              status = draftsForTask.length > 0 ? 'En Proceso' : 'Pendiente';
             } else {
               status = 'No completado';
             }
 
-            const currentProgress = submittedPrices.length;
+            const currentProgress = submitted.length;
             const percentage =
-              totalProducts > 0 ? (currentProgress / totalProducts) * 100 : 0;
+              totalVariables > 0 ? (currentProgress / totalVariables) * 100 : 0;
             let completionLevel: CompletionLevel = null;
             if (status === 'Completado') {
               if (percentage < 33) completionLevel = 'bajo';
@@ -111,30 +127,36 @@ export class MonitorService {
               else completionLevel = 'alto';
             }
 
-            const submittedPricesMap = submittedPrices.reduce<
-              Record<string, unknown>
-            >((acc, p) => {
-              if (p.productId != null) acc[p.productId] = p.price;
-              return acc;
-            }, {});
-            const draftPricesMap = draftPricesForTask.reduce<
-              Record<string, unknown>
-            >((acc, d) => {
-              if (d.productId != null) acc[d.productId] = d.price;
-              return acc;
-            }, {});
+            const submittedValues = submitted.reduce<Record<string, unknown>>(
+              (acc, o) => {
+                if (o.variableId != null)
+                  acc[o.variableId] = pickObservationValue(o);
+                return acc;
+              },
+              {},
+            );
+            const draftValues = draftsForTask.reduce<Record<string, unknown>>(
+              (acc, d) => {
+                if (d.variableId != null)
+                  acc[d.variableId] = pickObservationValue(d);
+                return acc;
+              },
+              {},
+            );
 
             return {
-              commerceId,
-              commerceName,
+              observationUnitId,
+              observationUnitName,
               status,
               completionLevel,
-              progress: { current: currentProgress, total: totalProducts },
-              submittedPrices: submittedPricesMap,
-              draftPrices: draftPricesMap,
+              progress: { current: currentProgress, total: totalVariables },
+              submittedValues,
+              draftValues,
             };
           })
-          .sort((a, b) => a.commerceName.localeCompare(b.commerceName));
+          .sort((a, b) =>
+            a.observationUnitName.localeCompare(b.observationUnitName),
+          );
 
         return { studentId: student.id, studentName: student.name, tasks };
       });

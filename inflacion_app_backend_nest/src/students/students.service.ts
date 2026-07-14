@@ -1,34 +1,53 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { SaveDraftDto } from './dto/student.schema';
+import {
+  pickObservationValue,
+  toObservationValueFields,
+} from '../common/validation/variable-value';
+import type { SaveDraftDto, SubmitObservationsDto } from './dto/student.schema';
 
 type TaskStatus = 'Pendiente' | 'Completado' | 'En Proceso';
 
-// Port de inflacion_app_backend/services/studentService.js.
+// Fase H: renombrado de dominio (Product -> Variable, Commerce ->
+// ObservationUnit, Price -> Observation) + unificación de saveDraft/
+// submitPrices en un solo envelope multi-tipo (port de students.service.ts
+// pre-rename).
 @Injectable()
 export class StudentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getStudentTasks(userId: number) {
-    const [products, categories, assignedCommerces] = await Promise.all([
-      this.prisma.product.findMany({
-        select: { id: true, name: true, unit: true, categoryId: true },
-        orderBy: { name: 'asc' },
-      }),
-      this.prisma.category.findMany({ orderBy: { name: 'asc' } }),
-      this.prisma.commerceAssignment.findMany({
-        where: { userId },
-        select: {
-          commerce: { select: { id: true, name: true, address: true } },
-        },
-        orderBy: { commerce: { name: 'asc' } },
-      }),
-    ]);
+    const [variables, studyFields, assignedObservationUnits] =
+      await Promise.all([
+        this.prisma.variable.findMany({
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            dataType: true,
+            config: true,
+            studyFieldId: true,
+          },
+          orderBy: { name: 'asc' },
+        }),
+        this.prisma.studyField.findMany({ orderBy: { name: 'asc' } }),
+        this.prisma.observationUnitAssignment.findMany({
+          where: { userId },
+          select: {
+            observationUnit: {
+              select: { id: true, name: true, address: true },
+            },
+          },
+          orderBy: { observationUnit: { name: 'asc' } },
+        }),
+      ]);
 
     return {
-      products,
-      categories,
-      assignedCommerces: assignedCommerces.map((a) => a.commerce),
+      variables,
+      studyFields,
+      assignedObservationUnits: assignedObservationUnits.map(
+        (a) => a.observationUnit,
+      ),
     };
   }
 
@@ -38,46 +57,57 @@ export class StudentsService {
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
 
-    const [drafts, prices, assignedCommerces] = await Promise.all([
-      this.prisma.draftPrice.findMany({
+    const [drafts, observations, assignedObservationUnits] = await Promise.all([
+      this.prisma.draftObservation.findMany({
         where: { userId },
         select: {
-          productId: true,
-          commerceId: true,
+          variableId: true,
+          observationUnitId: true,
           periodId: true,
-          price: true,
-          commerce: { select: { name: true } },
+          numericValue: true,
+          textValue: true,
+          booleanValue: true,
+          choiceValue: true,
+          observationUnit: { select: { name: true } },
         },
       }),
-      this.prisma.price.findMany({
+      this.prisma.observation.findMany({
         where: { userId },
         select: {
-          productId: true,
-          commerceId: true,
+          variableId: true,
+          observationUnitId: true,
           periodId: true,
-          price: true,
-          commerce: { select: { name: true } },
+          numericValue: true,
+          textValue: true,
+          booleanValue: true,
+          choiceValue: true,
+          observationUnit: { select: { name: true } },
         },
       }),
-      this.prisma.commerceAssignment.findMany({
+      this.prisma.observationUnitAssignment.findMany({
         where: { userId },
-        select: { commerce: { select: { id: true, name: true } } },
-        orderBy: { commerce: { name: 'asc' } },
+        select: { observationUnit: { select: { id: true, name: true } } },
+        orderBy: { observationUnit: { name: 'asc' } },
       }),
     ]);
 
-    const assignedCommercesList = assignedCommerces.map((a) => a.commerce);
+    const assignedObservationUnitsList = assignedObservationUnits.map(
+      (a) => a.observationUnit,
+    );
 
     return periods.map((period) => {
-      const commercesMap = new Map<number, { id: number; name: string }>();
+      const unitsMap = new Map<number, { id: number; name: string }>();
 
-      prices
-        .filter((p) => p.periodId === period.id)
-        .forEach((p) => {
-          if (p.commerceId != null && !commercesMap.has(p.commerceId)) {
-            commercesMap.set(p.commerceId, {
-              id: p.commerceId,
-              name: p.commerce!.name,
+      observations
+        .filter((o) => o.periodId === period.id)
+        .forEach((o) => {
+          if (
+            o.observationUnitId != null &&
+            !unitsMap.has(o.observationUnitId)
+          ) {
+            unitsMap.set(o.observationUnitId, {
+              id: o.observationUnitId,
+              name: o.observationUnit!.name,
             });
           }
         });
@@ -85,52 +115,60 @@ export class StudentsService {
       drafts
         .filter((d) => d.periodId === period.id)
         .forEach((d) => {
-          if (d.commerceId != null && !commercesMap.has(d.commerceId)) {
-            commercesMap.set(d.commerceId, {
-              id: d.commerceId,
-              name: d.commerce!.name,
+          if (
+            d.observationUnitId != null &&
+            !unitsMap.has(d.observationUnitId)
+          ) {
+            unitsMap.set(d.observationUnitId, {
+              id: d.observationUnitId,
+              name: d.observationUnit!.name,
             });
           }
         });
 
       // Si no hay registros en este período, usar las asignaciones actuales
-      let commercesForPeriod = Array.from(commercesMap.values());
-      if (commercesForPeriod.length === 0) {
-        commercesForPeriod = assignedCommercesList;
+      let unitsForPeriod = Array.from(unitsMap.values());
+      if (unitsForPeriod.length === 0) {
+        unitsForPeriod = assignedObservationUnitsList;
       }
 
-      const tasks = commercesForPeriod.map((commerce) => {
-        const submittedPricesForPeriod = prices.filter(
-          (p) => p.periodId === period.id && p.commerceId === commerce.id,
+      const tasks = unitsForPeriod.map((observationUnit) => {
+        const submittedForPeriod = observations.filter(
+          (o) =>
+            o.periodId === period.id &&
+            o.observationUnitId === observationUnit.id,
         );
-        const draftPricesForPeriod = drafts.filter(
-          (d) => d.periodId === period.id && d.commerceId === commerce.id,
+        const draftsForPeriod = drafts.filter(
+          (d) =>
+            d.periodId === period.id &&
+            d.observationUnitId === observationUnit.id,
         );
 
         let status: TaskStatus = 'Pendiente';
-        if (submittedPricesForPeriod.length > 0) {
+        if (submittedForPeriod.length > 0) {
           status = 'Completado';
-        } else if (draftPricesForPeriod.length > 0) {
+        } else if (draftsForPeriod.length > 0) {
           status = 'En Proceso';
         }
 
         return {
-          commerceId: commerce.id,
-          commerceName: commerce.name,
+          observationUnitId: observationUnit.id,
+          observationUnitName: observationUnit.name,
           status,
-          draftPrices: draftPricesForPeriod.reduce<Record<string, unknown>>(
-            (acc, p) => {
-              acc[p.productId!] = p.price;
+          draftValues: draftsForPeriod.reduce<Record<string, unknown>>(
+            (acc, d) => {
+              acc[d.variableId!] = pickObservationValue(d);
               return acc;
             },
             {},
           ),
-          submittedPrices: submittedPricesForPeriod.reduce<
-            Record<string, unknown>
-          >((acc, p) => {
-            acc[p.productId!] = p.price;
-            return acc;
-          }, {}),
+          submittedValues: submittedForPeriod.reduce<Record<string, unknown>>(
+            (acc, o) => {
+              acc[o.variableId!] = pickObservationValue(o);
+              return acc;
+            },
+            {},
+          ),
         };
       });
 
@@ -145,78 +183,100 @@ export class StudentsService {
 
   async saveDraft(
     userId: number,
-    commerceId: number,
+    observationUnitId: number,
     periodId: number,
-    prices: SaveDraftDto['prices'],
+    values: SaveDraftDto['values'],
   ) {
+    const entries = (values ?? []).filter(
+      (v) => v.value != null && v.value !== '',
+    );
+
+    const variables =
+      entries.length > 0
+        ? await this.prisma.variable.findMany({
+            where: { id: { in: entries.map((e) => e.variableId) } },
+          })
+        : [];
+    const variablesById = new Map(variables.map((v) => [v.id, v]));
+
+    const rows = entries.map((entry) => {
+      const variable = variablesById.get(entry.variableId);
+      if (!variable) {
+        return null;
+      }
+      return {
+        userId,
+        variableId: entry.variableId,
+        observationUnitId,
+        periodId,
+        ...toObservationValueFields(variable, entry.value),
+      };
+    });
+    const validRows = rows.filter((r): r is NonNullable<typeof r> => r != null);
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.draftPrice.deleteMany({
-        where: { userId, commerceId, periodId },
+      await tx.draftObservation.deleteMany({
+        where: { userId, observationUnitId, periodId },
       });
 
-      const priceEntries = Object.entries(prices ?? {}).filter(
-        ([, price]) => price != null && price !== '',
-      );
-
-      if (priceEntries.length > 0) {
-        await tx.draftPrice.createMany({
-          data: priceEntries.map(([productId, price]) => ({
-            userId,
-            productId: parseInt(productId, 10),
-            commerceId,
-            periodId,
-            price: price as number | string,
-          })),
-        });
+      if (validRows.length > 0) {
+        await tx.draftObservation.createMany({ data: validRows });
       }
     });
   }
 
-  async submitPrices(
+  async submitObservations(
     userId: number,
     periodId: number,
-    pricesData: { productId: number; commerceId: number; price: number }[],
+    observationUnitId: number,
+    values: SubmitObservationsDto['values'],
   ) {
-    const commerceId = pricesData.length > 0 ? pricesData[0].commerceId : null;
+    const assignment = await this.prisma.observationUnitAssignment.findFirst({
+      where: { userId, observationUnitId },
+      select: { id: true },
+    });
+    if (!assignment) {
+      throw new ForbiddenException(
+        'No estás asignado a esta unidad de observación',
+      );
+    }
+
+    const variables = await this.prisma.variable.findMany({
+      where: { id: { in: values.map((v) => v.variableId) } },
+    });
+    const variablesById = new Map(variables.map((v) => [v.id, v]));
+
+    const rows = values.map((entry) => {
+      const variable = variablesById.get(entry.variableId);
+      if (!variable) {
+        throw new ForbiddenException(
+          `Variable ${entry.variableId} no encontrada`,
+        );
+      }
+      return {
+        userId,
+        variableId: entry.variableId,
+        observationUnitId,
+        periodId,
+        ...toObservationValueFields(variable, entry.value),
+      };
+    });
 
     await this.prisma.$transaction(async (tx) => {
-      // Verificar que el estudiante está asignado a este comercio
-      if (commerceId != null) {
-        const assignment = await tx.commerceAssignment.findFirst({
-          where: { userId, commerceId },
-          select: { id: true },
-        });
-        if (!assignment) {
-          throw new ForbiddenException('No estás asignado a este comercio');
-        }
+      // Elimina observaciones existentes para este usuario/unidad/período
+      // (previene duplicados) antes de insertar las nuevas.
+      await tx.observation.deleteMany({
+        where: { userId, observationUnitId, periodId },
+      });
+
+      for (const row of rows) {
+        await tx.observation.create({ data: row });
       }
 
-      // Eliminar precios existentes para este usuario/comercio/período (previene duplicados)
-      if (commerceId != null) {
-        await tx.price.deleteMany({
-          where: { userId, commerceId, periodId },
-        });
-      }
-
-      // Insertar nuevos precios
-      for (const p of pricesData) {
-        await tx.price.create({
-          data: {
-            price: p.price,
-            periodId,
-            productId: p.productId,
-            userId,
-            commerceId: p.commerceId,
-          },
-        });
-      }
-
-      // Eliminar borradores después del envío exitoso
-      if (commerceId != null) {
-        await tx.draftPrice.deleteMany({
-          where: { userId, commerceId, periodId },
-        });
-      }
+      // Elimina borradores después del envío exitoso
+      await tx.draftObservation.deleteMany({
+        where: { userId, observationUnitId, periodId },
+      });
     });
   }
 }

@@ -31,8 +31,12 @@ export const getAnalysisSchema = z.object({
   }),
 });
 
-export const updatePriceSchema = z.object({
-  price: z.coerce.number(),
+// `value` no se coerciona a propósito -- z.coerce.number() convertiría un
+// booleano `true` a `1` antes de llegar a la validación real por dataType
+// (toObservationValueFields), que es la que sabe si esta observación es
+// numérica, categórica, booleana o de texto.
+export const updateObservationSchema = z.object({
+  value: z.union([z.number(), z.string(), z.boolean()]),
 });
 
 export const createUserSchema = z.object({
@@ -57,14 +61,16 @@ export const updateUserPasswordSchema = z.object({
 });
 
 export const updateUserRolesSchema = z.object({
-  roles: z.array(z.string(), { error: 'El campo roles es requerido y debe ser un array' }),
+  roles: z.array(z.string(), {
+    error: 'El campo roles es requerido y debe ser un array',
+  }),
 });
 
 export type CreatePeriodDto = z.infer<typeof createPeriodSchema>;
 export type UpdatePeriodDto = z.infer<typeof updatePeriodSchema>;
 export type UpdatePeriodStatusDto = z.infer<typeof updatePeriodStatusSchema>;
 export type GetAnalysisDto = z.infer<typeof getAnalysisSchema>;
-export type UpdatePriceDto = z.infer<typeof updatePriceSchema>;
+export type UpdateObservationDto = z.infer<typeof updateObservationSchema>;
 export type CreateUserDto = z.infer<typeof createUserSchema>;
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 export type UpdateUserPasswordDto = z.infer<typeof updateUserPasswordSchema>;

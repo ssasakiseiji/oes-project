@@ -9,41 +9,47 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { CommercesService } from './commerces.service';
+import { ObservationUnitsService } from './observation-units.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { commerceSchema } from './dto/commerce.schema';
-import type { CommerceDto } from './dto/commerce.schema';
+import { observationUnitSchema } from './dto/observation-unit.schema';
+import type { ObservationUnitDto } from './dto/observation-unit.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
-// Port 1:1 de inflacion_app_backend/routes/commerceRoutes.js: lectura para
-// cualquier usuario autenticado, escritura solo para admin.
-@Controller('commerces')
+// Fase H: renombrado de dominio, commerces -> observation-units (port 1:1
+// de commerces.controller.ts). Lectura para cualquier usuario autenticado,
+// escritura solo para admin.
+@Controller('observation-units')
 @UseGuards(JwtAuthGuard)
-export class CommercesController {
-  constructor(private readonly commercesService: CommercesService) {}
+export class ObservationUnitsController {
+  constructor(
+    private readonly observationUnitsService: ObservationUnitsService,
+  ) {}
 
   @Get()
   findAll() {
-    return this.commercesService.findAll();
+    return this.observationUnitsService.findAll();
   }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.commercesService.findOne(id);
+    return this.observationUnitsService.findOne(id);
   }
 
   @Get(':id/students')
   getStudents(@Param('id', ParseIntPipe) id: number) {
-    return this.commercesService.getStudents(id);
+    return this.observationUnitsService.getStudents(id);
   }
 
   @Post()
   @UseGuards(RolesGuard)
   @Roles('admin')
-  create(@Body(new ZodValidationPipe(commerceSchema)) body: CommerceDto) {
-    return this.commercesService.create(body.name, body.address);
+  create(
+    @Body(new ZodValidationPipe(observationUnitSchema))
+    body: ObservationUnitDto,
+  ) {
+    return this.observationUnitsService.create(body.name, body.address);
   }
 
   @Put(':id')
@@ -51,15 +57,16 @@ export class CommercesController {
   @Roles('admin')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body(new ZodValidationPipe(commerceSchema)) body: CommerceDto,
+    @Body(new ZodValidationPipe(observationUnitSchema))
+    body: ObservationUnitDto,
   ) {
-    return this.commercesService.update(id, body.name, body.address);
+    return this.observationUnitsService.update(id, body.name, body.address);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('admin')
   remove(@Param('id', ParseIntPipe) id: number) {
-    return this.commercesService.remove(id);
+    return this.observationUnitsService.remove(id);
   }
 }

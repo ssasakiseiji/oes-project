@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const createCategorySchema = z.object({
-  name: z.string().trim().min(1, 'El nombre de la categoría es requerido'),
+export const createStudyFieldSchema = z.object({
+  name: z.string().trim().min(1, 'El nombre del campo de estudio es requerido'),
 });
 
-export type CreateCategoryDto = z.infer<typeof createCategorySchema>;
+export type CreateStudyFieldDto = z.infer<typeof createStudyFieldSchema>;

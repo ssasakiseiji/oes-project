@@ -8,44 +8,56 @@ import { Prisma } from '@prisma/client';
 import type { Period } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { toObservationValueFields } from '../common/validation/variable-value';
 import type {
   CreatePeriodDto,
   UpdatePeriodDto,
   UpdateUserDto,
 } from './dto/admin.schema';
 
-export interface PriceRow {
+export interface ObservationRow {
   id: number;
-  price: Prisma.Decimal;
   createdAt: Date;
+  numericValue: Prisma.Decimal | null;
+  textValue: string | null;
+  booleanValue: boolean | null;
+  choiceValue: string | null;
+  dataType: string;
+  isCurrency: boolean;
   periodName: string;
-  productName: string;
-  categoryName: string;
+  variableName: string;
+  studyFieldName: string;
   userName: string;
-  commerceName: string;
+  observationUnitName: string;
   isOutlier: boolean;
 }
 
-export interface HistoricalRow {
+export interface VariableHistoryRow {
   name: string;
-  avgPrice: Prisma.Decimal | null;
+  avgValue: Prisma.Decimal | null;
 }
 
-// Port de inflacion_app_backend/services/adminService.js. Las consultas de
-// prices/historical-data usan $queryRaw (en vez del query builder de Prisma)
-// porque dependen de STDDEV/AVG de Postgres, igual que el original.
+export interface VariableDistributionEntry {
+  periodName: string;
+  counts: Record<string, number>;
+}
+
+// Port de admin.service.ts pre-rename (Fase H: Category/Product/Commerce/
+// Price -> StudyField/Variable/ObservationUnit/Observation). Las consultas
+// de observations/variable-history usan $queryRaw (en vez del query builder
+// de Prisma) porque dependen de STDDEV/AVG de Postgres, igual que el
+// original -- ahora corren nativas sobre `numeric_value`, que queda
+// numeric-only automáticamente porque las filas no numéricas tienen esa
+// columna en NULL (que AVG/STDDEV ya ignoran).
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Periods
 
-  // Express devolvía `SELECT * FROM periods` directamente (columnas snake_case
-  // sin transformar), y el frontend lee period.start_date/end_date de ahí en
-  // vez de camelCase. Prisma serializa con los nombres de campo del schema
-  // (startDate/endDate), así que hay que remapear a mano para no romper
-  // PeriodsManager.jsx, igual que se hace con commerce_id/assigned_at en
-  // commerce-assignments.service.ts.
+  // Express devolvía columnas snake_case sin transformar, y el frontend lee
+  // period.start_date/end_date de ahí. Prisma serializa con los nombres de
+  // campo del schema (startDate/endDate), así que hay que remapear a mano.
   private mapPeriod(period: Period) {
     return {
       id: period.id,
@@ -148,65 +160,85 @@ export class AdminService {
 
   // Analysis
 
+  // Restringido a variables numéricas Y de moneda (config.isCurrency) --
+  // sumar/costear una lectura de temperatura junto a un precio no tiene
+  // sentido. Variables numéricas no-monetarias, categóricas, booleanas y de
+  // texto quedan fuera de este análisis "costo de canasta" (ver
+  // getVariableDistribution para categóricas/booleanas).
   async getAnalysis(periodAId: number, periodBId: number) {
-    const [pricesA, pricesB, allProducts, allCategories] = await Promise.all([
-      this.prisma.price.findMany({
-        where: { periodId: periodAId },
-        select: { productId: true, price: true },
+    const allVariables = await this.prisma.variable.findMany({
+      where: { dataType: 'numeric' },
+      select: { id: true, name: true, studyFieldId: true, config: true },
+    });
+    const currencyVariables = allVariables.filter(
+      (v) => (v.config as { isCurrency?: boolean } | null)?.isCurrency === true,
+    );
+    const currencyVariableIds = new Set(currencyVariables.map((v) => v.id));
+
+    const [observationsA, observationsB, allStudyFields] = await Promise.all([
+      this.prisma.observation.findMany({
+        where: {
+          periodId: periodAId,
+          variableId: { in: [...currencyVariableIds] },
+        },
+        select: { variableId: true, numericValue: true },
       }),
-      this.prisma.price.findMany({
-        where: { periodId: periodBId },
-        select: { productId: true, price: true },
+      this.prisma.observation.findMany({
+        where: {
+          periodId: periodBId,
+          variableId: { in: [...currencyVariableIds] },
+        },
+        select: { variableId: true, numericValue: true },
       }),
-      this.prisma.product.findMany({
-        select: { id: true, name: true, categoryId: true },
-      }),
-      this.prisma.category.findMany({ select: { id: true, name: true } }),
+      this.prisma.studyField.findMany({ select: { id: true, name: true } }),
     ]);
 
     const calculateAverages = (
-      priceRows: { productId: number | null; price: Prisma.Decimal }[],
+      rows: {
+        variableId: number | null;
+        numericValue: Prisma.Decimal | null;
+      }[],
     ) => {
-      const priceMap = new Map<number, number[]>();
-      priceRows.forEach((row) => {
-        if (row.productId == null) return;
-        if (!priceMap.has(row.productId)) priceMap.set(row.productId, []);
-        const price = Number(row.price);
-        if (!isNaN(price)) {
-          priceMap.get(row.productId)!.push(price);
+      const valueMap = new Map<number, number[]>();
+      rows.forEach((row) => {
+        if (row.variableId == null || row.numericValue == null) return;
+        if (!valueMap.has(row.variableId)) valueMap.set(row.variableId, []);
+        const value = Number(row.numericValue);
+        if (!isNaN(value)) {
+          valueMap.get(row.variableId)!.push(value);
         }
       });
 
       const avgMap = new Map<number, number>();
-      priceMap.forEach((prices, productId) => {
-        if (prices.length > 0) {
+      valueMap.forEach((values, variableId) => {
+        if (values.length > 0) {
           // Primera pasada: media y desvío estándar
-          const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
+          const mean = values.reduce((a, b) => a + b, 0) / values.length;
           const stdDev =
-            prices.length > 1
+            values.length > 1
               ? Math.sqrt(
-                  prices.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) /
-                    prices.length,
+                  values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) /
+                    values.length,
                 )
               : 0;
 
-          // Segunda pasada: descarta outliers con la regla de 2-sigma (igual que getPrices)
+          // Segunda pasada: descarta outliers con la regla de 2-sigma (igual que getObservations)
           const filtered =
             stdDev > 0
-              ? prices.filter((p) => Math.abs(p - mean) <= 2 * stdDev)
-              : prices;
+              ? values.filter((v) => Math.abs(v - mean) <= 2 * stdDev)
+              : values;
 
           if (filtered.length > 0) {
             const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
-            avgMap.set(productId, avg);
+            avgMap.set(variableId, avg);
           }
         }
       });
       return avgMap;
     };
 
-    const avgPricesA = calculateAverages(pricesA);
-    const avgPricesB = calculateAverages(pricesB);
+    const avgValuesA = calculateAverages(observationsA);
+    const avgValuesB = calculateAverages(observationsB);
 
     let totalCostA = 0;
     let totalCostB = 0;
@@ -218,107 +250,158 @@ export class AdminService {
       return costA > 0 ? 100 : 0;
     };
 
-    const categoryAnalysis = allCategories.map((cat) => {
-      const categoryProducts = allProducts.filter(
-        (p) => p.categoryId === cat.id,
+    const studyFieldAnalysis = allStudyFields.map((field) => {
+      const fieldVariables = currencyVariables.filter(
+        (v) => v.studyFieldId === field.id,
       );
-      let catCostA = 0;
-      let catCostB = 0;
+      let fieldCostA = 0;
+      let fieldCostB = 0;
 
-      const productAnalysis = categoryProducts.map((p) => {
-        const priceA = avgPricesA.get(p.id) || 0;
-        const priceB = avgPricesB.get(p.id) || 0;
-        catCostA += priceA;
-        catCostB += priceB;
+      const variableAnalysis = fieldVariables.map((v) => {
+        const valueA = avgValuesA.get(v.id) || 0;
+        const valueB = avgValuesB.get(v.id) || 0;
+        fieldCostA += valueA;
+        fieldCostB += valueB;
         return {
-          id: p.id,
-          name: p.name,
-          priceA,
-          priceB,
-          variation: calculateVariation(priceA, priceB),
+          id: v.id,
+          name: v.name,
+          valueA,
+          valueB,
+          variation: calculateVariation(valueA, valueB),
         };
       });
 
-      totalCostA += catCostA;
-      totalCostB += catCostB;
+      totalCostA += fieldCostA;
+      totalCostB += fieldCostB;
 
       return {
-        id: cat.id,
-        name: cat.name,
-        costA: catCostA,
-        costB: catCostB,
-        variation: calculateVariation(catCostA, catCostB),
-        products: productAnalysis,
+        id: field.id,
+        name: field.name,
+        costA: fieldCostA,
+        costB: fieldCostB,
+        variation: calculateVariation(fieldCostA, fieldCostB),
+        variables: variableAnalysis,
       };
     });
 
     const totalVariation = calculateVariation(totalCostA, totalCostB);
 
     return {
-      categoryAnalysis,
+      studyFieldAnalysis,
       totalCostA,
       totalCostB,
       totalVariation,
     };
   }
 
-  getHistoricalData(productId?: number, categoryId?: number) {
-    if (productId != null) {
-      return this.prisma.$queryRaw<HistoricalRow[]>`
-        SELECT p.name, AVG(pr.price) as "avgPrice"
-        FROM prices pr
-        JOIN periods p ON pr.period_id = p.id
-        WHERE pr.product_id = ${productId}
+  getVariableHistory(variableId?: number, studyFieldId?: number) {
+    if (variableId != null) {
+      return this.prisma.$queryRaw<VariableHistoryRow[]>`
+        SELECT p.name, AVG(o.numeric_value) as "avgValue"
+        FROM observations o
+        JOIN periods p ON o.period_id = p.id
+        WHERE o.variable_id = ${variableId}
         GROUP BY p.id, p.name, p.year, p.month
         ORDER BY p.year, p.month;
       `;
     }
 
-    if (categoryId != null) {
-      return this.prisma.$queryRaw<HistoricalRow[]>`
-        SELECT p.name, AVG(pr.price) as "avgPrice"
-        FROM prices pr
-        JOIN products prod ON pr.product_id = prod.id
-        JOIN periods p ON pr.period_id = p.id
-        WHERE prod.category_id = ${categoryId}
+    if (studyFieldId != null) {
+      return this.prisma.$queryRaw<VariableHistoryRow[]>`
+        SELECT p.name, AVG(o.numeric_value) as "avgValue"
+        FROM observations o
+        JOIN variables v ON o.variable_id = v.id
+        JOIN periods p ON o.period_id = p.id
+        WHERE v.study_field_id = ${studyFieldId}
         GROUP BY p.id, p.name, p.year, p.month
         ORDER BY p.year, p.month;
       `;
     }
 
-    throw new BadRequestException('Se requiere productId o categoryId');
+    throw new BadRequestException('Se requiere variableId o studyFieldId');
   }
 
-  // Prices
+  // Distribución de frecuencias por período -- equivalente de
+  // getVariableHistory pero para variables categóricas/booleanas, donde un
+  // AVG no tiene sentido (ver plan de Fase I).
+  async getVariableDistribution(
+    variableId: number,
+  ): Promise<VariableDistributionEntry[]> {
+    const variable = await this.prisma.variable.findUnique({
+      where: { id: variableId },
+    });
 
-  getPrices(filters: {
+    if (!variable) {
+      throw new NotFoundException('Variable no encontrada');
+    }
+    if (
+      variable.dataType !== 'categorical' &&
+      variable.dataType !== 'boolean'
+    ) {
+      throw new BadRequestException(
+        'La distribución solo aplica a variables categóricas o booleanas',
+      );
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      { periodName: string; value: string; count: bigint }[]
+    >`
+      SELECT
+        p.name AS "periodName",
+        COALESCE(o.choice_value, o.boolean_value::text) AS "value",
+        COUNT(*) AS "count"
+      FROM observations o
+      JOIN periods p ON o.period_id = p.id
+      WHERE o.variable_id = ${variableId}
+        AND (o.choice_value IS NOT NULL OR o.boolean_value IS NOT NULL)
+      GROUP BY p.id, p.name, p.year, p.month, COALESCE(o.choice_value, o.boolean_value::text)
+      ORDER BY p.year, p.month;
+    `;
+
+    const byPeriod = new Map<string, Record<string, number>>();
+    for (const row of rows) {
+      if (!byPeriod.has(row.periodName)) byPeriod.set(row.periodName, {});
+      byPeriod.get(row.periodName)![row.value] = Number(row.count);
+    }
+
+    return Array.from(byPeriod.entries()).map(([periodName, counts]) => ({
+      periodName,
+      counts,
+    }));
+  }
+
+  // Observations
+
+  getObservations(filters: {
     periodId?: number;
-    categoryId?: number;
-    productId?: number;
+    studyFieldId?: number;
+    variableId?: number;
     userId?: number;
-    commerceId?: number;
+    observationUnitId?: number;
     showOutliersOnly?: boolean;
   }) {
     const conditions: Prisma.Sql[] = [];
 
     if (filters.periodId != null) {
-      conditions.push(Prisma.sql`pr.period_id = ${filters.periodId}`);
+      conditions.push(Prisma.sql`o.period_id = ${filters.periodId}`);
     }
-    if (filters.categoryId != null) {
-      conditions.push(Prisma.sql`p.category_id = ${filters.categoryId}`);
+    if (filters.studyFieldId != null) {
+      conditions.push(Prisma.sql`v.study_field_id = ${filters.studyFieldId}`);
     }
-    if (filters.productId != null) {
-      conditions.push(Prisma.sql`pr.product_id = ${filters.productId}`);
+    if (filters.variableId != null) {
+      conditions.push(Prisma.sql`o.variable_id = ${filters.variableId}`);
     }
     if (filters.userId != null) {
-      conditions.push(Prisma.sql`pr.user_id = ${filters.userId}`);
+      conditions.push(Prisma.sql`o.user_id = ${filters.userId}`);
     }
-    if (filters.commerceId != null) {
-      conditions.push(Prisma.sql`pr.commerce_id = ${filters.commerceId}`);
+    if (filters.observationUnitId != null) {
+      conditions.push(
+        Prisma.sql`o.observation_unit_id = ${filters.observationUnitId}`,
+      );
     }
     if (filters.showOutliersOnly) {
       conditions.push(
-        Prisma.sql`(ps.std_dev > 0 AND ABS(pr.price - ps.avg_price) > (2 * ps.std_dev))`,
+        Prisma.sql`(o.numeric_value IS NOT NULL AND os.std_dev > 0 AND ABS(o.numeric_value - os.avg_value) > (2 * os.std_dev))`,
       );
     }
 
@@ -328,57 +411,82 @@ export class AdminService {
         : Prisma.empty;
 
     const query = Prisma.sql`
-      WITH price_stats AS (
-          SELECT period_id, product_id, AVG(price) as avg_price, STDDEV(price) as std_dev
-          FROM prices
-          GROUP BY period_id, product_id
+      WITH observation_stats AS (
+          SELECT period_id, variable_id, AVG(numeric_value) as avg_value, STDDEV(numeric_value) as std_dev
+          FROM observations
+          WHERE numeric_value IS NOT NULL
+          GROUP BY period_id, variable_id
       )
       SELECT
-          pr.id, pr.price, pr.created_at AS "createdAt",
-          pd.name AS "periodName", p.name AS "productName",
-          cat.name AS "categoryName",
-          u.name AS "userName", c.name AS "commerceName",
+          o.id, o.created_at AS "createdAt",
+          o.numeric_value AS "numericValue", o.text_value AS "textValue",
+          o.boolean_value AS "booleanValue", o.choice_value AS "choiceValue",
+          v.data_type AS "dataType",
+          COALESCE((v.config->>'isCurrency')::boolean, false) AS "isCurrency",
+          pd.name AS "periodName", v.name AS "variableName",
+          sf.name AS "studyFieldName",
+          u.name AS "userName", ou.name AS "observationUnitName",
           CASE
-              WHEN ps.std_dev > 0 AND ABS(pr.price - ps.avg_price) > (2 * ps.std_dev)
+              WHEN o.numeric_value IS NOT NULL AND os.std_dev > 0 AND ABS(o.numeric_value - os.avg_value) > (2 * os.std_dev)
               THEN TRUE ELSE FALSE
           END AS "isOutlier"
-      FROM prices pr
-      JOIN periods pd ON pr.period_id = pd.id
-      JOIN products p ON pr.product_id = p.id
-      JOIN categories cat ON p.category_id = cat.id
-      JOIN users u ON pr.user_id = u.id
-      JOIN commerces c ON pr.commerce_id = c.id
-      LEFT JOIN price_stats ps ON pr.period_id = ps.period_id AND pr.product_id = ps.product_id
+      FROM observations o
+      JOIN periods pd ON o.period_id = pd.id
+      JOIN variables v ON o.variable_id = v.id
+      JOIN study_fields sf ON v.study_field_id = sf.id
+      JOIN users u ON o.user_id = u.id
+      JOIN observation_units ou ON o.observation_unit_id = ou.id
+      LEFT JOIN observation_stats os ON o.period_id = os.period_id AND o.variable_id = os.variable_id
       ${whereClause}
-      ORDER BY pr.created_at DESC;
+      ORDER BY o.created_at DESC;
     `;
 
-    return this.prisma.$queryRaw<PriceRow[]>(query);
+    return this.prisma.$queryRaw<ObservationRow[]>(query);
   }
 
-  async updatePrice(id: number, price: number) {
+  async updateObservation(id: number, rawValue: number | string | boolean) {
+    const observation = await this.prisma.observation.findUnique({
+      where: { id },
+      select: { variableId: true },
+    });
+    if (!observation || observation.variableId == null) {
+      throw new NotFoundException('Observación no encontrada');
+    }
+
+    const variable = await this.prisma.variable.findUnique({
+      where: { id: observation.variableId },
+    });
+    if (!variable) {
+      throw new NotFoundException('Variable no encontrada');
+    }
+
+    const valueFields = toObservationValueFields(variable, rawValue);
+
     try {
-      return await this.prisma.price.update({ where: { id }, data: { price } });
+      return await this.prisma.observation.update({
+        where: { id },
+        data: valueFields,
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
-        throw new NotFoundException('Precio no encontrado');
+        throw new NotFoundException('Observación no encontrada');
       }
       throw error;
     }
   }
 
-  async deletePrice(id: number) {
+  async deleteObservation(id: number) {
     try {
-      await this.prisma.price.delete({ where: { id } });
+      await this.prisma.observation.delete({ where: { id } });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
-        throw new NotFoundException('Precio no encontrado');
+        throw new NotFoundException('Observación no encontrada');
       }
       throw error;
     }
@@ -474,17 +582,19 @@ export class AdminService {
 
   deleteUser(userId: number) {
     return this.prisma.$transaction(async (tx) => {
-      const priceCount = await tx.price.count({ where: { userId } });
+      const observationCount = await tx.observation.count({
+        where: { userId },
+      });
 
-      if (priceCount > 0) {
+      if (observationCount > 0) {
         throw new ConflictException(
-          `No se puede eliminar el usuario porque tiene ${priceCount} precio(s) registrado(s). Los datos históricos deben preservarse.`,
+          `No se puede eliminar el usuario porque tiene ${observationCount} observación(es) registrada(s). Los datos históricos deben preservarse.`,
         );
       }
 
       // Los borradores sí se pueden eliminar
-      await tx.draftPrice.deleteMany({ where: { userId } });
-      await tx.commerceAssignment.deleteMany({ where: { userId } });
+      await tx.draftObservation.deleteMany({ where: { userId } });
+      await tx.observationUnitAssignment.deleteMany({ where: { userId } });
 
       try {
         await tx.user.delete({ where: { id: userId } });
