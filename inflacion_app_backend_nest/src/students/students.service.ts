@@ -12,14 +12,24 @@ type TaskStatus = 'Pendiente' | 'Completado' | 'En Proceso';
 // ObservationUnit, Price -> Observation) + unificación de saveDraft/
 // submitPrices en un solo envelope multi-tipo (port de students.service.ts
 // pre-rename).
+//
+// Fase S: scoped por proyecto. `projectId` en saveDraft/submitObservations
+// viene SIEMPRE de request.activeProjectId (CollectionPeriodGuard, derivado
+// server-side del observationUnitId) -- nunca de un valor declarado por el
+// cliente. Además, las Variables referenciadas en `values` se resuelven
+// filtrando por `studyField.projectId`, así que un variableId de otro
+// proyecto simplemente no matchea (mismo principio ya usado para el
+// dataType de una Variable en variable-value.ts: no confiar en lo que el
+// cliente declara, resolverlo server-side contra la entidad real).
 @Injectable()
 export class StudentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStudentTasks(userId: number) {
+  async getStudentTasks(userId: number, projectId: number) {
     const [variables, studyFields, assignedObservationUnits] =
       await Promise.all([
         this.prisma.variable.findMany({
+          where: { studyField: { projectId } },
           select: {
             id: true,
             name: true,
@@ -30,9 +40,12 @@ export class StudentsService {
           },
           orderBy: { name: 'asc' },
         }),
-        this.prisma.studyField.findMany({ orderBy: { name: 'asc' } }),
+        this.prisma.studyField.findMany({
+          where: { projectId },
+          orderBy: { name: 'asc' },
+        }),
         this.prisma.observationUnitAssignment.findMany({
-          where: { userId },
+          where: { userId, observationUnit: { projectId } },
           select: {
             observationUnit: {
               select: { id: true, name: true, address: true },
@@ -51,15 +64,16 @@ export class StudentsService {
     };
   }
 
-  async getStudentDashboard(userId: number) {
+  async getStudentDashboard(userId: number, projectId: number) {
     const periods = await this.prisma.period.findMany({
+      where: { projectId },
       select: { id: true, name: true, status: true },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
 
     const [drafts, observations, assignedObservationUnits] = await Promise.all([
       this.prisma.draftObservation.findMany({
-        where: { userId },
+        where: { userId, period: { projectId } },
         select: {
           variableId: true,
           observationUnitId: true,
@@ -72,7 +86,7 @@ export class StudentsService {
         },
       }),
       this.prisma.observation.findMany({
-        where: { userId },
+        where: { userId, period: { projectId } },
         select: {
           variableId: true,
           observationUnitId: true,
@@ -85,7 +99,7 @@ export class StudentsService {
         },
       }),
       this.prisma.observationUnitAssignment.findMany({
-        where: { userId },
+        where: { userId, observationUnit: { projectId } },
         select: { observationUnit: { select: { id: true, name: true } } },
         orderBy: { observationUnit: { name: 'asc' } },
       }),
@@ -185,6 +199,7 @@ export class StudentsService {
     userId: number,
     observationUnitId: number,
     periodId: number,
+    projectId: number,
     values: SaveDraftDto['values'],
   ) {
     const entries = (values ?? []).filter(
@@ -194,7 +209,10 @@ export class StudentsService {
     const variables =
       entries.length > 0
         ? await this.prisma.variable.findMany({
-            where: { id: { in: entries.map((e) => e.variableId) } },
+            where: {
+              id: { in: entries.map((e) => e.variableId) },
+              studyField: { projectId },
+            },
           })
         : [];
     const variablesById = new Map(variables.map((v) => [v.id, v]));
@@ -229,6 +247,7 @@ export class StudentsService {
     userId: number,
     periodId: number,
     observationUnitId: number,
+    projectId: number,
     values: SubmitObservationsDto['values'],
   ) {
     const assignment = await this.prisma.observationUnitAssignment.findFirst({
@@ -242,7 +261,10 @@ export class StudentsService {
     }
 
     const variables = await this.prisma.variable.findMany({
-      where: { id: { in: values.map((v) => v.variableId) } },
+      where: {
+        id: { in: values.map((v) => v.variableId) },
+        studyField: { projectId },
+      },
     });
     const variablesById = new Map(variables.map((v) => [v.id, v]));
 

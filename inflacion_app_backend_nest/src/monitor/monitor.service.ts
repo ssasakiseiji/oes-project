@@ -9,11 +9,18 @@ type CompletionLevel = 'bajo' | 'medio' | 'alto' | null;
 // -- la lógica de progreso ya era agnóstica al tipo de valor (cuenta
 // observaciones enviadas, no las suma ni promedia), así que el único
 // cambio real acá es de nombres.
+//
+// Fase S: scoped por proyecto. Antes de esto, este método no tenía NINGÚN
+// scoping más allá de "sos monitor" -- traía todos los estudiantes,
+// observaciones, unidades, etc. de la base entera. Ahora todo se filtra por
+// projectId (directo en period/observationUnit/variable, vía
+// ProjectMembership en el filtro de estudiantes, y vía la relación
+// observationUnit en assignments/observations/draftObservations).
 @Injectable()
 export class MonitorService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMonitorData() {
+  async getMonitorData(projectId: number) {
     const [
       periods,
       students,
@@ -24,19 +31,26 @@ export class MonitorService {
       allObservationUnits,
     ] = await Promise.all([
       this.prisma.period.findMany({
+        where: { projectId },
         select: { id: true, name: true, status: true },
         orderBy: [{ year: 'desc' }, { month: 'desc' }],
       }),
       this.prisma.user.findMany({
-        where: { roles: { has: 'student' } },
+        where: {
+          projectMemberships: {
+            some: { projectId, roles: { has: 'student' } },
+          },
+        },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }),
-      this.prisma.variable.count(),
+      this.prisma.variable.count({ where: { studyField: { projectId } } }),
       this.prisma.observationUnitAssignment.findMany({
+        where: { observationUnit: { projectId } },
         select: { userId: true, observationUnitId: true },
       }),
       this.prisma.observation.findMany({
+        where: { observationUnit: { projectId } },
         select: {
           userId: true,
           observationUnitId: true,
@@ -49,6 +63,7 @@ export class MonitorService {
         },
       }),
       this.prisma.draftObservation.findMany({
+        where: { observationUnit: { projectId } },
         select: {
           userId: true,
           observationUnitId: true,
@@ -61,6 +76,7 @@ export class MonitorService {
         },
       }),
       this.prisma.observationUnit.findMany({
+        where: { projectId },
         select: { id: true, name: true },
       }),
     ]);
