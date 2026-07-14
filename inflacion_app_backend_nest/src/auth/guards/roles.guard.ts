@@ -31,10 +31,13 @@ export class RolesGuard implements CanActivate {
     );
 
     if (!hasRole) {
+      // Fase P: mensaje genérico en vez de los dos casos hardcodeados que
+      // había antes (admin / monitor-o-admin) -- ese hardcodeo asumía que
+      // 'admin'/'monitor' eran los únicos roles posibles vía @Roles(...),
+      // y con 'superadmin' ahora en juego el mensaje anterior sería
+      // directamente incorrecto para esas rutas.
       throw new ForbiddenException(
-        requiredRoles.includes('admin')
-          ? 'Acceso denegado. Se requiere rol de administrador.'
-          : 'Acceso denegado. Se requiere rol de monitor o administrador.',
+        `Acceso denegado. Se requiere alguno de estos roles: ${requiredRoles.join(', ')}.`,
       );
     }
 
