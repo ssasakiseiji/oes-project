@@ -95,8 +95,8 @@ fallar con "relation already exists".
 ### Datos de demo/test
 
 `prisma migrate deploy` solo crea el schema, no inserta datos. Para
-popular las categorías/productos/comercios/usuarios de prueba (los mismos
-que tenía `supabase-setup.sql`):
+popular campos de estudio/variables/unidades de observación/usuarios de
+prueba:
 
 ```bash
 npx prisma db seed
@@ -105,6 +105,24 @@ npx prisma db seed
 No se corre automáticamente (ni en `migrate deploy` ni al arrancar el
 contenedor) porque son credenciales de test, no algo para insertar en
 cualquier entorno sin pensarlo — ver `prisma/seed.ts`.
+
+Siembra 2 proyectos de demo ("Encuesta de Precios" y "Encuesta del
+Rally") con memberships mixtas para poder probar el selector de proyecto
+del frontend: María es miembro de ambos proyectos (auto-selección con
+picker), el resto de los usuarios de un solo proyecto (auto-selección
+directa). Credenciales de prueba (mismas de siempre):
+
+| Email | Password | Rol de plataforma | Proyecto(s) |
+|---|---|---|---|
+| admin@portalipc.com | admin123 | superadmin | todos (bypass implícito) |
+| monitor@portalipc.com | monitor123 | — | Encuesta de Precios (monitor) |
+| juan@portalipc.com | student123 | — | Encuesta de Precios (student) |
+| maria@portalipc.com | student123 | — | Encuesta de Precios + Encuesta del Rally (student) |
+| carlos@portalipc.com | student123 | — | Encuesta de Precios (student) |
+
+Tras Fase T, `User.roles` (el JWT) solo puede ser `[]` o `['superadmin']`
+— los roles de trabajo (admin/monitor/student) viven en
+`ProjectMembership`, por proyecto, no en el usuario global.
 
 ## Deployment
 

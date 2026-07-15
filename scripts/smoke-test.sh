@@ -47,21 +47,40 @@ else
   fail "POST /api/login (admin) no devolvió token (body: $login_body)"
 fi
 
-# 3. GET /api/me con ese token incluye el rol admin
+# 3. GET /api/me con ese token incluye el rol superadmin (Fase T: el JWT ya
+# no lleva 'admin'/'monitor'/'student' -- esos son roles DE PROYECTO, ver
+# ProjectMembership. El admin sembrado es superadmin de plataforma.)
 if [ -n "$token" ]; then
   me_body="$(curl -s "$BASE_URL/api/me" -H "Authorization: Bearer $token")"
-  if echo "$me_body" | grep -q '"admin"'; then
-    pass "GET /api/me incluye el rol admin"
+  if echo "$me_body" | grep -q '"superadmin"'; then
+    pass "GET /api/me incluye el rol superadmin"
   else
-    fail "GET /api/me no incluye el rol admin (body: $me_body)"
+    fail "GET /api/me no incluye el rol superadmin (body: $me_body)"
   fi
 else
   fail "GET /api/me omitido (sin token del paso anterior)"
 fi
 
-# 4. Endpoints autenticados devuelven 200
+# 4. Descubrir un projectId real vía /api/projects/mine (Fase O en
+# adelante: study-fields/observation-units son project-scoped y devuelven
+# 403 sin ?projectId=). Superadmin ve todos los proyectos vía bypass, así
+# que alcanza con tomar el primero.
+project_id=""
 if [ -n "$token" ]; then
-  for path in /api/study-fields /api/observation-units /api/users; do
+  projects_body="$(curl -s "$BASE_URL/api/projects/mine" -H "Authorization: Bearer $token")"
+  project_id="$(printf '%s' "$projects_body" | grep -o '"projectId":[0-9]*' | head -1 | cut -d':' -f2)"
+  if [ -n "$project_id" ]; then
+    pass "GET /api/projects/mine devuelve al menos un proyecto (projectId=$project_id)"
+  else
+    fail "GET /api/projects/mine no devolvió ningún proyecto (body: $projects_body)"
+  fi
+else
+  fail "GET /api/projects/mine omitido (sin token)"
+fi
+
+# 5. Endpoints autenticados devuelven 200
+if [ -n "$token" ] && [ -n "$project_id" ]; then
+  for path in "/api/study-fields?projectId=$project_id" "/api/observation-units?projectId=$project_id" /api/users; do
     code="$(http_code "$BASE_URL$path" -H "Authorization: Bearer $token")"
     if [ "$code" = "200" ]; then
       pass "GET $path -> 200"
@@ -70,10 +89,10 @@ if [ -n "$token" ]; then
     fi
   done
 else
-  fail "Chequeos de endpoints autenticados omitidos (sin token)"
+  fail "Chequeos de endpoints autenticados omitidos (sin token o sin projectId)"
 fi
 
-# 5. Rate limiting: dentro de la ventana de 10 intentos, en algún momento
+# 6. Rate limiting: dentro de la ventana de 10 intentos, en algún momento
 # debe aparecer un 429. No se asume en qué intento exacto ocurre porque el
 # throttler cuenta todas las requests a /login (incluido el login exitoso
 # del paso 2), no solo las fallidas — igual que rateLimiter.js.
