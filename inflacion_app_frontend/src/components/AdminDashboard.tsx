@@ -44,23 +44,23 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
                 />
             )}
 
-            {/* Contenedor principal con bordes redondeados */}
-            <div className="flex h-[calc(100vh-10rem)] md:h-auto overflow-hidden rounded-2xl shadow-xl">
+            {/* Contenedor principal -- un solo nivel de superficie (el sidebar); el
+                área de contenido queda sin fondo propio, flotando sobre --color-bg */}
+            <div className="flex h-[calc(100vh-10rem)] md:h-auto overflow-hidden">
                 {/* Sidebar */}
                 <aside className={`
                     fixed md:static inset-y-0 left-0 z-50
-                    w-64 bg-white dark:bg-gray-800 flex flex-col p-4
-                    border-r border-gray-200 dark:border-gray-700 shrink-0
+                    w-64 card elev-sm rounded-none md:rounded-[var(--nc-radius-lg)] flex flex-col p-4 gap-1 shrink-0
                     transform transition-transform duration-300 ease-in-out
                     ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 `}>
-                <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400 px-2">Panel Admin</h1>
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="text-xl font-medium text-ink px-2">Panel Admin</h1>
                     <button
                         onClick={() => setIsSidebarOpen(false)}
-                        className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                        className="btn btn-icon btn-secondary rounded-full md:hidden"
                     >
-                        <X size={20} className="text-gray-600 dark:text-gray-300" />
+                        <X size={18} />
                     </button>
                 </div>
                 <nav className="flex-grow space-y-1">
@@ -71,13 +71,13 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
                                 setView(item.id);
                                 setIsSidebarOpen(false);
                             }}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-semibold transition ${
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--nc-radius-md)] text-left text-sm font-medium transition-colors ${
                                 view === item.id
-                                    ? 'bg-blue-600 dark:bg-blue-500 text-white shadow-lg'
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400'
+                                    ? 'bg-accent-800 text-accent-100'
+                                    : 'text-ink/80 hover:bg-nc-neutral-500/10'
                             }`}
                         >
-                            <item.icon size={20} />
+                            <item.icon size={18} />
                             <span>{item.label}</span>
                         </button>
                     ))}
@@ -85,22 +85,22 @@ function AdminDashboard({ user: _user }: { user: AuthUser }) {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-grow flex flex-col overflow-hidden bg-white dark:bg-gray-800">
+            <main className="flex-grow flex flex-col overflow-hidden">
                 {/* Header con botón hamburger para móvil */}
-                <div className="md:hidden border-b border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+                <div className="md:hidden border-b p-4 flex items-center gap-3" style={{ borderColor: 'var(--color-divider)' }}>
                     <button
                         onClick={() => setIsSidebarOpen(true)}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                        className="btn btn-icon btn-secondary rounded-full"
                     >
-                        <Menu size={24} className="text-gray-600 dark:text-gray-300" />
+                        <Menu size={20} />
                     </button>
-                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                    <h2 className="text-base font-medium text-ink">
                         {menuItems.find(item => item.id === view)?.label}
                     </h2>
                 </div>
 
                 {/* Contenido scrolleable */}
-                <div className="flex-grow overflow-y-auto p-4 md:p-8">
+                <div className="flex-grow overflow-y-auto py-4 md:py-2 md:px-6">
                     <div className="max-w-7xl mx-auto">
                         {view === 'analysis' && <AnalysisView projectId={activeProjectId} />}
                         {view === 'periods' && <PeriodsManager projectId={activeProjectId} />}

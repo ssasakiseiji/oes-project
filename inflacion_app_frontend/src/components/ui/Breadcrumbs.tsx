@@ -7,16 +7,16 @@ export interface BreadcrumbItem {
 }
 
 export const Breadcrumbs = ({ items }: { items: BreadcrumbItem[] }) => (
-    <nav className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
-        <Home size={16} className="text-gray-500 dark:text-gray-500" />
+    <nav className="flex items-center gap-2 text-sm text-muted mb-4">
+        <Home size={16} />
         {items.map((item, index) => (
             <Fragment key={index}>
-                <ChevronRight size={14} className="text-gray-400 dark:text-gray-600" />
+                <ChevronRight size={14} className="opacity-50" />
                 <span
                     className={`${
                         index === items.length - 1
-                            ? 'text-blue-600 dark:text-blue-400 font-semibold'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                            ? 'text-accent-300 font-medium'
+                            : 'text-muted hover:text-ink'
                     } ${item.onClick ? 'cursor-pointer' : ''}`}
                     onClick={item.onClick}
                 >

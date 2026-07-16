@@ -27,21 +27,20 @@ function PlatformDashboard() {
                 />
             )}
 
-            <div className="flex h-[calc(100vh-10rem)] md:h-auto overflow-hidden rounded-2xl shadow-xl">
+            <div className="flex h-[calc(100vh-10rem)] md:h-auto overflow-hidden">
                 <aside className={`
                     fixed md:static inset-y-0 left-0 z-50
-                    w-64 bg-white dark:bg-gray-800 flex flex-col p-4
-                    border-r border-gray-200 dark:border-gray-700 shrink-0
+                    w-64 card elev-sm rounded-none md:rounded-[var(--nc-radius-lg)] flex flex-col p-4 gap-1 shrink-0
                     transform transition-transform duration-300 ease-in-out
                     ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 `}>
-                    <div className="flex items-center justify-between mb-8">
-                        <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 px-2">Plataforma</h1>
+                    <div className="flex items-center justify-between mb-6">
+                        <h1 className="text-xl font-medium text-ink px-2">Plataforma</h1>
                         <button
                             onClick={() => setIsSidebarOpen(false)}
-                            className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                            className="btn btn-icon btn-secondary rounded-full md:hidden"
                         >
-                            <X size={20} className="text-gray-600 dark:text-gray-300" />
+                            <X size={18} />
                         </button>
                     </div>
                     <nav className="flex-grow space-y-1">
@@ -52,33 +51,33 @@ function PlatformDashboard() {
                                     setView(item.id);
                                     setIsSidebarOpen(false);
                                 }}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-semibold transition ${
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--nc-radius-md)] text-left text-sm font-medium transition-colors ${
                                     view === item.id
-                                        ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-lg'
-                                        : 'text-gray-600 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400'
+                                        ? 'bg-accent-2-800 text-accent-2-100'
+                                        : 'text-ink/80 hover:bg-nc-neutral-500/10'
                                 }`}
                             >
-                                <item.icon size={20} />
+                                <item.icon size={18} />
                                 <span>{item.label}</span>
                             </button>
                         ))}
                     </nav>
                 </aside>
 
-                <main className="flex-grow flex flex-col overflow-hidden bg-white dark:bg-gray-800">
-                    <div className="md:hidden border-b border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+                <main className="flex-grow flex flex-col overflow-hidden">
+                    <div className="md:hidden border-b p-4 flex items-center gap-3" style={{ borderColor: 'var(--color-divider)' }}>
                         <button
                             onClick={() => setIsSidebarOpen(true)}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                            className="btn btn-icon btn-secondary rounded-full"
                         >
-                            <Menu size={24} className="text-gray-600 dark:text-gray-300" />
+                            <Menu size={20} />
                         </button>
-                        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                        <h2 className="text-base font-medium text-ink">
                             {menuItems.find(item => item.id === view)?.label}
                         </h2>
                     </div>
 
-                    <div className="flex-grow overflow-y-auto p-4 md:p-8">
+                    <div className="flex-grow overflow-y-auto py-4 md:py-2 md:px-6">
                         <div className="max-w-7xl mx-auto">
                             {view === 'projects' && <ProjectsManager />}
                             {view === 'users' && <PlatformUsersManager />}

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { TrendingUp, Mail, Lock, Loader2 } from 'lucide-react';
+import { TrendingUp, Loader2 } from 'lucide-react';
 import type { LoginResponse } from '../types/api';
 
 // Ver comentario equivalente en api.ts sobre por qué ?? y no ||.
@@ -43,104 +43,84 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                {/* Logo y Título */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-500/50">
-                        <TrendingUp size={40} className="text-white" strokeWidth={2.5} />
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--color-bg)' }}>
+            <div className="w-full max-w-sm">
+                {/* Hero */}
+                <div
+                    className="relative overflow-hidden rounded-t-3xl px-7 pt-10 pb-9"
+                    style={{ background: 'linear-gradient(160deg, var(--color-section) 0%, var(--color-section-glow) 55%, var(--color-bg) 100%)' }}
+                >
+                    <div
+                        className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full"
+                        style={{ background: 'radial-gradient(circle, rgba(145,132,217,.35), transparent 70%)' }}
+                    />
+                    <div className="relative mb-3.5 flex h-10 w-10 items-center justify-center rounded-[10px] bg-white/10">
+                        <TrendingUp size={20} className="text-ink" strokeWidth={2.5} />
                     </div>
-                    <h1 className="text-4xl font-bold text-white mb-2">Portal IPC</h1>
-                    <p className="text-blue-200 text-sm">Sistema de Seguimiento de Precios al Consumidor</p>
+                    <h1 className="relative mb-1 text-2xl font-medium text-ink">Portal IPC</h1>
+                    <p className="relative text-[13px] text-ink/65">Índice de Precios al Consumidor</p>
                 </div>
 
-                {/* Card de Login */}
-                <div className="bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden">
-                    <div className="p-8">
-                        <h2 className="text-2xl font-bold text-white mb-6">Iniciar Sesión</h2>
+                {/* Form sheet -- overlaps the hero, matches the mockup's -18px overlap */}
+                <div className="card elev-lg relative -mt-[18px] rounded-t-none px-6 pt-7 pb-6">
+                    <h2 className="mb-5 text-lg font-medium text-ink">Iniciar sesión</h2>
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                        <div className="field">
+                            <label htmlFor="email">Correo electrónico</label>
+                            <input
+                                id="email"
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                className="input"
+                                placeholder="tu@email.com"
+                            />
+                        </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            {/* Email Input */}
-                            <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                                    Correo Electrónico
-                                </label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Mail size={20} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        id="email"
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        required
-                                        className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition placeholder-gray-500"
-                                        placeholder="tu@email.com"
-                                    />
-                                </div>
-                            </div>
+                        <div className="field">
+                            <label htmlFor="password">Contraseña</label>
+                            <input
+                                id="password"
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                className="input"
+                                placeholder="••••••••"
+                            />
+                        </div>
 
-                            {/* Password Input */}
-                            <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                                    Contraseña
-                                </label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock size={20} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        id="password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        required
-                                        className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition placeholder-gray-500"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Error Message */}
-                            {error && (
-                                <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-lg text-sm">
-                                    {error}
-                                </div>
-                            )}
-
-                            {/* Submit Button */}
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30"
+                        {error && (
+                            <div
+                                className="rounded-md px-3 py-2 text-sm"
+                                style={{
+                                    background: 'color-mix(in srgb, #f87171 15%, transparent)',
+                                    color: '#fca5a5',
+                                    border: '1px solid color-mix(in srgb, #f87171 35%, transparent)',
+                                }}
                             >
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 size={20} className="animate-spin" />
-                                        <span>Ingresando...</span>
-                                    </>
-                                ) : (
-                                    <span>Iniciar Sesión</span>
-                                )}
-                            </button>
-                        </form>
-                    </div>
+                                {error}
+                            </div>
+                        )}
 
-                    {/* Footer */}
-                    <div className="bg-gray-900/50 px-8 py-4 border-t border-gray-700">
-                        <p className="text-xs text-gray-400 text-center">
-                            Portal IPC - Universidad Nacional de Itapúa
-                        </p>
-                    </div>
+                        <button type="submit" disabled={isLoading} className="btn btn-primary btn-block">
+                            {isLoading ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    <span>Ingresando...</span>
+                                </>
+                            ) : (
+                                <span>Iniciar sesión</span>
+                            )}
+                        </button>
+
+                        <p className="text-muted mt-1 text-center text-xs">¿Olvidaste tu contraseña?</p>
+                    </form>
                 </div>
 
-                {/* Info adicional */}
-                <div className="mt-6 text-center">
-                    <p className="text-sm text-blue-200">
-                        ¿Problemas para acceder? Contacta a tu administrador
-                    </p>
-                </div>
+                <p className="text-muted mt-6 text-center text-xs">Portal IPC - Universidad Nacional de Itapúa</p>
+                <p className="text-muted mt-2 text-center text-sm">¿Problemas para acceder? Contacta a tu administrador</p>
             </div>
         </div>
     );

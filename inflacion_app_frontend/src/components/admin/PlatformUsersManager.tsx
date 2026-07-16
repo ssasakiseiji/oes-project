@@ -9,6 +9,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { RoleTag } from '../ui/RoleTag';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { Tooltip } from '../ui/Tooltip';
+import { Button } from '../ui/button';
 import type { User } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -119,19 +120,19 @@ export const PlatformUsersManager = () => {
     return (
         <>
             <Breadcrumbs items={[{ label: 'Plataforma' }, { label: 'Usuarios' }]} />
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in">
+            <div className="card elev-sm p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Usuarios de la Plataforma</h3>
+                    <h3 className="text-lg font-medium text-ink">Usuarios de la Plataforma</h3>
                     <input
                         type="text"
                         placeholder="Buscar por nombre o email..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 w-full sm:w-72"
+                        className="input w-full sm:w-72"
                     />
                 </div>
 
-                <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+                <p className="text-xs text-muted -mt-2">
                     Esta lista incluye todos los usuarios de todos los proyectos. Para crear un usuario nuevo, hacelo desde la vista de Miembros de un proyecto específico.
                 </p>
 
@@ -148,61 +149,56 @@ export const PlatformUsersManager = () => {
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-left text-sm">
                                 <thead>
-                                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                                        <th onClick={() => handleSort('id')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                        <th onClick={() => handleSort('id')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
                                             <div className="flex items-center gap-2">
                                                 ID
-                                                {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />) : <ArrowUpDown size={14} className="opacity-40" />}
+                                                {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
                                             </div>
                                         </th>
-                                        <th onClick={() => handleSort('name')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                        <th onClick={() => handleSort('name')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
                                             <div className="flex items-center gap-2">
                                                 Nombre
-                                                {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />) : <ArrowUpDown size={14} className="opacity-40" />}
+                                                {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
                                             </div>
                                         </th>
-                                        <th onClick={() => handleSort('email')} className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                        <th onClick={() => handleSort('email')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
                                             <div className="flex items-center gap-2">
                                                 Email
-                                                {sortConfig.key === 'email' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />) : <ArrowUpDown size={14} className="opacity-40" />}
+                                                {sortConfig.key === 'email' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
                                             </div>
                                         </th>
-                                        <th className="p-3 text-gray-500 dark:text-gray-400">Rol de Plataforma</th>
-                                        <th className="p-3 text-right text-gray-500 dark:text-gray-400">Acciones</th>
+                                        <th className="p-3 font-medium text-muted">Rol de Plataforma</th>
+                                        <th className="p-3 text-right font-medium text-muted">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {paginatedUsers.map(u => {
                                         const isSuperadmin = u.roles.includes('superadmin');
                                         return (
-                                            <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-none transition-all">
-                                                <td className="p-3 text-gray-600 dark:text-gray-400">{u.id}</td>
-                                                <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{u.name}</td>
-                                                <td className="p-3 text-gray-700 dark:text-gray-300">{u.email}</td>
+                                            <tr key={u.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                                <td className="p-3 text-muted">{u.id}</td>
+                                                <td className="p-3 font-medium text-ink">{u.name}</td>
+                                                <td className="p-3 text-muted">{u.email}</td>
                                                 <td className="p-3">
-                                                    {isSuperadmin ? <RoleTag role="superadmin" /> : <span className="text-gray-400 dark:text-gray-500 text-sm">Ninguno</span>}
+                                                    {isSuperadmin ? <RoleTag role="superadmin" /> : <span className="text-muted text-sm">Ninguno</span>}
                                                 </td>
                                                 <td className="p-3">
-                                                    <div className="flex items-center justify-end gap-2">
+                                                    <div className="flex items-center justify-end gap-1">
                                                         <Tooltip content={isSuperadmin ? 'Revocar superadmin' : 'Otorgar superadmin'}>
-                                                            <button
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
                                                                 onClick={() => setRoleChangeTarget({ user: u, grant: !isSuperadmin })}
-                                                                className={`flex items-center gap-1 px-3 py-1.5 rounded transition-colors text-sm font-medium ${
-                                                                    isSuperadmin
-                                                                        ? 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                                                                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                                }`}
+                                                                className={isSuperadmin ? 'text-accent-300' : 'text-muted hover:text-ink'}
                                                             >
                                                                 {isSuperadmin ? <ShieldOff size={16} /> : <Shield size={16} />}
-                                                            </button>
+                                                            </Button>
                                                         </Tooltip>
                                                         <Tooltip content="Eliminar cuenta">
-                                                            <button
-                                                                onClick={() => setDeleteTarget(u)}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors text-sm font-medium"
-                                                            >
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTarget(u)} className="text-danger hover:bg-danger/10">
                                                                 <Trash2 size={16} />
-                                                            </button>
+                                                            </Button>
                                                         </Tooltip>
                                                     </div>
                                                 </td>

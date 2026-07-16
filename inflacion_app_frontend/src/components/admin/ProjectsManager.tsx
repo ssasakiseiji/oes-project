@@ -6,6 +6,8 @@ import { EmptyState } from '../ui/EmptyState';
 import { TableSkeleton } from '../ui/TableSkeleton';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { Button } from '../ui/button';
 import type { Project } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -113,77 +115,14 @@ export const ProjectsManager = () => {
         <div className="space-y-6">
             <Breadcrumbs items={[{ label: 'Plataforma' }, { label: 'Proyectos' }]} />
 
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                        {showCreateForm ? 'Crear Nuevo Proyecto' : 'Proyectos de la Plataforma'}
-                    </h3>
-                    {!showCreateForm && (
-                        <button
-                            onClick={() => setShowCreateForm(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                        >
-                            <Plus size={18} />
-                            Nuevo Proyecto
-                        </button>
-                    )}
+            <div className="card elev-sm p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-ink">Todos los Proyectos</h3>
+                    <Button onClick={() => setShowCreateForm(true)}>
+                        <Plus size={18} />
+                        <span className="hidden sm:inline">Nuevo Proyecto</span>
+                    </Button>
                 </div>
-
-                {showCreateForm && (
-                    <form onSubmit={handleCreateProject} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Nombre</label>
-                                <input
-                                    type="text"
-                                    value={newProject.name}
-                                    onChange={e => setNewProject({ ...newProject, name: e.target.value })}
-                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-full"
-                                    placeholder="ej: Encuesta de Precios"
-                                    autoFocus
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Descripción (opcional)</label>
-                                <input
-                                    type="text"
-                                    value={newProject.description}
-                                    onChange={e => setNewProject({ ...newProject, description: e.target.value })}
-                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-full"
-                                    placeholder="ej: Recolección mensual de precios al consumidor"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                type="button"
-                                onClick={() => { setShowCreateForm(false); setNewProject({ name: '', description: '' }); }}
-                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={isCreating}
-                                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition flex items-center gap-2"
-                            >
-                                {isCreating ? (
-                                    <>
-                                        <Loader className="animate-spin" size={16} />
-                                        Creando...
-                                    </>
-                                ) : (
-                                    'Crear Proyecto'
-                                )}
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in space-y-4">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Todos los Proyectos</h3>
 
                 {isLoading ? (
                     <TableSkeleton rows={3} columns={4} />
@@ -197,17 +136,17 @@ export const ProjectsManager = () => {
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
                             <thead>
-                                <tr className="border-b border-gray-200 dark:border-gray-700">
-                                    <th className="p-3 text-gray-500 dark:text-gray-400">Nombre</th>
-                                    <th className="p-3 text-gray-500 dark:text-gray-400">Descripción</th>
-                                    <th className="p-3 text-gray-500 dark:text-gray-400">Estado</th>
-                                    <th className="p-3 text-right text-gray-500 dark:text-gray-400">Acciones</th>
+                                <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                    <th className="p-3 font-medium text-muted">Nombre</th>
+                                    <th className="p-3 font-medium text-muted">Descripción</th>
+                                    <th className="p-3 font-medium text-muted">Estado</th>
+                                    <th className="p-3 text-right font-medium text-muted">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {projects.map(p => (
-                                    <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-none transition-all">
-                                        <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">
+                                    <tr key={p.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                        <td className="p-3 font-medium text-ink">
                                             {editingProject?.id === p.id ? (
                                                 <input
                                                     type="text"
@@ -217,11 +156,11 @@ export const ProjectsManager = () => {
                                                         if (e.key === 'Enter') handleSaveEdit();
                                                         if (e.key === 'Escape') setEditingProject(null);
                                                     }}
-                                                    className="w-full p-1 border-2 border-blue-500 dark:border-blue-400 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                                    className="input"
                                                 />
                                             ) : p.name}
                                         </td>
-                                        <td className="p-3 text-gray-600 dark:text-gray-400">
+                                        <td className="p-3 text-muted">
                                             {editingProject?.id === p.id ? (
                                                 <input
                                                     type="text"
@@ -231,17 +170,13 @@ export const ProjectsManager = () => {
                                                         if (e.key === 'Enter') handleSaveEdit();
                                                         if (e.key === 'Escape') setEditingProject(null);
                                                     }}
-                                                    className="w-full p-1 border-2 border-blue-500 dark:border-blue-400 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                                    className="input"
                                                 />
-                                            ) : (p.description || <span className="text-gray-400 italic">Sin descripción</span>)}
+                                            ) : (p.description || <span className="italic">Sin descripción</span>)}
                                         </td>
                                         <td className="p-3">
                                             <Tooltip content={p.isArchived ? 'Proyecto archivado' : 'Proyecto activo'}>
-                                                <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                                                    p.isArchived
-                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-                                                        : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                                                }`}>
+                                                <span className={`tag ${p.isArchived ? 'tag-neutral' : 'tag-accent'}`}>
                                                     {p.isArchived ? 'Archivado' : 'Activo'}
                                                 </span>
                                             </Tooltip>
@@ -250,41 +185,30 @@ export const ProjectsManager = () => {
                                             <div className="flex items-center justify-end gap-2">
                                                 {editingProject?.id === p.id ? (
                                                     <>
-                                                        <button
-                                                            onClick={handleSaveEdit}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition"
-                                                        >
+                                                        <Button size="sm" onClick={handleSaveEdit}>
                                                             <Save size={14} />
                                                             Guardar
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditingProject(null)}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm transition"
-                                                        >
+                                                        </Button>
+                                                        <Button size="icon-sm" variant="ghost" onClick={() => setEditingProject(null)} className="text-muted hover:text-ink">
                                                             <X size={14} />
-                                                        </button>
+                                                        </Button>
                                                     </>
                                                 ) : (
                                                     <>
                                                         <Tooltip content="Editar proyecto">
-                                                            <button
-                                                                onClick={() => startEditing(p)}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors text-sm font-medium"
-                                                            >
+                                                            <Button size="icon-sm" variant="ghost" onClick={() => startEditing(p)} className="text-accent-300">
                                                                 <Edit size={14} />
-                                                            </button>
+                                                            </Button>
                                                         </Tooltip>
                                                         <Tooltip content={p.isArchived ? 'Reactivar proyecto' : 'Archivar proyecto'}>
-                                                            <button
+                                                            <Button
+                                                                size="icon-sm"
+                                                                variant="ghost"
                                                                 onClick={() => handleToggleArchived(p)}
-                                                                className={`flex items-center gap-1 px-3 py-1.5 rounded transition-colors text-sm font-medium ${
-                                                                    p.isArchived
-                                                                        ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                                                        : 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                                                                }`}
+                                                                className={p.isArchived ? 'text-success hover:bg-success/10' : 'text-muted hover:text-ink'}
                                                             >
                                                                 {p.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                                                            </button>
+                                                            </Button>
                                                         </Tooltip>
                                                     </>
                                                 )}
@@ -297,6 +221,52 @@ export const ProjectsManager = () => {
                     </div>
                 )}
             </div>
+
+            {/* Create Project Dialog */}
+            <Dialog open={showCreateForm} onOpenChange={(open) => { setShowCreateForm(open); if (!open) setNewProject({ name: '', description: '' }); }}>
+                <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-lg sm:max-w-lg">
+                    <DialogTitle className="text-xl font-medium text-ink">Crear Nuevo Proyecto</DialogTitle>
+                    <form onSubmit={handleCreateProject} className="space-y-4">
+                        <div className="field">
+                            <label>Nombre</label>
+                            <input
+                                type="text"
+                                value={newProject.name}
+                                onChange={e => setNewProject({ ...newProject, name: e.target.value })}
+                                className="input"
+                                placeholder="ej: Encuesta de Precios"
+                                autoFocus
+                                required
+                            />
+                        </div>
+                        <div className="field">
+                            <label>Descripción (opcional)</label>
+                            <input
+                                type="text"
+                                value={newProject.description}
+                                onChange={e => setNewProject({ ...newProject, description: e.target.value })}
+                                className="input"
+                                placeholder="ej: Recolección mensual de precios al consumidor"
+                            />
+                        </div>
+                        <div className="flex gap-3 justify-end pt-2">
+                            <Button type="button" variant="secondary" onClick={() => { setShowCreateForm(false); setNewProject({ name: '', description: '' }); }}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" disabled={isCreating}>
+                                {isCreating ? (
+                                    <>
+                                        <Loader className="animate-spin" size={16} />
+                                        Creando...
+                                    </>
+                                ) : (
+                                    'Crear Proyecto'
+                                )}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

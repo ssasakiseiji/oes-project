@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import Select from 'react-select';
-import { X, Users, Store } from 'lucide-react';
+import { Users, Store } from 'lucide-react';
 import { getReactSelectStyles } from '../../utils/reactSelectStyles';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { Button } from '../ui/button';
 
 interface StudentOption {
     value: number;
@@ -27,8 +29,6 @@ export const AssignmentModal = ({ isOpen, onClose, students, commerces, onSave }
     const [selectedStudent, setSelectedStudent] = useState<StudentOption | null>(null);
     const [selectedCommerces, setSelectedCommerces] = useState<CommerceOption[]>([]);
     const [isSaving, setIsSaving] = useState(false);
-
-    const isDark = document.documentElement.classList.contains('dark');
 
     const studentOptions: StudentOption[] = students.map(s => ({
         value: s.id,
@@ -67,25 +67,15 @@ export const AssignmentModal = ({ isOpen, onClose, students, commerces, onSave }
         onClose();
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={handleClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                <header className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Nueva Asignación</h3>
-                    <button
-                        onClick={handleClose}
-                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
-                </header>
+        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+            <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-lg sm:max-w-lg">
+                <DialogTitle className="text-xl font-medium text-ink">Nueva Asignación</DialogTitle>
 
-                <div className="p-6 space-y-5">
+                <div className="space-y-5">
                     {/* Select Student */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <div className="field">
+                        <label className="flex items-center gap-2">
                             <Users size={16} />
                             Estudiante
                         </label>
@@ -93,21 +83,21 @@ export const AssignmentModal = ({ isOpen, onClose, students, commerces, onSave }
                             value={selectedStudent}
                             onChange={(option) => setSelectedStudent(option)}
                             options={studentOptions}
-                            styles={getReactSelectStyles<StudentOption>(isDark)}
+                            styles={getReactSelectStyles<StudentOption>()}
                             placeholder="Seleccionar estudiante..."
                             isClearable
                             formatOptionLabel={(option) => (
                                 <div>
                                     <div className="font-medium">{option.label}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">{option.email}</div>
+                                    <div className="text-xs text-muted">{option.email}</div>
                                 </div>
                             )}
                         />
                     </div>
 
                     {/* Select Commerces */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <div className="field">
+                        <label className="flex items-center gap-2">
                             <Store size={16} />
                             Comercios
                         </label>
@@ -115,50 +105,43 @@ export const AssignmentModal = ({ isOpen, onClose, students, commerces, onSave }
                             value={selectedCommerces}
                             onChange={(options) => setSelectedCommerces([...options])}
                             options={commerceOptions}
-                            styles={getReactSelectStyles<CommerceOption>(isDark)}
+                            styles={getReactSelectStyles<CommerceOption>()}
                             placeholder="Seleccionar comercios..."
                             isMulti
                             isClearable
                             formatOptionLabel={(option) => (
                                 <div>
                                     <div className="font-medium">{option.label}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">{option.address}</div>
+                                    <div className="text-xs text-muted">{option.address}</div>
                                 </div>
                             )}
                         />
                         {selectedCommerces.length > 0 && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            <p className="text-xs text-muted mt-2">
                                 {selectedCommerces.length} comercio{selectedCommerces.length !== 1 ? 's' : ''} seleccionado{selectedCommerces.length !== 1 ? 's' : ''}
                             </p>
                         )}
                     </div>
 
                     {/* Info message */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                        <p className="text-sm text-blue-800 dark:text-blue-300">
-                            <strong>Nota:</strong> Los comercios se agregarán a las asignaciones existentes del estudiante. No se eliminarán asignaciones previas.
-                        </p>
+                    <div
+                        className="rounded-[var(--nc-radius-md)] p-3 text-sm text-ink/90"
+                        style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)', border: '1px solid var(--color-accent)' }}
+                    >
+                        <strong className="text-accent-200">Nota:</strong> Los comercios se agregarán a las asignaciones existentes del estudiante. No se eliminarán asignaciones previas.
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-800">
-                    <button
-                        onClick={handleClose}
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
                         Cancelar
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={!selectedStudent || selectedCommerces.length === 0 || isSaving}
-                        className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
+                    </Button>
+                    <Button onClick={handleSave} disabled={!selectedStudent || selectedCommerces.length === 0 || isSaving}>
                         {isSaving ? 'Guardando...' : 'Asignar'}
-                    </button>
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 };

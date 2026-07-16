@@ -40,8 +40,8 @@ function App() {
 
   if (isLoading) {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-            <p className="text-xl font-semibold text-gray-600">Verificando sesión...</p>
+        <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
+            <p className="text-xl font-semibold text-muted">Verificando sesión...</p>
         </div>
     );
   }

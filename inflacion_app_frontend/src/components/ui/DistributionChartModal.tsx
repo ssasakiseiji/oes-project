@@ -43,10 +43,10 @@ export const DistributionChartModal = ({ isOpen, onClose, variableId, name, proj
                 <div style={{ width: '100%', height: 300 }}>
                     <ResponsiveContainer>
                         <BarChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                            <XAxis dataKey="name" className="text-gray-600 dark:text-gray-400" />
-                            <YAxis allowDecimals={false} className="text-gray-600 dark:text-gray-400" />
-                            <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ddd', borderRadius: '8px' }} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" />
+                            <XAxis dataKey="name" tick={{ fill: 'var(--color-ink)' }} />
+                            <YAxis allowDecimals={false} tick={{ fill: 'var(--color-ink)' }} />
+                            <RechartsTooltip contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-divider)', borderRadius: 'var(--nc-radius-md)', color: 'var(--color-ink)' }} />
                             <Legend />
                             {seriesKeys.map((key, i) => (
                                 <Bar key={key} dataKey={key} name={key} fill={BAR_COLORS[i % BAR_COLORS.length]} />

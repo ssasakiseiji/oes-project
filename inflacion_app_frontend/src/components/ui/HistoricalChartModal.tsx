@@ -32,7 +32,7 @@ export const HistoricalChartModal = ({ isOpen, onClose, type, id, name, projectI
         <Modal isOpen={isOpen} onClose={onClose} title={`Evolución de "${name}"`}>
             {isLoading ? <LoadingSpinner /> : (
             <div style={{width: '100%', height: 300}}>
-                <ResponsiveContainer><LineChart data={data}><CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" /><XAxis dataKey="name" className="text-gray-600 dark:text-gray-400" /><YAxis tickFormatter={(val) => new Intl.NumberFormat('es-PY').format(val)} className="text-gray-600 dark:text-gray-400"/><RechartsTooltip formatter={(val) => new Intl.NumberFormat('es-PY').format(Number(val))} contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ddd', borderRadius: '8px' }}/><Legend /><Line type="monotone" dataKey="avgValue" name="Valor Promedio" stroke="#2563eb" strokeWidth={2}/></LineChart></ResponsiveContainer>
+                <ResponsiveContainer><LineChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" /><XAxis dataKey="name" tick={{ fill: 'var(--color-ink)' }} /><YAxis tickFormatter={(val) => new Intl.NumberFormat('es-PY').format(val)} tick={{ fill: 'var(--color-ink)' }}/><RechartsTooltip formatter={(val) => new Intl.NumberFormat('es-PY').format(Number(val))} contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-divider)', borderRadius: 'var(--nc-radius-md)', color: 'var(--color-ink)' }}/><Legend /><Line type="monotone" dataKey="avgValue" name="Valor Promedio" stroke="var(--color-accent)" strokeWidth={2}/></LineChart></ResponsiveContainer>
             </div>
             )}
         </Modal>

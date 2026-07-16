@@ -12,7 +12,7 @@ interface SkeletonProps {
 
 // Componente base de Skeleton con animación de shimmer
 const Skeleton = memo(({ className = '', variant = 'rectangular', width, height, circle = false }: SkeletonProps) => {
-  const baseClasses = 'animate-shimmer bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 bg-[length:200%_100%]';
+  const baseClasses = 'animate-shimmer bg-gradient-to-r from-nc-neutral-800 via-nc-neutral-700 to-nc-neutral-800 bg-[length:200%_100%]';
 
   const variantClasses: Record<SkeletonVariant, string> = {
     text: 'h-4 rounded',
@@ -48,7 +48,7 @@ Skeleton.displayName = 'Skeleton';
 
 // Skeleton para tarjeta de tarea
 export const TaskCardSkeleton = memo(() => (
-  <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-2xl space-y-3">
+  <div className="card elev-sm p-2 space-y-3">
     <div className="flex items-center gap-3 sm:gap-4 p-3">
       {/* Circular progress skeleton */}
       <Skeleton circle width="48px" height="48px" />
@@ -69,7 +69,7 @@ TaskCardSkeleton.displayName = 'TaskCardSkeleton';
 
 // Skeleton para dashboard completo
 export const DashboardSkeleton = memo(() => (
-  <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 p-4 sm:p-6 md:p-8 rounded-2xl shadow-lg">
+  <div>
     {/* Header skeleton */}
     <div className="flex flex-col gap-4 mb-6">
       <Skeleton variant="text" width="150px" height="32px" />
@@ -77,9 +77,10 @@ export const DashboardSkeleton = memo(() => (
         <Skeleton variant="rectangular" width="100%" height="40px" className="sm:w-64" />
       </div>
     </div>
+    <hr className="hr" />
 
     {/* Tasks skeleton */}
-    <div className="space-y-3">
+    <div className="space-y-3 mt-3">
       <TaskCardSkeleton />
       <TaskCardSkeleton />
       <TaskCardSkeleton />

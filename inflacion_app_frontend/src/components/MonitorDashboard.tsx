@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import Select from 'react-select';
-import { CheckCircle, Clock, Search, ChevronRight, PieChart, Users, ListFilter, Smile, Store, TrendingUp, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, XCircle } from 'lucide-react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { CheckCircle, Clock, Search, ChevronRight, PieChart, Users, ListFilter, Smile, Store, TrendingUp, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, XCircle, Check } from 'lucide-react';
 import { apiFetch } from '../api';
 import { useProject } from '../contexts/ProjectContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { getReactSelectStyles } from '../utils/reactSelectStyles';
+import PeriodDropdown, { type PeriodOption } from './student/PeriodDropdown';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './ui/accordion';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu';
 import type {
     AuthUser,
     CompletionLevel,
@@ -40,7 +40,7 @@ function formatValuePreview(variable: Variable, value: unknown): string {
 
 const LoadingSpinner = () => (
     <div className="flex justify-center items-center h-full w-full p-10">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: 'var(--color-accent)' }}></div>
     </div>
 );
 
@@ -48,16 +48,15 @@ interface StatCardProps {
     title: string;
     value: ReactNode;
     icon: ReactNode;
-    color?: string;
 }
 
-const StatCard = ({ title, value, icon, color = 'blue' }: StatCardProps) => (
-    <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between hover:shadow-md transition-shadow">
+const StatCard = ({ title, value, icon }: StatCardProps) => (
+    <div className="card elev-sm p-5 flex items-center justify-between">
         <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{title}</p>
-            <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">{value}</p>
+            <p className="text-sm text-muted font-medium">{title}</p>
+            <p className="text-3xl font-medium text-ink">{value}</p>
         </div>
-        <div className={`bg-${color}-100 dark:bg-${color}-900/30 text-${color}-600 dark:text-${color}-400 p-3 rounded-full`}>{icon}</div>
+        <div className="text-accent-300 bg-accent-800/40 p-3 rounded-full">{icon}</div>
     </div>
 );
 
@@ -74,21 +73,14 @@ const ProgressBar = ({ current, total, size = 'md' }: ProgressBarProps) => {
         md: 'h-2',
         lg: 'h-3'
     };
+    const fillColor = percentage === 100 ? 'var(--color-success)' : 'var(--color-accent)';
 
     return (
-        <div className="w-full">
-            <div className={`w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden ${sizeClasses[size]}`}>
-                <div
-                    className={`${sizeClasses[size]} rounded-full transition-all duration-300 ${
-                        percentage === 100
-                            ? 'bg-green-500 dark:bg-green-600'
-                            : percentage > 50
-                                ? 'bg-yellow-500 dark:bg-yellow-600'
-                                : 'bg-blue-500 dark:bg-blue-600'
-                    }`}
-                    style={{ width: `${percentage}%` }}
-                />
-            </div>
+        <div className={`w-full rounded-full overflow-hidden ${sizeClasses[size]}`} style={{ background: 'var(--color-nc-neutral-800)' }}>
+            <div
+                className={`${sizeClasses[size]} rounded-full transition-all duration-300`}
+                style={{ width: `${percentage}%`, background: fillColor }}
+            />
         </div>
     );
 };
@@ -99,9 +91,10 @@ interface RegistrationSummaryProps {
     values: ObservationValueMap;
 }
 
+// Mismo principio que el resumen del estudiante: un solo nivel de superficie
+// (ya cubierto por la tarjeta de la tarea, en el padre) -- filas planas
+// separadas por líneas, sin fondos tintados por fila.
 const RegistrationSummary = ({ variables, studyFields, values }: RegistrationSummaryProps) => {
-    const [activeStudyField, setActiveStudyField] = useState<number | null>(null);
-
     const summaryData = useMemo(() => {
         return studyFields.map(field => {
             const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
@@ -111,34 +104,35 @@ const RegistrationSummary = ({ variables, studyFields, values }: RegistrationSum
     }, [studyFields, variables, values]);
 
     return (
-        <div className="bg-gray-100 dark:bg-gray-900/30 p-4 rounded-2xl space-y-3 mt-4 border border-gray-200 dark:border-gray-700">
-            <h4 className="font-bold text-md text-gray-700 dark:text-gray-300 mb-2 px-2">Detalle de Variables</h4>
-            {summaryData.map(field => (
-                <div key={field.id} className="bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div onClick={() => setActiveStudyField(prev => prev === field.id ? null : field.id)} className="w-full flex justify-between items-center p-3 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition">
-                        <div className="flex-1">
-                            <h3 className="font-bold text-md text-gray-700 dark:text-gray-200 mb-1">{field.name}</h3>
-                            <ProgressBar current={field.completedCount} total={field.variables.length} size="sm" />
-                        </div>
-                        <div className="flex items-center gap-3 ml-4">
-                            <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{field.completedCount} / {field.variables.length}</span>
-                            <ChevronRight size={20} className={`transition-transform text-gray-400 dark:text-gray-500 ${activeStudyField === field.id ? 'rotate-90' : ''}`} />
-                        </div>
-                    </div>
-                    {activeStudyField === field.id && (
-                        <ul className="space-y-2 p-3 pt-0">
-                            {field.variables.map(v => (
-                                <li key={v.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-md border border-gray-100 dark:border-gray-700">
-                                    <p className="font-medium text-gray-600 dark:text-gray-300 text-sm">{v.name}</p>
-                                    <p className="font-mono font-semibold text-sm text-blue-600 dark:text-blue-400">
-                                        {formatValuePreview(v, values[v.id])}
-                                    </p>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            ))}
+        <div className="pt-3 mt-1" style={{ borderTop: '1px solid var(--color-divider)' }}>
+            <h4 className="text-[11px] uppercase tracking-wide text-accent-300 mb-2 px-1">Detalle de Variables</h4>
+            <Accordion type="single" collapsible>
+                {summaryData.map(field => (
+                    <AccordionItem key={field.id} value={String(field.id)}>
+                        <AccordionTrigger className="px-1 py-2.5 hover:text-accent-300">
+                            <span className="flex-1 min-w-0 text-left">
+                                <span className="text-sm font-medium text-ink truncate block">{field.name}</span>
+                                <span className="mt-1 block max-w-[220px]"><ProgressBar current={field.completedCount} total={field.variables.length} size="sm" /></span>
+                            </span>
+                            <span className="text-sm text-muted flex-shrink-0">{field.completedCount} / {field.variables.length}</span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <ul className="pb-2">
+                                {field.variables.map((v, i) => (
+                                    <li
+                                        key={v.id}
+                                        className="flex justify-between items-center gap-2 py-2 px-1 text-sm"
+                                        style={i > 0 ? { borderTop: '1px solid var(--color-divider)' } : undefined}
+                                    >
+                                        <span className="text-ink truncate">{v.name}</span>
+                                        <span className="font-mono text-accent-300 flex-shrink-0">{formatValuePreview(v, values[v.id])}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+            </Accordion>
         </div>
     );
 };
@@ -165,107 +159,57 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
     }
 
     return (
-        <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 sm:px-6 rounded-b-xl">
-            <div className="flex justify-between sm:hidden w-full">
+        <div className="flex items-center justify-between pt-4" style={{ borderTop: '1px solid var(--color-divider)' }}>
+            <p className="text-sm text-muted hidden sm:block">
+                Página <span className="font-medium text-ink">{currentPage}</span> de{' '}
+                <span className="font-medium text-ink">{totalPages}</span>
+            </p>
+            <div className="flex items-center gap-1 w-full sm:w-auto">
                 <button
                     onClick={() => onPageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn btn-icon btn-secondary"
                 >
-                    Anterior
+                    <ChevronLeft size={18} />
                 </button>
+                <div className="hidden sm:flex items-center gap-1">
+                    {startPage > 1 && (
+                        <>
+                            <button onClick={() => onPageChange(1)} className="btn btn-secondary">1</button>
+                            {startPage > 2 && <span className="text-muted px-1">…</span>}
+                        </>
+                    )}
+                    {pages.map(page => (
+                        <button
+                            key={page}
+                            onClick={() => onPageChange(page)}
+                            className={page === currentPage ? 'btn btn-primary' : 'btn btn-secondary'}
+                        >
+                            {page}
+                        </button>
+                    ))}
+                    {endPage < totalPages && (
+                        <>
+                            {endPage < totalPages - 1 && <span className="text-muted px-1">…</span>}
+                            <button onClick={() => onPageChange(totalPages)} className="btn btn-secondary">{totalPages}</button>
+                        </>
+                    )}
+                </div>
                 <button
                     onClick={() => onPageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="relative ml-3 inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn btn-icon btn-secondary"
                 >
-                    Siguiente
+                    <ChevronRightIcon size={18} />
                 </button>
-            </div>
-            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                <div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                        Página <span className="font-medium">{currentPage}</span> de{' '}
-                        <span className="font-medium">{totalPages}</span>
-                    </p>
-                </div>
-                <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                        <button
-                            onClick={() => onPageChange(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
-                        {startPage > 1 && (
-                            <>
-                                <button
-                                    onClick={() => onPageChange(1)}
-                                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                >
-                                    1
-                                </button>
-                                {startPage > 2 && (
-                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        ...
-                                    </span>
-                                )}
-                            </>
-                        )}
-                        {pages.map(page => (
-                            <button
-                                key={page}
-                                onClick={() => onPageChange(page)}
-                                className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                    page === currentPage
-                                        ? 'z-10 bg-blue-600 dark:bg-blue-500 border-blue-600 dark:border-blue-500 text-white'
-                                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                }`}
-                            >
-                                {page}
-                            </button>
-                        ))}
-                        {endPage < totalPages && (
-                            <>
-                                {endPage < totalPages - 1 && (
-                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        ...
-                                    </span>
-                                )}
-                                <button
-                                    onClick={() => onPageChange(totalPages)}
-                                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                >
-                                    {totalPages}
-                                </button>
-                            </>
-                        )}
-                        <button
-                            onClick={() => onPageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <ChevronRightIcon size={20} />
-                        </button>
-                    </nav>
-                </div>
             </div>
         </div>
     );
 };
 
-interface PeriodOption {
-    value: number;
-    label: string;
-    status: string;
-}
-
 type SortBy = 'name' | 'progress' | 'status' | 'level';
 
 function MonitorDashboard({ user: _user }: { user: AuthUser }) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
   const { activeProjectId } = useProject();
 
   const [monitorData, setMonitorData] = useState<MonitorPeriod[]>([]);
@@ -279,12 +223,8 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   const [sortBy, setSortBy] = useState<SortBy>('name'); // name, progress, status
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [activeStudentId, setActiveStudentId] = useState<number | null>(null);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [showSortMenu, setShowSortMenu] = useState(false);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
-  const filterMenuRef = useRef<HTMLDivElement>(null);
+  const [openStudentId, setOpenStudentId] = useState<string | undefined>(undefined);
+  const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const fetchMonitorData = async () => {
@@ -316,21 +256,6 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, sortBy, selectedPeriod]);
-
-  // Close menus when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
-        setShowSortMenu(false);
-      }
-      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target as Node)) {
-        setShowFilterMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const periodOptions = useMemo<PeriodOption[]>(() => monitorData.map(p => ({
       value: p.periodId,
@@ -421,40 +346,35 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
 
   if (activeProjectId === null) return null;
   if (isLoading) return <LoadingSpinner />;
-  if (error) return <div className="text-center p-8 text-red-500 dark:text-red-400">Error: {error}</div>;
+  if (error) return <div className="text-center p-8 text-danger">Error: {error}</div>;
 
   const getStatusChip = (status: MonitorTaskStatus, completionLevel: CompletionLevel) => {
-    const completionStyles: Record<'alto' | 'medio' | 'bajo', string> = {
-      alto: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
-      medio: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
-      bajo: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+    const completionColor: Record<'alto' | 'medio' | 'bajo', string> = {
+      alto: 'var(--color-success)',
+      medio: 'var(--color-accent-2)',
+      bajo: 'var(--color-danger)',
     };
-    const styles: Record<MonitorTaskStatus, string> = {
-      'Completado': completionLevel ? completionStyles[completionLevel] : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
-      'En Proceso': 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
-      'Pendiente': 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600',
-      'No completado': 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
-    };
-    const completionIcons: Record<'alto' | 'medio' | 'bajo', ReactNode> = {
-      alto: <CheckCircle size={14} />,
-      medio: <Clock size={14} />,
-      bajo: <Clock size={14} />,
+    const color: Record<MonitorTaskStatus, string> = {
+      'Completado': completionLevel ? completionColor[completionLevel] : 'var(--color-success)',
+      'En Proceso': 'var(--color-accent)',
+      'Pendiente': 'var(--color-nc-neutral-500)',
+      'No completado': 'var(--color-danger)',
     };
     const icon: Record<MonitorTaskStatus, ReactNode> = {
-        'Completado': completionLevel ? completionIcons[completionLevel] : <CheckCircle size={14} />,
-        'En Proceso': <Clock size={14} />,
-        'Pendiente': <div className="w-2.5 h-2.5 rounded-full bg-gray-400 dark:bg-gray-500" />,
-        'No completado': <XCircle size={14} />
+        'Completado': completionLevel === 'bajo' ? <Clock size={13} /> : <CheckCircle size={13} />,
+        'En Proceso': <Clock size={13} />,
+        'Pendiente': <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-nc-neutral-600)' }} />,
+        'No completado': <XCircle size={13} />
     };
     const levelLabels: Record<'alto' | 'medio' | 'bajo', string> = { alto: 'Alto', medio: 'Medio', bajo: 'Bajo' };
     const label = status === 'Completado' && completionLevel
         ? `${status}: ${levelLabels[completionLevel]}`
         : status;
     return (
-        <div className={`px-2.5 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 border ${styles[status]}`}>
+        <span className="tag flex items-center gap-1.5" style={{ border: `1px solid ${color[status]}`, color: color[status] }}>
             {icon[status]}
             <span>{label}</span>
-        </div>
+        </span>
     );
   };
 
@@ -479,275 +399,191 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   return (
     <div className="space-y-6">
       {/* Selector de Período */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Período Activo</h2>
-        <Select<PeriodOption>
-            placeholder="Seleccionar Período..."
-            value={selectedPeriod}
-            onChange={(option) => setSelectedPeriod(option)}
-            options={periodOptions}
-            styles={getReactSelectStyles<PeriodOption>(isDark)}
-            formatOptionLabel={({ label, status }) => (
-                <div className="flex items-center">
-                    {status === 'Open' && <span className="h-2 w-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>}
-                    <span>{label}</span>
-                </div>
-            )}
-        />
+      <div className="field max-w-sm">
+        <label>Período Activo</label>
+        <PeriodDropdown options={periodOptions} value={selectedPeriod} onChange={setSelectedPeriod} />
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-            title="Estudiantes Asignados"
-            value={globalStats.totalStudents}
-            icon={<Users size={24} />}
-            color="blue"
-        />
-        <StatCard
-            title="Tareas Completadas"
-            value={`${globalStats.completedTasks}/${globalStats.totalTasks}`}
-            icon={<TrendingUp size={24} />}
-            color="green"
-        />
-        <StatCard
-            title="Progreso Global"
-            value={`${globalStats.completionPercentage.toFixed(1)}%`}
-            icon={<PieChart size={24} />}
-            color="teal"
-        />
+        <StatCard title="Estudiantes Asignados" value={globalStats.totalStudents} icon={<Users size={22} />} />
+        <StatCard title="Tareas Completadas" value={`${globalStats.completedTasks}/${globalStats.totalTasks}`} icon={<TrendingUp size={22} />} />
+        <StatCard title="Progreso Global" value={`${globalStats.completionPercentage.toFixed(1)}%`} icon={<PieChart size={22} />} />
       </div>
 
       {/* Barra de progreso global */}
       {globalStats.totalTasks > 0 && (
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="card elev-sm p-5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-gray-700 dark:text-gray-300">Progreso General del Período</h3>
-            <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{globalStats.completionPercentage.toFixed(1)}%</span>
+            <h3 className="font-medium text-ink">Progreso General del Período</h3>
+            <span className="text-2xl font-medium text-accent-300">{globalStats.completionPercentage.toFixed(1)}%</span>
           </div>
           <ProgressBar current={globalStats.completedTasks} total={globalStats.totalTasks} size="lg" />
         </div>
       )}
 
       {/* Búsqueda y Controles */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+      <div>
           <div className="flex items-center gap-3">
               {/* Búsqueda */}
               <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
                   <input
                       type="text"
                       placeholder="Buscar estudiante..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition"
+                      className="input pl-10"
                   />
               </div>
 
               {/* Botón de Ordenamiento */}
-              <div className="relative" ref={sortMenuRef}>
-                  <button
-                      onClick={() => setShowSortMenu(!showSortMenu)}
-                      className={`p-2.5 rounded-lg border transition-all ${
-                          showSortMenu
-                              ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400'
-                              : 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                      title="Ordenar"
-                  >
-                      <ArrowUpDown size={20} />
-                  </button>
-
-                  {showSortMenu && (
-                      <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-2">
-                          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-                              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ordenar por</p>
-                          </div>
-                          {sortOptions.map(option => (
-                              <button
-                                  key={option.value}
-                                  onClick={() => {
-                                      setSortBy(option.value);
-                                      setShowSortMenu(false);
-                                  }}
-                                  className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
-                                      sortBy === option.value
-                                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold'
-                                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                  }`}
-                              >
-                                  {option.label}
-                              </button>
-                          ))}
-                      </div>
-                  )}
-              </div>
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <button className="btn btn-icon btn-secondary" title="Ordenar">
+                          <ArrowUpDown size={18} />
+                      </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                      {sortOptions.map(option => (
+                          <DropdownMenuItem
+                              key={option.value}
+                              onSelect={() => setSortBy(option.value)}
+                              className={`py-2 ${sortBy === option.value ? 'text-accent-300 font-semibold' : ''}`}
+                          >
+                              {sortBy === option.value && <Check size={14} />}
+                              <span className={sortBy === option.value ? '' : 'pl-[22px]'}>{option.label}</span>
+                          </DropdownMenuItem>
+                      ))}
+                  </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Botón de Filtros */}
-              <div className="relative" ref={filterMenuRef}>
-                  <button
-                      onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className={`p-2.5 rounded-lg border transition-all relative ${
-                          showFilterMenu
-                              ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400'
-                              : 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                      title="Filtrar por estado"
-                  >
-                      <SlidersHorizontal size={20} />
-                      {statusFilter !== 'Todos' && (
-                          <span className="absolute -top-1 -right-1 h-3 w-3 bg-blue-600 dark:bg-blue-500 rounded-full border-2 border-white dark:border-gray-800"></span>
-                      )}
-                  </button>
-
-                  {showFilterMenu && (
-                      <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-2">
-                          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Filtrar por estado</p>
-                              {statusFilter !== 'Todos' && (
-                                  <button
-                                      onClick={() => setStatusFilter('Todos')}
-                                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                  >
-                                      Limpiar
-                                  </button>
-                              )}
-                          </div>
-                          {filterOptions.map(option => (
-                              <button
-                                  key={option.value}
-                                  onClick={() => {
-                                      setStatusFilter(option.value);
-                                      setShowFilterMenu(false);
-                                  }}
-                                  className={`w-full text-left py-2.5 text-sm transition-colors ${
-                                      option.indent ? 'pl-6 pr-3' : 'px-3'
-                                  } ${
-                                      statusFilter === option.value
-                                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold'
-                                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                  }`}
-                              >
-                                  {option.label}
-                              </button>
-                          ))}
-                      </div>
-                  )}
-              </div>
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <button className="btn btn-icon btn-secondary relative" title="Filtrar por estado">
+                          <SlidersHorizontal size={18} />
+                          {statusFilter !== 'Todos' && (
+                              <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-accent" />
+                          )}
+                      </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                      {filterOptions.map(option => (
+                          <DropdownMenuItem
+                              key={option.value}
+                              onSelect={() => setStatusFilter(option.value)}
+                              className={`py-2 ${option.indent ? 'pl-7' : ''} ${statusFilter === option.value ? 'text-accent-300 font-semibold' : ''}`}
+                          >
+                              {statusFilter === option.value && <Check size={14} />}
+                              <span className={statusFilter === option.value ? '' : 'pl-[22px]'}>{option.label}</span>
+                          </DropdownMenuItem>
+                      ))}
+                  </DropdownMenuContent>
+              </DropdownMenu>
           </div>
 
           {/* Contador de resultados */}
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {sortedAndFilteredStudents.length} estudiante{sortedAndFilteredStudents.length !== 1 ? 's' : ''}
-                  {statusFilter !== 'Todos' && (
-                      <span className="ml-2 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-semibold">
-                          {filterOptions.find(o => o.value === statusFilter)?.label || statusFilter}
-                      </span>
-                  )}
-              </p>
-          </div>
+          <p className="text-sm text-muted mt-3">
+              {sortedAndFilteredStudents.length} estudiante{sortedAndFilteredStudents.length !== 1 ? 's' : ''}
+              {statusFilter !== 'Todos' && (
+                  <span className="tag tag-accent ml-2">
+                      {filterOptions.find(o => o.value === statusFilter)?.label || statusFilter}
+                  </span>
+              )}
+          </p>
       </div>
 
       {/* Lista de Estudiantes */}
-      <div className="space-y-4">
+      <div>
         {paginatedStudents.length > 0 ? (
           <>
-            {paginatedStudents.map((student: MonitorStudent & { completedTasksCount: number; totalTasksCount: number; progressPercentage: number }) => {
-              const { completedTasksCount, totalTasksCount, progressPercentage } = student;
-              const isStudentUpToDate = completedTasksCount === totalTasksCount;
+            <Accordion
+              type="single"
+              collapsible
+              className="gap-3"
+              value={openStudentId}
+              onValueChange={(v) => setOpenStudentId(v || undefined)}
+            >
+              {paginatedStudents.map((student: MonitorStudent & { completedTasksCount: number; totalTasksCount: number; progressPercentage: number }) => {
+                const { completedTasksCount, totalTasksCount, progressPercentage } = student;
+                const isStudentUpToDate = completedTasksCount === totalTasksCount;
+                const studentValue = String(student.studentId);
 
-              return (
-                <div key={student.studentId} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow">
-                  {/* Header del Estudiante */}
-                  <div
-                    onClick={() => setActiveStudentId(prev => prev === student.studentId ? null : student.studentId)}
-                    className="w-full p-4 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
+                return (
+                  <AccordionItem key={student.studentId} value={studentValue} className="card elev-sm p-3">
+                    <AccordionTrigger>
+                      <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 truncate">{student.studentName}</h3>
+                          <h3 className="font-medium text-ink truncate">{student.studentName}</h3>
                           {isStudentUpToDate && (
-                              <span className="px-2.5 py-1 text-xs font-bold text-white bg-green-500 dark:bg-green-600 rounded-full shadow-sm flex items-center gap-1">
+                              <span className="tag tag-accent flex items-center gap-1">
                                   <CheckCircle size={12} />
                                   Al día
                               </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mb-2">
+                        <div className="flex items-center gap-3 text-xs text-muted mb-2">
                           <div className="flex items-center gap-1.5">
-                            <Store size={16} />
+                            <Store size={14} />
                             <span>{totalTasksCount} comercio{totalTasksCount !== 1 ? 's' : ''}</span>
                           </div>
-                          <span>•</span>
-                          <span className="font-semibold">{completedTasksCount}/{totalTasksCount} completado{completedTasksCount !== 1 ? 's' : ''}</span>
-                          <span>•</span>
-                          <span className="font-semibold text-blue-600 dark:text-blue-400">{progressPercentage.toFixed(0)}%</span>
+                          <span>{completedTasksCount}/{totalTasksCount} completado{completedTasksCount !== 1 ? 's' : ''}</span>
+                          <span className="text-accent-300 font-semibold">{progressPercentage.toFixed(0)}%</span>
                         </div>
-                        <ProgressBar current={completedTasksCount} total={totalTasksCount} size="md" />
+                        <div className="max-w-sm"><ProgressBar current={completedTasksCount} total={totalTasksCount} size="md" /></div>
                       </div>
-                      <ChevronRight
-                        size={24}
-                        className={`flex-shrink-0 transition-transform text-gray-400 dark:text-gray-500 ${activeStudentId === student.studentId ? 'rotate-90' : ''}`}
-                      />
-                    </div>
-                  </div>
+                    </AccordionTrigger>
 
-                  {/* Tareas del Estudiante */}
-                  {activeStudentId === student.studentId && (
-                    <div className="bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700 p-4">
-                      <div className="space-y-3">
-                        {student.tasks.map(task => {
-                          const currentTaskId = `${student.studentId}-${task.observationUnitId}`;
-                          const isTaskActive = activeTaskId === currentTaskId;
-                          const taskPercentage = task.progress.total > 0 ? (task.progress.current / task.progress.total) * 100 : 0;
+                    <AccordionContent>
+                      <div className="pt-2 mt-1" style={{ borderTop: '1px solid var(--color-divider)' }}>
+                        <Accordion
+                          type="single"
+                          collapsible
+                          value={openTaskId}
+                          onValueChange={(v) => setOpenTaskId(v || undefined)}
+                        >
+                          {student.tasks.map(task => {
+                            const currentTaskId = `${student.studentId}-${task.observationUnitId}`;
+                            const taskPercentage = task.progress.total > 0 ? (task.progress.current / task.progress.total) * 100 : 0;
 
-                          return (
-                            <div key={task.observationUnitId} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                              <div
-                                onClick={() => setActiveTaskId(prev => prev === currentTaskId ? null : currentTaskId)}
-                                className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
-                              >
-                                <div className="flex-1 min-w-0 mr-4">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{task.observationUnitName}</p>
-                                    {getStatusChip(task.status, task.completionLevel)}
+                            return (
+                              <AccordionItem key={task.observationUnitId} value={currentTaskId} className="border-b last:border-b-0" style={{ borderColor: 'var(--color-divider)' }}>
+                                <AccordionTrigger className="py-3">
+                                  <div className="flex-1 min-w-0 text-left">
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                      <p className="font-medium text-sm text-ink truncate">{task.observationUnitName}</p>
+                                      {getStatusChip(task.status, task.completionLevel)}
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-mono text-muted">
+                                        {task.progress.current} / {task.progress.total} variables
+                                      </span>
+                                      <span className="text-xs text-accent-300 font-semibold">
+                                        {taskPercentage.toFixed(0)}%
+                                      </span>
+                                    </div>
+                                    <div className="max-w-xs"><ProgressBar current={task.progress.current} total={task.progress.total} size="sm" /></div>
                                   </div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
-                                      {task.progress.current} / {task.progress.total} variables
-                                    </span>
-                                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                                      {taskPercentage.toFixed(0)}%
-                                    </span>
-                                  </div>
-                                  <ProgressBar current={task.progress.current} total={task.progress.total} size="sm" />
-                                </div>
-                                <ChevronRight
-                                  size={20}
-                                  className={`flex-shrink-0 transition-transform text-gray-400 dark:text-gray-500 ${isTaskActive ? 'rotate-90' : ''}`}
-                                />
-                              </div>
+                                </AccordionTrigger>
 
-                              {isTaskActive && (
-                                  <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50">
-                                      <RegistrationSummary
-                                          variables={staticData.variables}
-                                          studyFields={staticData.studyFields}
-                                          values={task.status === 'Completado' ? (task.submittedValues || {}) : (task.draftValues || {})}
-                                      />
-                                  </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                                <AccordionContent>
+                                  <RegistrationSummary
+                                      variables={staticData.variables}
+                                      studyFields={staticData.studyFields}
+                                      values={task.status === 'Completado' ? (task.submittedValues || {}) : (task.draftValues || {})}
+                                  />
+                                </AccordionContent>
+                              </AccordionItem>
+                            );
+                          })}
+                        </Accordion>
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
 
             {/* Paginación */}
             {totalPages > 1 && (
@@ -759,17 +595,17 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
             )}
           </>
         ) : (
-            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <ListFilter size={56} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-                <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-300">No se encontraron estudiantes</h3>
-                <p className="mt-2 text-gray-400 dark:text-gray-500">Prueba a cambiar el filtro o el término de búsqueda.</p>
+            <div className="card elev-sm text-center py-16">
+                <ListFilter size={48} className="mx-auto text-muted mb-4" />
+                <h3 className="text-lg font-medium text-ink">No se encontraron estudiantes</h3>
+                <p className="mt-2 text-muted">Prueba a cambiar el filtro o el término de búsqueda.</p>
             </div>
         )}
          {monitorData.length === 0 && !isLoading && (
-            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <Smile size={56} className="mx-auto text-blue-400 dark:text-blue-500 mb-4" />
-                <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-300">Todo tranquilo por aquí</h3>
-                <p className="mt-2 text-gray-400 dark:text-gray-500">Aún no hay datos de períodos para mostrar.</p>
+            <div className="card elev-sm text-center py-16">
+                <Smile size={48} className="mx-auto text-accent mb-4" />
+                <h3 className="text-lg font-medium text-ink">Todo tranquilo por aquí</h3>
+                <p className="mt-2 text-muted">Aún no hay datos de períodos para mostrar.</p>
             </div>
          )}
       </div>

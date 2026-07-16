@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, lazy, Suspense, memo } from 'react';
-import Select from 'react-select';
-import { Edit3, CheckCircle, ChevronRight, Smile, RadioTower } from 'lucide-react';
+import { Edit3, CheckCircle, Smile, RadioTower } from 'lucide-react';
 import LoadingOverlay from './LoadingOverlay';
 import { DashboardSkeleton } from './Skeleton';
+import PeriodDropdown, { type PeriodOption } from './student/PeriodDropdown';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './ui/accordion';
 import { apiFetch } from '../api';
 import { useProject } from '../contexts/ProjectContext';
 import { useToast } from './Toast';
@@ -50,38 +51,46 @@ const RegistrationWizard = lazy(() =>
 );
 
 const NoCollectionPanel = memo(() => (
-    <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 p-8 rounded-2xl shadow-lg text-center">
-        <Smile size={64} className="mx-auto text-blue-500 dark:text-blue-400 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">¡Todo listo por aquí!</h2>
-        <p className="text-gray-600 dark:text-gray-400">No hay recolecciones disponibles para ti en este momento, ¡nos vemos pronto!</p>
+    <div className="card elev-sm p-8 text-center">
+        <Smile size={64} className="mx-auto text-accent mb-4" />
+        <h2 className="text-2xl font-medium mb-2 text-ink">¡Todo listo por aquí!</h2>
+        <p className="text-muted">No hay recolecciones disponibles para ti en este momento, ¡nos vemos pronto!</p>
     </div>
 ));
 NoCollectionPanel.displayName = 'NoCollectionPanel';
 
-const CircularProgress = memo(({ percentage }: { percentage: number }) => {
+// Color del anillo según status -- verde=completado, accent=en_proceso,
+// gris=pendiente, igual esquema que el mockup (dashboard, task ring).
+function ringColorForStatus(status: string): string {
+    if (status === 'Completado') return 'var(--color-success)';
+    if (status === 'En Proceso') return 'var(--color-accent)';
+    return 'var(--color-nc-neutral-700)';
+}
+
+const CircularProgress = memo(({ percentage, status }: { percentage: number; status: string }) => {
     const radius = 18;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (percentage / 100) * circumference;
+    const color = ringColorForStatus(status);
 
     return (
         <div className="relative h-12 w-12 flex-shrink-0">
             <svg width="48" height="48" viewBox="0 0 48 48" className="-rotate-90">
-                <circle cx="24" cy="24" r={radius} className="text-gray-200 dark:text-gray-600" strokeWidth="4" fill="transparent" stroke="currentColor" />
+                <circle cx="24" cy="24" r={radius} strokeWidth="4" fill="transparent" stroke="var(--color-nc-neutral-800)" />
                 <circle
                     cx="24"
                     cy="24"
                     r={radius}
-                    className="text-blue-600 dark:text-blue-400"
                     strokeWidth="4"
                     fill="transparent"
-                    stroke="currentColor"
+                    stroke={color}
                     strokeDasharray={circumference}
                     strokeDashoffset={offset}
                     strokeLinecap="round"
                     style={{ transition: 'stroke-dashoffset 0.3s ease' }}
                 />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-200">
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-ink">
                 {`${Math.round(percentage)}%`}
             </span>
         </div>
@@ -96,9 +105,10 @@ interface RegistrationSummaryProps {
     title: string;
 }
 
+// Un solo nivel de superficie más (la tarjeta de la tarea, en el padre) ya
+// cubierto -- esto es texto plano y filas separadas por líneas, sin fondos
+// tintados por fila (ver diagnóstico "de cajas a diseño integral").
 const RegistrationSummary = ({ variables, studyFields, values, title }: RegistrationSummaryProps) => {
-    const [activeStudyField, setActiveStudyField] = useState<number | null>(null);
-
     const summaryData = useMemo(() => {
         return studyFields.map(field => {
             const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
@@ -109,88 +119,48 @@ const RegistrationSummary = ({ variables, studyFields, values, title }: Registra
     }, [studyFields, variables, values]);
 
     return (
-        <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-800 dark:to-gray-700 p-4 rounded-2xl space-y-3 mt-4 border border-slate-200 dark:border-gray-600">
-            <h4 className="font-bold text-md text-gray-800 dark:text-gray-100 mb-2 px-2 flex items-center gap-2">
-                <div className="h-1 w-1 rounded-full bg-blue-500 dark:bg-blue-400"></div>
-                {title}
-            </h4>
-            {summaryData.map(field => {
-                const isComplete = field.completedCount === field.variables.length && field.variables.length > 0;
-                const isFieldActive = activeStudyField === field.id;
+        <div className="pt-3 mt-1" style={{ borderTop: '1px solid var(--color-divider)' }}>
+            <h4 className="a-eyebrow text-[11px] uppercase tracking-wide text-accent-300 mb-2 px-1">{title}</h4>
+            <Accordion type="single" collapsible className="gap-0">
+                {summaryData.map(field => {
+                    const isComplete = field.completedCount === field.variables.length && field.variables.length > 0;
 
-                return (
-                    <div
-                        key={field.id}
-                        className={`transition-all duration-200 rounded-xl overflow-hidden ${
-                            isFieldActive
-                                ? 'bg-white dark:bg-gray-700 shadow-md ring-2 ring-blue-200 dark:ring-blue-500'
-                                : 'bg-white dark:bg-gray-700 hover:shadow-sm'
-                        }`}
-                    >
-                        <button
-                            onClick={() => setActiveStudyField(prev => prev === field.id ? null : field.id)}
-                            className="w-full flex justify-between items-start p-3 text-left rounded-xl transition-colors focus:outline-none"
-                            aria-expanded={isFieldActive}
-                            aria-label={`${field.name} - ${field.completedCount} de ${field.variables.length} variables completadas`}
-                        >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                    isComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-blue-100 dark:bg-blue-900'
-                                }`}>
-                                    <span className={`text-sm font-bold ${isComplete ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300'}`}>
-                                        {Math.round(field.percentage)}%
-                                    </span>
-                                </div>
-                                <h3 className="font-bold text-md text-gray-800 dark:text-gray-100 break-words">{field.name}</h3>
-                            </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                                <span className={`text-sm font-semibold px-2 py-1 rounded-md ${
-                                    isComplete ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200'
-                                }`}>
+                    return (
+                        <AccordionItem key={field.id} value={String(field.id)}>
+                            <AccordionTrigger className="px-1 py-2.5 hover:text-accent-300">
+                                <span className="flex items-center gap-2 flex-1 min-w-0">
+                                    <span className="text-sm font-medium text-ink truncate">{field.name}</span>
+                                </span>
+                                <span className={`tag flex-shrink-0 ${isComplete ? 'tag-accent' : 'tag-neutral'}`}>
                                     {field.completedCount} / {field.variables.length}
                                 </span>
-                                <ChevronRight size={20} className={`transition-transform text-gray-400 dark:text-gray-300 ${isFieldActive ? 'rotate-90' : ''}`} aria-hidden="true" />
-                            </div>
-                        </button>
-                        {isFieldActive && (
-                            <ul className="space-y-2 p-3 pt-0 animate-fade-in">
-                                {field.variables.map(v => {
-                                    const hasValue = hasValidValue(values[v.id]);
-                                    return (
-                                        <li
-                                            key={v.id}
-                                            className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
-                                                hasValue ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-600 border border-gray-200 dark:border-gray-500'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${hasValue ? 'bg-blue-500 dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-500'}`}></div>
-                                                <p className={`font-medium text-sm truncate ${hasValue ? 'text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                    {v.name}
-                                                </p>
-                                            </div>
-                                            <p className={`font-mono font-bold text-sm ml-2 flex-shrink-0 ${
-                                                hasValue ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
-                                            }`}>
-                                                {formatValuePreview(v, values[v.id])}
-                                            </p>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
-                    </div>
-                );
-            })}
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <ul className="pb-2">
+                                    {field.variables.map((v, i) => {
+                                        const hasValue = hasValidValue(values[v.id]);
+                                        return (
+                                            <li
+                                                key={v.id}
+                                                className="flex justify-between items-center gap-2 py-2 px-1 text-sm"
+                                                style={i > 0 ? { borderTop: '1px solid var(--color-divider)' } : undefined}
+                                            >
+                                                <span className={hasValue ? 'text-ink truncate' : 'text-muted truncate'}>{v.name}</span>
+                                                <span className={`font-mono flex-shrink-0 ${hasValue ? 'text-accent-300' : 'text-muted'}`}>
+                                                    {formatValuePreview(v, values[v.id])}
+                                                </span>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </AccordionContent>
+                        </AccordionItem>
+                    );
+                })}
+            </Accordion>
         </div>
     );
 };
-
-interface PeriodOption {
-    value: number;
-    label: string;
-    status: string;
-}
 
 interface EditingObservationUnit {
     id: number;
@@ -208,7 +178,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
     const [error, setError] = useState<string | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption | null>(null);
     const [editingObservationUnit, setEditingObservationUnit] = useState<EditingObservationUnit | null>(null);
-    const [activeObservationUnit, setActiveObservationUnit] = useState<number | null>(null);
+    const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -283,156 +253,85 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
 
     return (
         <>
-            <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 p-4 sm:p-6 md:p-8 rounded-2xl shadow-lg animate-fade-in">
+            <div className="animate-fade-in">
                 <div className="flex flex-col gap-4 mb-6">
-                    <h2 className="text-2xl sm:text-3xl font-bold">Tus Tareas</h2>
+                    <h2 className="text-2xl sm:text-3xl font-medium text-ink">Tus Tareas</h2>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full">
                         {openPeriod && selectedPeriod?.value !== openPeriod.periodId && (
                             <button
                                 onClick={goToActivePeriod}
-                                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 dark:from-green-600 dark:to-emerald-700 dark:hover:from-green-700 dark:hover:to-emerald-800 text-white rounded-xl text-sm font-semibold whitespace-nowrap order-2 sm:order-1 shadow-md hover:shadow-lg dark:shadow-green-900/50 transition-all duration-200 animate-pulse"
+                                className="btn btn-primary order-2 sm:order-1 whitespace-nowrap animate-pulse"
                             >
                                 <RadioTower size={16} className="animate-bounce" />
                                 <span>Ir al período activo</span>
                             </button>
                         )}
                         <div className="w-full sm:flex-1 md:w-64 md:flex-initial order-1 sm:order-2">
-                            <Select<PeriodOption>
-                                value={selectedPeriod}
-                                onChange={(option) => setSelectedPeriod(option)}
+                            <PeriodDropdown
                                 options={periodOptions}
-                                styles={{
-                                    control: (base, state) => ({
-                                        ...base,
-                                        backgroundColor: document.documentElement.classList.contains('dark') ? '#374151' : '#f9fafb',
-                                        borderRadius: 12,
-                                        borderColor: state.isFocused
-                                            ? (document.documentElement.classList.contains('dark') ? '#3b82f6' : '#3b82f6')
-                                            : (document.documentElement.classList.contains('dark') ? '#4b5563' : '#e5e7eb'),
-                                        borderWidth: 2,
-                                        boxShadow: state.isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
-                                        minHeight: 44,
-                                        transition: 'all 0.2s',
-                                        '&:hover': {
-                                            borderColor: document.documentElement.classList.contains('dark') ? '#60a5fa' : '#93c5fd',
-                                        }
-                                    }),
-                                    singleValue: (base) => ({
-                                        ...base,
-                                        color: document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#1f2937',
-                                        fontWeight: 600,
-                                    }),
-                                    menu: (base) => ({
-                                        ...base,
-                                        backgroundColor: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-                                        borderRadius: 12,
-                                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
-                                        border: document.documentElement.classList.contains('dark') ? '1px solid #374151' : '1px solid #e5e7eb',
-                                        overflow: 'hidden',
-                                    }),
-                                    menuList: (base) => ({
-                                        ...base,
-                                        padding: 4,
-                                    }),
-                                    option: (base, state) => ({
-                                        ...base,
-                                        backgroundColor: state.isSelected
-                                            ? (document.documentElement.classList.contains('dark') ? '#3b82f6' : '#3b82f6')
-                                            : state.isFocused
-                                                ? (document.documentElement.classList.contains('dark') ? '#374151' : '#eff6ff')
-                                                : 'transparent',
-                                        color: state.isSelected
-                                            ? '#ffffff'
-                                            : (document.documentElement.classList.contains('dark') ? '#f3f4f6' : '#1f2937'),
-                                        cursor: 'pointer',
-                                        borderRadius: 8,
-                                        padding: '10px 12px',
-                                        fontWeight: state.isSelected ? 600 : 500,
-                                        transition: 'all 0.15s',
-                                        '&:active': {
-                                            backgroundColor: document.documentElement.classList.contains('dark') ? '#2563eb' : '#2563eb',
-                                        }
-                                    }),
-                                    indicatorSeparator: () => ({ display: 'none' }),
-                                    dropdownIndicator: (base, state) => ({
-                                        ...base,
-                                        color: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
-                                        transition: 'all 0.2s',
-                                        transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                                        '&:hover': {
-                                            color: document.documentElement.classList.contains('dark') ? '#d1d5db' : '#374151',
-                                        }
-                                    }),
-                                }}
-                                formatOptionLabel={({ label, status }) => (
-                                    <div className="flex items-center">
-                                        {status === 'Open' && (
-                                            <span className="relative flex h-2 w-2 mr-3">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                            </span>
-                                        )}
-                                        <span>{label}</span>
-                                    </div>
-                                )}
+                                value={selectedPeriod}
+                                onChange={setSelectedPeriod}
                             />
                         </div>
                     </div>
                 </div>
 
                 {activePeriodData && (
-                    <div className="space-y-3">
-                        {activePeriodData.tasks.map((task, index) => {
-                            let values: ObservationValueMap = task.status === 'Completado' ? task.submittedValues : task.draftValues;
-                            // Fusionar borradores de localStorage si tienen más progreso que el backend
-                            if (task.status !== 'Completado') {
-                                try {
-                                    const localDraft: ObservationValueMap = JSON.parse(localStorage.getItem(`draft_${task.observationUnitId}`) || '{}');
-                                    const localCount = Object.values(localDraft).filter(hasValidValue).length;
-                                    const serverCount = Object.values(values).filter(hasValidValue).length;
-                                    if (localCount > serverCount) values = localDraft;
-                                } catch { /* ignorar errores de parse */ }
-                            }
-                            const completedCount = Object.values(values).filter(hasValidValue).length;
-                            const totalCount = staticData.variables.length;
-                            const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-                            const isTaskActive = activeObservationUnit === task.observationUnitId;
-
-                            const ActionButton = () => {
-                                if (activePeriodData.status !== 'Open') return null;
-                                if (task.status === 'Completado') {
-                                    return <button disabled className="w-full px-4 py-3 mb-4 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-md cursor-not-allowed"><CheckCircle size={16} className="mr-2"/> Registro Enviado</button>;
+                    <>
+                        <hr className="hr" />
+                        <Accordion
+                            type="single"
+                            collapsible
+                            className="gap-3 mt-3"
+                            value={openTaskId}
+                            onValueChange={(v) => setOpenTaskId(v || undefined)}
+                        >
+                            {activePeriodData.tasks.map((task, index) => {
+                                let values: ObservationValueMap = task.status === 'Completado' ? task.submittedValues : task.draftValues;
+                                // Fusionar borradores de localStorage si tienen más progreso que el backend
+                                if (task.status !== 'Completado') {
+                                    try {
+                                        const localDraft: ObservationValueMap = JSON.parse(localStorage.getItem(`draft_${task.observationUnitId}`) || '{}');
+                                        const localCount = Object.values(localDraft).filter(hasValidValue).length;
+                                        const serverCount = Object.values(values).filter(hasValidValue).length;
+                                        if (localCount > serverCount) values = localDraft;
+                                    } catch { /* ignorar errores de parse */ }
                                 }
-                                return <button onClick={() => setEditingObservationUnit({ id: task.observationUnitId, name: task.observationUnitName, initialDraft: task.draftValues })} className="w-full px-4 py-3 mb-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition flex items-center justify-center shadow-md"><Edit3 size={16} className="mr-2"/> {task.status === 'En Proceso' ? 'Continuar Registro' : 'Iniciar Registro'}</button>;
-                            };
+                                const completedCount = Object.values(values).filter(hasValidValue).length;
+                                const totalCount = staticData.variables.length;
+                                const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+                                const itemValue = String(task.observationUnitId);
 
-                            return (
-                                <div
-                                    key={task.observationUnitId}
-                                    className={`transition-all duration-300 p-2 rounded-2xl animate-fade-in ${
-                                        isTaskActive
-                                            ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 shadow-lg ring-2 ring-blue-300 dark:ring-blue-500'
-                                            : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 hover:shadow-md'
-                                    }`}
-                                    style={{ animationDelay: `${index * 0.1}s` }}
-                                >
-                                    <button
-                                        onClick={() => setActiveObservationUnit(prev => prev === task.observationUnitId ? null : task.observationUnitId)}
-                                        className="w-full flex justify-between items-center p-3 text-left rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        aria-expanded={isTaskActive}
-                                        aria-label={`${task.observationUnitName} - ${task.status} - ${completedCount} de ${totalCount} variables registradas`}
+                                const ActionButton = () => {
+                                    if (activePeriodData.status !== 'Open') return null;
+                                    if (task.status === 'Completado') {
+                                        return <button disabled className="btn btn-secondary btn-block mb-1"><CheckCircle size={16} /> Registro Enviado</button>;
+                                    }
+                                    return <button onClick={() => setEditingObservationUnit({ id: task.observationUnitId, name: task.observationUnitName, initialDraft: task.draftValues })} className="btn btn-primary btn-block mb-1"><Edit3 size={16} /> {task.status === 'En Proceso' ? 'Continuar Registro' : 'Iniciar Registro'}</button>;
+                                };
+
+                                return (
+                                    <AccordionItem
+                                        key={task.observationUnitId}
+                                        value={itemValue}
+                                        className={`card elev-sm p-3 animate-fade-in ${openTaskId === itemValue ? 'ring-1 ring-accent/50' : ''}`}
+                                        style={{ animationDelay: `${index * 0.1}s` }}
                                     >
-                                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                                            <CircularProgress percentage={percentage} />
-                                            <div className="min-w-0 flex-1">
-                                                <h3 className="font-bold text-base sm:text-lg text-gray-800 dark:text-gray-100 truncate">{task.observationUnitName}</h3>
-                                                <p className={`font-semibold text-xs sm:text-sm ${task.status === 'Completado' ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>{completedCount} / {totalCount} variables</p>
-                                            </div>
-                                        </div>
-                                        <ChevronRight size={20} className={`transition-transform text-gray-500 dark:text-gray-400 flex-shrink-0 ${isTaskActive ? 'rotate-90' : ''}`} aria-hidden="true" />
-                                    </button>
-                                    {isTaskActive && (
-                                        <div className="p-3 animate-fade-in">
+                                        <AccordionTrigger
+                                            aria-label={`${task.observationUnitName} - ${task.status} - ${completedCount} de ${totalCount} variables registradas`}
+                                        >
+                                            <span className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                                                <CircularProgress percentage={percentage} status={task.status} />
+                                                <span className="min-w-0 flex-1 text-left">
+                                                    <span className="card-title text-base sm:text-lg truncate block">{task.observationUnitName}</span>
+                                                    <span className={`tag mt-1 ${task.status === 'Completado' ? 'tag-accent' : task.status === 'En Proceso' ? 'tag-outline' : 'tag-neutral'}`}>
+                                                        {task.status === 'Completado' ? 'Completado' : task.status === 'En Proceso' ? 'En proceso' : 'Pendiente'}
+                                                    </span>
+                                                    <span className="text-muted text-xs sm:text-sm mt-1 block">{completedCount} / {totalCount} variables</span>
+                                                </span>
+                                            </span>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
                                             <ActionButton />
                                             <RegistrationSummary
                                                 variables={staticData.variables}
@@ -440,12 +339,12 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                                                 values={values}
                                                 title={task.status === 'Completado' ? 'Valores Enviados' : 'Progreso de Registro'}
                                             />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                );
+                            })}
+                        </Accordion>
+                    </>
                 )}
             </div>
 

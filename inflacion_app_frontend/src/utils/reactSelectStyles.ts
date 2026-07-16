@@ -1,54 +1,58 @@
 import type { StylesConfig } from 'react-select';
 
-export const getReactSelectStyles = <Option = unknown>(isDark: boolean): StylesConfig<Option, boolean> => ({
+// App is dark-only (Nocturne, ThemeContext forces `.dark` permanently) --
+// no light/dark branching needed, just the Nocturne token set.
+export const getReactSelectStyles = <Option = unknown>(): StylesConfig<Option, boolean> => ({
     control: (provided, state) => ({
         ...provided,
-        backgroundColor: isDark ? '#374151' : '#f9fafb',
-        borderColor: isDark ? (state.isFocused ? '#3b82f6' : '#4b5563') : (state.isFocused ? '#3b82f6' : '#e5e7eb'),
+        backgroundColor: 'var(--color-surface)',
+        borderColor: state.isFocused ? 'var(--color-accent)' : 'var(--color-divider)',
         borderWidth: '1px',
-        borderRadius: '0.5rem',
-        boxShadow: state.isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
+        borderRadius: 'var(--nc-radius-md)',
+        boxShadow: state.isFocused ? '0 0 0 2px color-mix(in srgb, var(--color-accent) 30%, transparent)' : 'none',
         '&:hover': {
-            borderColor: isDark ? '#60a5fa' : '#93c5fd',
+            borderColor: 'var(--color-accent)',
         }
     }),
     singleValue: (provided) => ({
         ...provided,
-        color: isDark ? '#f3f4f6' : '#1f2937',
+        color: 'var(--color-ink)',
     }),
     input: (provided) => ({
         ...provided,
-        color: isDark ? '#f3f4f6' : '#1f2937',
+        color: 'var(--color-ink)',
     }),
     menu: (provided) => ({
         ...provided,
-        backgroundColor: isDark ? '#1f2937' : '#ffffff',
-        borderRadius: '0.5rem',
-        border: isDark ? '1px solid #374151' : '1px solid #e5e7eb',
+        backgroundColor: 'var(--color-surface)',
+        borderRadius: 'var(--nc-radius-md)',
+        border: '1px solid var(--color-divider)',
+        boxShadow: 'var(--nc-shadow-md)',
     }),
     option: (provided, state) => ({
         ...provided,
         backgroundColor: state.isSelected
-            ? (isDark ? '#3b82f6' : '#3b82f6')
+            ? 'var(--color-accent-800)'
             : state.isFocused
-                ? (isDark ? '#374151' : '#eff6ff')
+                ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)'
                 : 'transparent',
-        color: state.isSelected ? '#ffffff' : (isDark ? '#f3f4f6' : '#1f2937'),
+        color: state.isSelected ? 'var(--color-accent-100)' : 'var(--color-ink)',
         cursor: 'pointer',
         '&:active': {
-            backgroundColor: isDark ? '#2563eb' : '#2563eb',
+            backgroundColor: 'var(--color-accent-800)',
         }
     }),
     placeholder: (provided) => ({
         ...provided,
-        color: isDark ? '#9ca3af' : '#6b7280',
+        color: 'color-mix(in srgb, var(--color-ink) 55%, transparent)',
     }),
     multiValue: (provided) => ({
         ...provided,
-        backgroundColor: isDark ? '#374151' : '#e5e7eb',
+        backgroundColor: 'var(--color-accent-800)',
+        borderRadius: 'calc(var(--nc-radius-md) * 0.75)',
     }),
     multiValueLabel: (provided) => ({
         ...provided,
-        color: isDark ? '#f3f4f6' : '#1f2937',
+        color: 'var(--color-accent-100)',
     }),
 });

@@ -8,6 +8,10 @@ import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Pagination } from '../ui/Pagination';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { DistributionChartModal } from '../ui/DistributionChartModal';
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '../ui/alert-dialog';
+import { Button } from '../ui/button';
 import type {
     CreateVariablePayload,
     StudentTasksResponse,
@@ -487,67 +491,52 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
         setConfigOptionDraft('');
     };
 
+    const SortIcon = ({ sortKey }: { sortKey: SortKey }) =>
+        sortConfig.key === sortKey ? (
+            sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+        ) : (
+            <ArrowUpDown size={14} className="text-muted opacity-40" />
+        );
+
     return (
         <>
             <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Variables y Campos de Estudio' }]} />
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in">
+            <div className="card elev-sm p-6 space-y-4">
                 {/* Tabs */}
-                <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-                    <button
-                        onClick={() => setActiveTab('variables')}
-                        disabled={editingItem.id !== null}
-                        className={`px-4 py-2 font-semibold transition border-b-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            activeTab === 'variables'
-                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <VariableIcon size={18} />
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+                    <TabsList>
+                        <TabsTrigger value="variables" disabled={editingItem.id !== null}>
+                            <VariableIcon size={16} />
                             Variables
-                        </div>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('study-fields')}
-                        disabled={editingItem.id !== null}
-                        className={`px-4 py-2 font-semibold transition border-b-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            activeTab === 'study-fields'
-                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Tag size={18} />
+                        </TabsTrigger>
+                        <TabsTrigger value="study-fields" disabled={editingItem.id !== null}>
+                            <Tag size={16} />
                             Campos de Estudio
-                        </div>
-                    </button>
-                </div>
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
 
                 {/* Header with Search and Add Button */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                    <h3 className="text-lg font-medium text-ink">
                         {activeTab === 'study-fields' ? 'Campos de Estudio' : 'Variables'}
                     </h3>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         <div className="relative flex-1 sm:flex-initial">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
                             <input
                                 type="text"
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 disabled={editingItem.id !== null}
                                 placeholder={editingItem.id ? "Finaliza la edición para buscar" : "Buscar..."}
-                                className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="input pl-10 w-full sm:w-64"
                             />
                         </div>
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            disabled={editingItem.id !== null}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                        >
+                        <Button onClick={() => setShowAddModal(true)} disabled={editingItem.id !== null}>
                             <Plus size={18} />
                             <span className="hidden sm:inline">Agregar</span>
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -560,34 +549,34 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
-                                        <th onClick={() => handleSort('id')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
+                                        <th onClick={() => handleSort('id')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
                                             <div className="flex items-center gap-2">
                                                 ID
-                                                {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}
+                                                <SortIcon sortKey="id" />
                                             </div>
                                         </th>
-                                        <th onClick={() => handleSort('name')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                        <th onClick={() => handleSort('name')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
                                             <div className="flex items-center gap-2">
                                                 Nombre
-                                                {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}
+                                                <SortIcon sortKey="name" />
                                             </div>
                                         </th>
-                                        <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-right">Acciones</th>
+                                        <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {paginatedStudyFields.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                            <td colSpan={3} className="text-center py-8 text-muted">
                                                 {searchTerm ? 'No se encontraron resultados' : 'No hay campos de estudio registrados'}
                                             </td>
                                         </tr>
                                     ) : (
                                         paginatedStudyFields.map(studyField => (
-                                        <tr key={studyField.id} className={`border-b border-gray-100 dark:border-gray-700 last:border-none transition-all ${editingItem.id === studyField.id ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 dark:ring-blue-400 ring-inset' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
-                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{studyField.id}</td>
-                                            <td className="py-3 px-4 text-gray-800 dark:text-gray-200">
+                                        <tr key={studyField.id} className={`border-b last:border-none transition-colors ${editingItem.id === studyField.id ? 'bg-accent-800/20 ring-1 ring-accent ring-inset' : 'hover:bg-accent-800/10'}`} style={{ borderColor: 'var(--color-divider)' }}>
+                                            <td className="py-3 px-4 text-muted">{studyField.id}</td>
+                                            <td className="py-3 px-4 text-ink">
                                                 {editingItem.id === studyField.id ? (
                                                     <input
                                                         ref={editInputRef}
@@ -598,21 +587,21 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                                             if (e.key === 'Enter') handleSaveStudyFieldEdit();
                                                             if (e.key === 'Escape') cancelEditing();
                                                         }}
-                                                        className="w-full p-2 border-2 border-blue-500 dark:border-blue-400 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="input"
                                                     />
                                                 ) : studyField.name}
                                             </td>
                                             <td className="py-3 px-4">
-                                                <div className="flex items-center justify-end gap-2">
+                                                <div className="flex items-center justify-end gap-1">
                                                     {editingItem.id === studyField.id ? (
                                                         <>
-                                                            <button onClick={handleSaveStudyFieldEdit} className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors" title="Guardar"><Check size={18} /></button>
-                                                            <button onClick={cancelEditing} className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Cancelar"><X size={18} /></button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={handleSaveStudyFieldEdit} className="text-success hover:bg-success/10" title="Guardar"><Check size={18} /></Button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar"><X size={18} /></Button>
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <button onClick={() => startEditingStudyField(studyField)} disabled={editingItem.id !== null} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={18} /></button>
-                                                            <button onClick={() => confirmDeleteStudyField(studyField)} disabled={editingItem.id !== null} className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Eliminar"><Trash2 size={18} /></button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => startEditingStudyField(studyField)} disabled={editingItem.id !== null} className="text-accent-300" title="Editar"><Edit size={18} /></Button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => confirmDeleteStudyField(studyField)} disabled={editingItem.id !== null} className="text-danger hover:bg-danger/10" title="Eliminar"><Trash2 size={18} /></Button>
                                                         </>
                                                     )}
                                                 </div>
@@ -633,37 +622,37 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
-                                        <th onClick={() => handleSort('id')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <div className="flex items-center gap-2">ID {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}</div>
+                                    <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
+                                        <th onClick={() => handleSort('id')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                            <div className="flex items-center gap-2">ID <SortIcon sortKey="id" /></div>
                                         </th>
-                                        <th onClick={() => handleSort('name')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <div className="flex items-center gap-2">Nombre {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}</div>
+                                        <th onClick={() => handleSort('name')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                            <div className="flex items-center gap-2">Nombre <SortIcon sortKey="name" /></div>
                                         </th>
-                                        <th onClick={() => handleSort('dataType')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <div className="flex items-center gap-2">Tipo {sortConfig.key === 'dataType' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}</div>
+                                        <th onClick={() => handleSort('dataType')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                            <div className="flex items-center gap-2">Tipo <SortIcon sortKey="dataType" /></div>
                                         </th>
-                                        <th onClick={() => handleSort('unit')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <div className="flex items-center gap-2">Unidad {sortConfig.key === 'unit' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}</div>
+                                        <th onClick={() => handleSort('unit')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                            <div className="flex items-center gap-2">Unidad <SortIcon sortKey="unit" /></div>
                                         </th>
-                                        <th onClick={() => handleSort('studyFieldName')} className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <div className="flex items-center gap-2">Campo de Estudio {sortConfig.key === 'studyFieldName' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />) : (<ArrowUpDown size={14} className="opacity-40" />)}</div>
+                                        <th onClick={() => handleSort('studyFieldName')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                            <div className="flex items-center gap-2">Campo de Estudio <SortIcon sortKey="studyFieldName" /></div>
                                         </th>
-                                        <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-right">Acciones</th>
+                                        <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {paginatedVariables.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                            <td colSpan={6} className="text-center py-8 text-muted">
                                                 {searchTerm ? 'No se encontraron resultados' : 'No hay variables registradas'}
                                             </td>
                                         </tr>
                                     ) : (
                                         paginatedVariables.map(variable => (
-                                        <tr key={variable.id} className={`border-b border-gray-100 dark:border-gray-700 last:border-none transition-all ${editingItem.id === variable.id ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 dark:ring-blue-400 ring-inset' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
-                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{variable.id}</td>
-                                            <td className="py-3 px-4 text-gray-800 dark:text-gray-200">
+                                        <tr key={variable.id} className={`border-b last:border-none transition-colors ${editingItem.id === variable.id ? 'bg-accent-800/20 ring-1 ring-accent ring-inset' : 'hover:bg-accent-800/10'}`} style={{ borderColor: 'var(--color-divider)' }}>
+                                            <td className="py-3 px-4 text-muted">{variable.id}</td>
+                                            <td className="py-3 px-4 text-ink">
                                                 {editingItem.id === variable.id ? (
                                                     <input
                                                         ref={editInputRef}
@@ -674,16 +663,16 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                                             if (e.key === 'Enter') handleSaveVariableEdit();
                                                             if (e.key === 'Escape') cancelEditing();
                                                         }}
-                                                        className="w-full p-2 border-2 border-blue-500 dark:border-blue-400 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="input"
                                                     />
                                                 ) : variable.name}
                                             </td>
-                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
-                                                <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded" title={configSummary(variable)}>
+                                            <td className="py-3 px-4 text-muted">
+                                                <span className="tag tag-neutral" title={configSummary(variable)}>
                                                     {DATA_TYPE_LABELS[variable.dataType]}
                                                 </span>
                                             </td>
-                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
+                                            <td className="py-3 px-4 text-muted">
                                                 {editingItem.id === variable.id ? (
                                                     <input
                                                         type="text"
@@ -694,30 +683,30 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                                             if (e.key === 'Escape') cancelEditing();
                                                         }}
                                                         placeholder="ej: 1 kg"
-                                                        className="w-full p-2 border-2 border-blue-500 dark:border-blue-400 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="input"
                                                     />
                                                 ) : (variable.unit || 'N/A')}
                                             </td>
-                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
+                                            <td className="py-3 px-4 text-muted">
                                                 {studyFields.find(f => f.id === variable.studyFieldId)?.name || 'N/A'}
                                             </td>
                                             <td className="py-3 px-4">
-                                                <div className="flex items-center justify-end gap-2">
+                                                <div className="flex items-center justify-end gap-1">
                                                     {editingItem.id === variable.id ? (
                                                         <>
-                                                            <button onClick={handleSaveVariableEdit} className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors" title="Guardar"><Check size={18} /></button>
-                                                            <button onClick={cancelEditing} className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Cancelar"><X size={18} /></button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={handleSaveVariableEdit} className="text-success hover:bg-success/10" title="Guardar"><Check size={18} /></Button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar"><X size={18} /></Button>
                                                         </>
                                                     ) : (
                                                         <>
                                                             {(variable.dataType === 'categorical' || variable.dataType === 'boolean') && (
-                                                                <button onClick={() => setDistributionTarget(variable)} disabled={editingItem.id !== null} className="p-2 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Ver distribución"><AreaChart size={18} /></button>
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => setDistributionTarget(variable)} disabled={editingItem.id !== null} className="text-muted hover:text-ink" title="Ver distribución"><AreaChart size={18} /></Button>
                                                             )}
                                                             {variable.dataType !== 'boolean' && (
-                                                                <button onClick={() => openConfigEditor(variable)} disabled={editingItem.id !== null} className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar configuración"><Settings size={18} /></button>
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => openConfigEditor(variable)} disabled={editingItem.id !== null} className="text-muted hover:text-ink" title="Editar configuración"><Settings size={18} /></Button>
                                                             )}
-                                                            <button onClick={() => startEditingVariable(variable)} disabled={editingItem.id !== null} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Editar"><Edit size={18} /></button>
-                                                            <button onClick={() => confirmDeleteVariable(variable)} disabled={editingItem.id !== null} className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Eliminar"><Trash2 size={18} /></button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => startEditingVariable(variable)} disabled={editingItem.id !== null} className="text-accent-300" title="Editar"><Edit size={18} /></Button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={() => confirmDeleteVariable(variable)} disabled={editingItem.id !== null} className="text-danger hover:bg-danger/10" title="Eliminar"><Trash2 size={18} /></Button>
                                                         </>
                                                     )}
                                                 </div>
@@ -736,245 +725,224 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
             </div>
 
             {/* Add Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">
-                            Agregar {activeTab === 'study-fields' ? 'Campo de Estudio' : 'Variable'}
-                        </h3>
+            <Dialog open={showAddModal} onOpenChange={(open) => { setShowAddModal(open); if (!open) resetAddForm(); }}>
+                <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-md sm:max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogTitle className="text-xl font-medium text-ink">
+                        Agregar {activeTab === 'study-fields' ? 'Campo de Estudio' : 'Variable'}
+                    </DialogTitle>
 
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nombre</label>
-                                <input
-                                    type="text"
-                                    value={newItemName}
-                                    onChange={e => setNewItemName(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && activeTab === 'study-fields') handleAddStudyField();
-                                    }}
-                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder={`Nombre de ${activeTab === 'study-fields' ? 'el campo de estudio' : 'la variable'}`}
-                                    autoFocus
-                                />
-                            </div>
-
-                            {activeTab === 'variables' && (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Tipo de Dato</label>
-                                        <select
-                                            value={newItemDataType}
-                                            onChange={e => setNewItemDataType(e.target.value as VariableDataType)}
-                                            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        >
-                                            {(Object.keys(DATA_TYPE_LABELS) as VariableDataType[]).map(dt => (
-                                                <option key={dt} value={dt}>{DATA_TYPE_LABELS[dt]}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Unidad de Medida (opcional)</label>
-                                        <input
-                                            type="text"
-                                            value={newItemUnit}
-                                            onChange={e => setNewItemUnit(e.target.value)}
-                                            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="ej: 1 kg, 500 g, °C"
-                                        />
-                                    </div>
-
-                                    {newItemDataType === 'numeric' && (
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={newItemIsCurrency}
-                                                onChange={e => setNewItemIsCurrency(e.target.checked)}
-                                                className="h-4 w-4 rounded form-checkbox text-blue-600"
-                                            />
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">Es un valor monetario (₲)</span>
-                                        </label>
-                                    )}
-
-                                    {newItemDataType === 'categorical' && (
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Opciones (mínimo 2)</label>
-                                            <div className="flex gap-2 mb-2">
-                                                <input
-                                                    type="text"
-                                                    value={newItemOptionDraft}
-                                                    onChange={e => setNewItemOptionDraft(e.target.value)}
-                                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOptionDraft(); } }}
-                                                    className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Agregar opción..."
-                                                />
-                                                <button type="button" onClick={addOptionDraft} className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-                                                    <Plus size={16} />
-                                                </button>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {newItemOptions.map(opt => (
-                                                    <span key={opt} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-sm">
-                                                        {opt}
-                                                        <button type="button" onClick={() => setNewItemOptions(prev => prev.filter(o => o !== opt))}><X size={12} /></button>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {newItemDataType === 'text' && (
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Largo máximo (opcional)</label>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                value={newItemMaxLength}
-                                                onChange={e => setNewItemMaxLength(e.target.value)}
-                                                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="ej: 500"
-                                            />
-                                        </div>
-                                    )}
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Campo de Estudio</label>
-                                        <Select<StudyFieldOption>
-                                            value={selectedStudyField}
-                                            onChange={(option) => setSelectedStudyField(option)}
-                                            options={studyFieldOptions}
-                                            placeholder="Seleccionar campo de estudio"
-                                            className="text-gray-800"
-                                            styles={getReactSelectStyles<StudyFieldOption>(document.documentElement.classList.contains('dark'))}
-                                        />
-                                    </div>
-                                </>
-                            )}
+                    <div className="space-y-3">
+                        <div className="field">
+                            <label>Nombre</label>
+                            <input
+                                type="text"
+                                value={newItemName}
+                                onChange={e => setNewItemName(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && activeTab === 'study-fields') handleAddStudyField();
+                                }}
+                                className="input"
+                                placeholder={`Nombre de ${activeTab === 'study-fields' ? 'el campo de estudio' : 'la variable'}`}
+                                autoFocus
+                            />
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button
-                                onClick={() => { setShowAddModal(false); resetAddForm(); }}
-                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={activeTab === 'study-fields' ? handleAddStudyField : handleAddVariable}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                            >
-                                Agregar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                        {activeTab === 'variables' && (
+                            <>
+                                <div className="field">
+                                    <label>Tipo de Dato</label>
+                                    <select
+                                        value={newItemDataType}
+                                        onChange={e => setNewItemDataType(e.target.value as VariableDataType)}
+                                        className="input"
+                                    >
+                                        {(Object.keys(DATA_TYPE_LABELS) as VariableDataType[]).map(dt => (
+                                            <option key={dt} value={dt}>{DATA_TYPE_LABELS[dt]}</option>
+                                        ))}
+                                    </select>
+                                </div>
 
-            {/* Config Edit Modal */}
-            {configTarget && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">
-                            Configuración de "{configTarget.name}"
-                        </h3>
-
-                        {configTarget.dataType === 'numeric' && (
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={configIsCurrency} onChange={e => setConfigIsCurrency(e.target.checked)} className="h-4 w-4 rounded form-checkbox text-blue-600" />
-                                <span className="text-sm text-gray-700 dark:text-gray-300">Es un valor monetario (₲)</span>
-                            </label>
-                        )}
-
-                        {configTarget.dataType === 'categorical' && (
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Opciones (mínimo 2)</label>
-                                <div className="flex gap-2 mb-2">
+                                <div className="field">
+                                    <label>Unidad de Medida (opcional)</label>
                                     <input
                                         type="text"
-                                        value={configOptionDraft}
-                                        onChange={e => setConfigOptionDraft(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addConfigOptionDraft(); } }}
-                                        className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Agregar opción..."
+                                        value={newItemUnit}
+                                        onChange={e => setNewItemUnit(e.target.value)}
+                                        className="input"
+                                        placeholder="ej: 1 kg, 500 g, °C"
                                     />
-                                    <button type="button" onClick={addConfigOptionDraft} className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-                                        <Plus size={16} />
-                                    </button>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {configOptions.map(opt => (
-                                        <span key={opt} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-sm">
-                                            {opt}
-                                            <button type="button" onClick={() => setConfigOptions(prev => prev.filter(o => o !== opt))}><X size={12} /></button>
-                                        </span>
-                                    ))}
+
+                                {newItemDataType === 'numeric' && (
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newItemIsCurrency}
+                                            onChange={e => setNewItemIsCurrency(e.target.checked)}
+                                            className="h-4 w-4 rounded accent-accent"
+                                        />
+                                        <span className="text-sm text-ink">Es un valor monetario (₲)</span>
+                                    </label>
+                                )}
+
+                                {newItemDataType === 'categorical' && (
+                                    <div className="field">
+                                        <label>Opciones (mínimo 2)</label>
+                                        <div className="flex gap-2 mb-2">
+                                            <input
+                                                type="text"
+                                                value={newItemOptionDraft}
+                                                onChange={e => setNewItemOptionDraft(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOptionDraft(); } }}
+                                                className="input flex-1"
+                                                placeholder="Agregar opción..."
+                                            />
+                                            <Button type="button" variant="secondary" size="icon" onClick={addOptionDraft}>
+                                                <Plus size={16} />
+                                            </Button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {newItemOptions.map(opt => (
+                                                <span key={opt} className="tag tag-accent inline-flex items-center gap-1">
+                                                    {opt}
+                                                    <button type="button" onClick={() => setNewItemOptions(prev => prev.filter(o => o !== opt))}><X size={12} /></button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {newItemDataType === 'text' && (
+                                    <div className="field">
+                                        <label>Largo máximo (opcional)</label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={newItemMaxLength}
+                                            onChange={e => setNewItemMaxLength(e.target.value)}
+                                            className="input"
+                                            placeholder="ej: 500"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="field">
+                                    <label>Campo de Estudio</label>
+                                    <Select<StudyFieldOption>
+                                        value={selectedStudyField}
+                                        onChange={(option) => setSelectedStudyField(option)}
+                                        options={studyFieldOptions}
+                                        placeholder="Seleccionar campo de estudio"
+                                        styles={getReactSelectStyles<StudyFieldOption>()}
+                                    />
                                 </div>
-                            </div>
+                            </>
                         )}
-
-                        {configTarget.dataType === 'text' && (
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Largo máximo (opcional)</label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={configMaxLength}
-                                    onChange={e => setConfigMaxLength(e.target.value)}
-                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                        )}
-
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={closeConfigEditor} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">Cancelar</button>
-                            <button onClick={handleSaveConfig} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">Guardar</button>
-                        </div>
                     </div>
-                </div>
-            )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="secondary" onClick={() => { setShowAddModal(false); resetAddForm(); }}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={activeTab === 'study-fields' ? handleAddStudyField : handleAddVariable}>
+                            Agregar
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Config Edit Modal */}
+            <Dialog open={configTarget !== null} onOpenChange={(open) => { if (!open) closeConfigEditor(); }}>
+                <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-md sm:max-w-md">
+                    <DialogTitle className="text-xl font-medium text-ink">
+                        Configuración de "{configTarget?.name}"
+                    </DialogTitle>
+
+                    {configTarget?.dataType === 'numeric' && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={configIsCurrency} onChange={e => setConfigIsCurrency(e.target.checked)} className="h-4 w-4 rounded accent-accent" />
+                            <span className="text-sm text-ink">Es un valor monetario (₲)</span>
+                        </label>
+                    )}
+
+                    {configTarget?.dataType === 'categorical' && (
+                        <div className="field">
+                            <label>Opciones (mínimo 2)</label>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="text"
+                                    value={configOptionDraft}
+                                    onChange={e => setConfigOptionDraft(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addConfigOptionDraft(); } }}
+                                    className="input flex-1"
+                                    placeholder="Agregar opción..."
+                                />
+                                <Button type="button" variant="secondary" size="icon" onClick={addConfigOptionDraft}>
+                                    <Plus size={16} />
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {configOptions.map(opt => (
+                                    <span key={opt} className="tag tag-accent inline-flex items-center gap-1">
+                                        {opt}
+                                        <button type="button" onClick={() => setConfigOptions(prev => prev.filter(o => o !== opt))}><X size={12} /></button>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {configTarget?.dataType === 'text' && (
+                        <div className="field">
+                            <label>Largo máximo (opcional)</label>
+                            <input
+                                type="number"
+                                min={1}
+                                value={configMaxLength}
+                                onChange={e => setConfigMaxLength(e.target.value)}
+                                className="input"
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="secondary" onClick={closeConfigEditor}>Cancelar</Button>
+                        <Button onClick={handleSaveConfig}>Guardar</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Delete Confirmation Modal */}
-            {showDeleteModal && itemToDelete && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-                        <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
-                            <AlertTriangle size={24} />
-                            <h3 className="text-xl font-bold">Confirmar Eliminación</h3>
-                        </div>
-
-                        <p className="text-gray-700 dark:text-gray-300">
+            <AlertDialog open={showDeleteModal} onOpenChange={(open) => { if (!open) { setShowDeleteModal(false); setItemToDelete(null); } }}>
+                <AlertDialogContent className="rounded-[var(--nc-radius-lg)]">
+                    <AlertDialogHeader>
+                        <AlertDialogMedia className="text-danger" style={{ background: 'color-mix(in srgb, var(--color-danger) 15%, transparent)' }}>
+                            <AlertTriangle size={20} />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle className="text-ink">Confirmar Eliminación</AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted">
                             ¿Estás seguro de que deseas eliminar {activeTab === 'study-fields' ? 'el campo de estudio' : 'la variable'}{' '}
-                            <strong>{itemToDelete.name}</strong>?
+                            <strong className="text-ink">{itemToDelete?.name}</strong>?
                             {activeTab === 'study-fields' && (
-                                <span className="block mt-2 text-sm text-red-600 dark:text-red-400">
+                                <span className="block mt-2 text-xs text-danger">
                                     Advertencia: Esto puede afectar variables asociadas a este campo de estudio.
                                 </span>
                             )}
-                            {activeTab === 'variables' && isVariable(itemToDelete) && (
-                                <span className="block mt-2 text-sm text-red-600 dark:text-red-400">
+                            {activeTab === 'variables' && itemToDelete && isVariable(itemToDelete) && (
+                                <span className="block mt-2 text-xs text-danger">
                                     Advertencia: no se puede eliminar si ya tiene observaciones registradas (se preservan los datos históricos).
                                 </span>
                             )}
-                        </p>
-
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button
-                                onClick={() => { setShowDeleteModal(false); setItemToDelete(null); }}
-                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={activeTab === 'study-fields' ? handleDeleteStudyField : handleDeleteVariable}
-                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                            >
-                                Eliminar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={activeTab === 'study-fields' ? handleDeleteStudyField : handleDeleteVariable}>
+                            Eliminar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             <DistributionChartModal
                 isOpen={distributionTarget !== null}

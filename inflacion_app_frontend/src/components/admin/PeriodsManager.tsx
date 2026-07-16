@@ -7,6 +7,8 @@ import { TableSkeleton } from '../ui/TableSkeleton';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { Pagination } from '../ui/Pagination';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { Button } from '../ui/button';
 import type { CreatePeriodPayload, Period } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -181,9 +183,9 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
 
     const getStatusBadge = (status: string) => {
         const styles: Record<string, string> = {
-            'Open': 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
-            'Closed': 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
-            'Scheduled': 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+            'Open': 'tag-accent',
+            'Closed': 'tag-neutral',
+            'Scheduled': 'border border-accent text-accent-300'
         };
         const tooltips: Record<string, string> = {
             'Open': 'Período activo - Los estudiantes pueden registrar observaciones',
@@ -192,7 +194,7 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
         };
         return (
             <Tooltip content={tooltips[status]}>
-                <span className={`px-3 py-1 text-xs font-bold rounded-full ${styles[status]}`}>{status}</span>
+                <span className={`tag ${styles[status]}`}>{status}</span>
             </Tooltip>
         );
     };
@@ -236,111 +238,36 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
         setCurrentPage(1);
     }, [searchTerm]);
 
+    const SortIcon = ({ sortKey }: { sortKey: SortKey }) =>
+        sortConfig.key === sortKey ? (
+            sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+        ) : (
+            <ArrowUpDown size={14} className="text-muted opacity-40" />
+        );
+
     return (
         <div className="space-y-6">
             <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Períodos' }]} />
 
-            {/* Create Period Form */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                        {showCreateForm ? 'Crear Nuevo Período' : 'Períodos de Recolección'}
-                    </h3>
-                    {!showCreateForm && (
-                        <button
-                            onClick={() => setShowCreateForm(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                        >
-                            <Plus size={18} />
-                            Nuevo Período
-                        </button>
-                    )}
-                </div>
-
-                {showCreateForm && (
-                    <form onSubmit={handleCreatePeriod} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Mes</label>
-                                <select
-                                    value={newPeriod.month}
-                                    onChange={e => setNewPeriod({...newPeriod, month: parseInt(e.target.value)})}
-                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-full"
-                                >
-                                    {months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Año</label>
-                                <select
-                                    value={newPeriod.year}
-                                    onChange={e => setNewPeriod({...newPeriod, year: parseInt(e.target.value)})}
-                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-full"
-                                >
-                                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Fecha Inicio</label>
-                                <input
-                                    type="date"
-                                    value={newPeriod.start_date}
-                                    onChange={e => setNewPeriod({...newPeriod, start_date: e.target.value})}
-                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg w-full bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">Fecha Fin</label>
-                                <input
-                                    type="date"
-                                    value={newPeriod.end_date}
-                                    onChange={e => setNewPeriod({...newPeriod, end_date: e.target.value})}
-                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg w-full bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                                    required
-                                />
-                            </div>
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setShowCreateForm(false)}
-                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={isCreating}
-                                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition flex items-center gap-2"
-                            >
-                                {isCreating ? (
-                                    <>
-                                        <Loader className="animate-spin" size={16} />
-                                        Creando...
-                                    </>
-                                ) : (
-                                    'Crear Período'
-                                )}
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </div>
-
             {/* Periods Table */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in space-y-4">
+            <div className="card elev-sm p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Historial de Períodos</h3>
-                    <div className="relative w-full sm:w-64">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            placeholder="Buscar períodos..."
-                            className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-                        />
+                    <h3 className="text-lg font-medium text-ink">Períodos de Recolección</h3>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:flex-initial">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                placeholder="Buscar períodos..."
+                                className="input pl-10 w-full sm:w-64"
+                            />
+                        </div>
+                        <Button onClick={() => setShowCreateForm(true)}>
+                            <Plus size={18} />
+                            <span className="hidden sm:inline">Nuevo Período</span>
+                        </Button>
                     </div>
                 </div>
 
@@ -357,65 +284,53 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-left text-sm">
                                 <thead>
-                                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
                                         <th
                                             onClick={() => handleSort('name')}
-                                            className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
                                         >
                                             <div className="flex items-center gap-2">
                                                 Nombre
-                                                {sortConfig.key === 'name' ? (
-                                                    sortConfig.direction === 'asc' ?
-                                                        <ArrowUp size={14} className="text-blue-600" /> :
-                                                        <ArrowDown size={14} className="text-blue-600" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
+                                                <SortIcon sortKey="name" />
                                             </div>
                                         </th>
                                         <th
                                             onClick={() => handleSort('status')}
-                                            className="p-3 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
                                         >
                                             <div className="flex items-center gap-2">
                                                 Estado
-                                                {sortConfig.key === 'status' ? (
-                                                    sortConfig.direction === 'asc' ?
-                                                        <ArrowUp size={14} className="text-blue-600" /> :
-                                                        <ArrowDown size={14} className="text-blue-600" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
+                                                <SortIcon sortKey="status" />
                                             </div>
                                         </th>
-                                        <th className="p-3 text-gray-500 dark:text-gray-400">Fechas</th>
-                                        <th className="p-3 text-right text-gray-500 dark:text-gray-400">Acciones</th>
+                                        <th className="p-3 font-medium text-muted">Fechas</th>
+                                        <th className="p-3 text-right font-medium text-muted">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {paginatedPeriods.map(p => (
-                                    <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-none transition-all">
-                                        <td className="p-3 font-semibold text-gray-800 dark:text-gray-100">{p.name}</td>
+                                    <tr key={p.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                        <td className="p-3 font-medium text-ink">{p.name}</td>
                                         <td className="p-3">{getStatusBadge(p.status)}</td>
                                         <td className="p-3">
                                             {editingPeriod?.id === p.id ? (
-                                                <div className="flex gap-2">
+                                                <div className="flex items-center gap-2">
                                                     <input
                                                         type="date"
                                                         value={editingPeriod.start_date}
                                                         onChange={e => setEditingPeriod({...editingPeriod, start_date: e.target.value})}
-                                                        className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-xs"
+                                                        className="input py-1 text-xs"
                                                     />
-                                                    <span className="self-center text-gray-500">-</span>
+                                                    <span className="text-muted">-</span>
                                                     <input
                                                         type="date"
                                                         value={editingPeriod.end_date}
                                                         onChange={e => setEditingPeriod({...editingPeriod, end_date: e.target.value})}
-                                                        className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-xs"
+                                                        className="input py-1 text-xs"
                                                     />
                                                 </div>
                                             ) : (
-                                                <span className="font-mono text-gray-600 dark:text-gray-400">
+                                                <span className="font-mono text-muted">
                                                     {new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}
                                                 </span>
                                             )}
@@ -424,48 +339,33 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
                                             <div className="flex items-center justify-end gap-2">
                                                 {editingPeriod?.id === p.id ? (
                                                     <>
-                                                        <button
-                                                            onClick={handleSaveEdit}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition"
-                                                        >
+                                                        <Button size="sm" onClick={handleSaveEdit}>
                                                             <Save size={14} />
                                                             Guardar
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditingPeriod(null)}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm transition"
-                                                        >
+                                                        </Button>
+                                                        <Button size="icon-sm" variant="ghost" onClick={() => setEditingPeriod(null)} className="text-muted hover:text-ink">
                                                             <X size={14} />
-                                                        </button>
+                                                        </Button>
                                                     </>
                                                 ) : (
                                                     <>
                                                         {p.status !== 'Closed' && (
-                                                            <button
-                                                                onClick={() => handleEditPeriod(p)}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors text-sm font-medium"
-                                                            >
+                                                            <Button size="icon-sm" variant="ghost" onClick={() => handleEditPeriod(p)} className="text-accent-300" title="Editar fechas">
                                                                 <Edit size={14} />
-                                                            </button>
+                                                            </Button>
                                                         )}
                                                         {p.status === 'Scheduled' && (
-                                                            <button
-                                                                onClick={() => handleUpdateStatus(p.id, 'Open')}
-                                                                className="px-3 py-1.5 bg-green-500 dark:bg-green-600 text-white rounded-lg text-sm hover:bg-green-600 dark:hover:bg-green-700 transition"
-                                                            >
+                                                            <Button size="sm" variant="ghost" onClick={() => handleUpdateStatus(p.id, 'Open')} className="text-success hover:bg-success/10">
                                                                 Abrir
-                                                            </button>
+                                                            </Button>
                                                         )}
                                                         {p.status === 'Open' && (
-                                                            <button
-                                                                onClick={() => handleUpdateStatus(p.id, 'Closed')}
-                                                                className="px-3 py-1.5 bg-red-500 dark:bg-red-600 text-white rounded-lg text-sm hover:bg-red-600 dark:hover:bg-red-700 transition"
-                                                            >
+                                                            <Button size="sm" variant="ghost" onClick={() => handleUpdateStatus(p.id, 'Closed')} className="text-danger hover:bg-danger/10">
                                                                 Cerrar
-                                                            </button>
+                                                            </Button>
                                                         )}
                                                         {p.status === 'Closed' && (
-                                                            <span className="text-gray-400 dark:text-gray-500 text-sm">Finalizado</span>
+                                                            <span className="text-muted text-sm">Finalizado</span>
                                                         )}
                                                     </>
                                                 )}
@@ -488,6 +388,72 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
                     </>
                 )}
             </div>
+
+            {/* Create Period Dialog */}
+            <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+                <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-lg sm:max-w-lg">
+                    <DialogTitle className="text-xl font-medium text-ink">Crear Nuevo Período</DialogTitle>
+                    <form onSubmit={handleCreatePeriod} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="field">
+                                <label>Mes</label>
+                                <select
+                                    value={newPeriod.month}
+                                    onChange={e => setNewPeriod({...newPeriod, month: parseInt(e.target.value)})}
+                                    className="input"
+                                >
+                                    {months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="field">
+                                <label>Año</label>
+                                <select
+                                    value={newPeriod.year}
+                                    onChange={e => setNewPeriod({...newPeriod, year: parseInt(e.target.value)})}
+                                    className="input"
+                                >
+                                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                            </div>
+                            <div className="field">
+                                <label>Fecha Inicio</label>
+                                <input
+                                    type="date"
+                                    value={newPeriod.start_date}
+                                    onChange={e => setNewPeriod({...newPeriod, start_date: e.target.value})}
+                                    className="input"
+                                    required
+                                />
+                            </div>
+                            <div className="field">
+                                <label>Fecha Fin</label>
+                                <input
+                                    type="date"
+                                    value={newPeriod.end_date}
+                                    onChange={e => setNewPeriod({...newPeriod, end_date: e.target.value})}
+                                    className="input"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3 justify-end pt-2">
+                            <Button type="button" variant="secondary" onClick={() => setShowCreateForm(false)}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" disabled={isCreating}>
+                                {isCreating ? (
+                                    <>
+                                        <Loader className="animate-spin" size={16} />
+                                        Creando...
+                                    </>
+                                ) : (
+                                    'Crear Período'
+                                )}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle } from './dialog';
 
 export interface ModalProps {
     isOpen: boolean;
@@ -8,17 +8,15 @@ export interface ModalProps {
     children: ReactNode;
 }
 
-export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                <header className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{title}</h3>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"><X size={20} /></button>
-                </header>
-                <div className="p-6">{children}</div>
-            </div>
-        </div>
-    );
-};
+// Mismo API de siempre (isOpen/onClose/title/children) -- call sites
+// (DistributionChartModal, HistoricalChartModal) sin cambios -- pero
+// implementado sobre Dialog (focus-trap, Escape, overlay reales) en vez
+// del div .fixed inset-0 a mano.
+export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => (
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-lg sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogTitle className="text-xl font-medium text-ink">{title}</DialogTitle>
+            {children}
+        </DialogContent>
+    </Dialog>
+);

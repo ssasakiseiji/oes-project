@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from '../ui/button';
 import type { User } from '../../types/api';
 
 export interface EditRolesFormProps {
@@ -16,32 +17,22 @@ export const EditRolesForm = ({ user, onSave, onCancel }: EditRolesFormProps) =>
     };
     return (
         <div className="space-y-4">
-            <div className="space-y-2">
+            <div>
                 {allRoles.map(role => (
-                    <label key={role} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900/70 transition">
+                    <label key={role} className="flex items-center gap-3 py-3 border-t first:border-t-0 cursor-pointer hover:text-accent transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
                         <input
                             type="checkbox"
                             checked={roles.includes(role)}
                             onChange={e => handleRoleChange(role, e.target.checked)}
-                            className="h-5 w-5 form-checkbox rounded text-blue-600 dark:text-blue-500 border-gray-300 dark:border-gray-600"
+                            className="h-4 w-4 rounded accent-accent"
                         />
-                        <span className="font-semibold capitalize text-gray-800 dark:text-gray-100">{role}</span>
+                        <span className="font-semibold capitalize">{role}</span>
                     </label>
                 ))}
             </div>
             <div className="flex justify-end gap-3">
-                <button
-                    onClick={onCancel}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                >
-                    Cancelar
-                </button>
-                <button
-                    onClick={() => onSave(user.id, roles)}
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition"
-                >
-                    Guardar Cambios
-                </button>
+                <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
+                <Button onClick={() => onSave(user.id, roles)}>Guardar Cambios</Button>
             </div>
         </div>
     );

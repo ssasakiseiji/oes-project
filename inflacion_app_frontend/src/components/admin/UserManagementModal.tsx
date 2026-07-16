@@ -1,6 +1,8 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
 import { X, User, Mail, Lock, Shield, Eye, EyeOff } from 'lucide-react';
 import { RoleTag } from '../ui/RoleTag';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { Button } from '../ui/button';
 import type { AuthUser } from '../../types/api';
 
 export interface UserFormData {
@@ -128,35 +130,27 @@ export const UserManagementModal = ({ isOpen, onClose, user, onSave, mode = 'edi
         }));
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
-                onClick={(e) => e.stopPropagation()}
+        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent
+                showCloseButton={false}
+                className="rounded-[var(--nc-radius-lg)] w-full max-w-lg sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0"
             >
                 {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">
-                        {mode === 'create' ? 'Crear Nuevo Usuario' : `Editar Usuario`}
-                    </h3>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
-                    >
-                        <X size={20} />
+                <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                    <DialogTitle className="text-xl font-medium text-ink">
+                        {mode === 'create' ? 'Crear Nuevo Usuario' : 'Editar Usuario'}
+                    </DialogTitle>
+                    <button onClick={onClose} className="btn btn-icon btn-secondary rounded-full" aria-label="Cerrar">
+                        <X size={18} />
                     </button>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-5">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-5">
                     {/* Name */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <div className="field">
+                        <label className="flex items-center gap-2">
                             <User size={16} />
                             Nombre Completo
                         </label>
@@ -164,17 +158,15 @@ export const UserManagementModal = ({ isOpen, onClose, user, onSave, mode = 'edi
                             type="text"
                             value={formData.name}
                             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                            className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                errors.name ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                            }`}
+                            className={`input ${errors.name ? 'border-danger' : ''}`}
                             placeholder="Juan Pérez"
                         />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+                        {errors.name && <p className="text-danger text-xs mt-1">{errors.name}</p>}
                     </div>
 
                     {/* Email */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <div className="field">
+                        <label className="flex items-center gap-2">
                             <Mail size={16} />
                             Email
                         </label>
@@ -182,19 +174,17 @@ export const UserManagementModal = ({ isOpen, onClose, user, onSave, mode = 'edi
                             type="email"
                             value={formData.email}
                             onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                            className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                            }`}
+                            className={`input ${errors.email ? 'border-danger' : ''}`}
                             placeholder="usuario@ejemplo.com"
                         />
-                        {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                        {errors.email && <p className="text-danger text-xs mt-1">{errors.email}</p>}
                     </div>
 
                     {/* Password (only for create mode) */}
                     {mode === 'create' && (
                         <>
-                            <div>
-                                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <div className="field">
+                                <label className="flex items-center gap-2">
                                     <Lock size={16} />
                                     Contraseña
                                 </label>
@@ -203,24 +193,22 @@ export const UserManagementModal = ({ isOpen, onClose, user, onSave, mode = 'edi
                                         type={showPassword ? 'text' : 'password'}
                                         value={formData.password}
                                         onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                                        className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                            errors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                                        }`}
+                                        className={`input pr-10 ${errors.password ? 'border-danger' : ''}`}
                                         placeholder="Mínimo 6 caracteres"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
                                     >
                                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
-                                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+                                {errors.password && <p className="text-danger text-xs mt-1">{errors.password}</p>}
                             </div>
 
-                            <div>
-                                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <div className="field">
+                                <label className="flex items-center gap-2">
                                     <Lock size={16} />
                                     Confirmar Contraseña
                                 </label>
@@ -229,83 +217,71 @@ export const UserManagementModal = ({ isOpen, onClose, user, onSave, mode = 'edi
                                         type={showConfirmPassword ? 'text' : 'password'}
                                         value={formData.confirmPassword}
                                         onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                                        className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                            errors.confirmPassword ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                                        }`}
+                                        className={`input pr-10 ${errors.confirmPassword ? 'border-danger' : ''}`}
                                         placeholder="Repetir contraseña"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
                                     >
                                         {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
-                                {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
+                                {errors.confirmPassword && <p className="text-danger text-xs mt-1">{errors.confirmPassword}</p>}
                             </div>
                         </>
                     )}
 
                     {/* Roles */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <div className="field">
+                        <label className="flex items-center gap-2">
                             <Shield size={16} />
                             Roles del Usuario
                         </label>
-                        <div className="space-y-2">
+                        <div>
                             {availableRoles.map(role => (
                                 <label
                                     key={role.value}
-                                    className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all ${
-                                        formData.roles.includes(role.value)
-                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                            : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600'
+                                    className={`flex items-center gap-3 py-3 border-t first:border-t-0 cursor-pointer transition-colors ${
+                                        formData.roles.includes(role.value) ? 'bg-accent-800/20' : 'hover:bg-accent-800/10'
                                     }`}
+                                    style={{ borderColor: 'var(--color-divider)' }}
                                 >
                                     <input
                                         type="checkbox"
                                         checked={formData.roles.includes(role.value)}
                                         onChange={() => toggleRole(role.value)}
-                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                        className="h-4 w-4 rounded accent-accent"
                                     />
-                                    <div className="flex-1">
-                                        <div className="font-medium text-gray-800 dark:text-gray-200">{role.label}</div>
-                                    </div>
+                                    <div className="flex-1 font-medium text-ink">{role.label}</div>
                                     {formData.roles.includes(role.value) && <RoleTag role={role.value} />}
                                 </label>
                             ))}
                         </div>
-                        {errors.roles && <p className="text-red-500 text-xs mt-2">{errors.roles}</p>}
+                        {errors.roles && <p className="text-danger text-xs mt-2">{errors.roles}</p>}
                     </div>
 
                     {errors.submit && (
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                            <p className="text-sm text-red-800 dark:text-red-300">{errors.submit}</p>
+                        <div
+                            className="rounded-[var(--nc-radius-md)] p-3 text-sm text-danger"
+                            style={{ background: 'color-mix(in srgb, var(--color-danger) 10%, transparent)', border: '1px solid var(--color-danger)' }}
+                        >
+                            {errors.submit}
                         </div>
                     )}
                 </form>
 
                 {/* Footer */}
-                <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
+                <div className="flex justify-end gap-3 p-4 border-t" style={{ borderColor: 'var(--color-divider)' }}>
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
                         Cancelar
-                    </button>
-                    <button
-                        type="submit"
-                        onClick={handleSubmit}
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
+                    </Button>
+                    <Button type="submit" onClick={handleSubmit} disabled={isSaving}>
                         {isSaving ? 'Guardando...' : mode === 'create' ? 'Crear Usuario' : 'Guardar Cambios'}
-                    </button>
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 };

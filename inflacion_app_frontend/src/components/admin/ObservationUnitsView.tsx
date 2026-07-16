@@ -5,6 +5,9 @@ import { useToast } from '../Toast';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Pagination } from '../ui/Pagination';
 import { StudentCommercePopover } from '../ui/StudentCommercePopover';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '../ui/alert-dialog';
+import { Button } from '../ui/button';
 import type { ObservationUnit, ObservationUnitWithStudents } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -224,31 +227,34 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
         }
     };
 
+    const SortIcon = ({ sortKey }: { sortKey: SortKey }) =>
+        sortConfig.key === sortKey ? (
+            sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+        ) : (
+            <ArrowUpDown size={14} className="text-muted opacity-40" />
+        );
+
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in">
+        <div className="card elev-sm p-6 space-y-4">
             {/* Header with Search and Add Button */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Gestión de Unidades de Observación</h3>
+                <h3 className="text-lg font-medium text-ink">Gestión de Unidades de Observación</h3>
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     <div className="relative flex-1 sm:flex-initial">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             disabled={editingObservationUnit.id !== null}
                             placeholder={editingObservationUnit.id ? "Finaliza la edicion para buscar" : "Buscar..."}
-                            className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="input pl-10 w-full sm:w-64"
                         />
                     </div>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        disabled={editingObservationUnit.id !== null}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
+                    <Button onClick={() => setShowAddModal(true)} disabled={editingObservationUnit.id !== null}>
                         <Plus size={18} />
                         <span className="hidden sm:inline">Agregar</span>
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -259,60 +265,42 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
+                            <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
                                 <th
                                     onClick={() => handleSort('id')}
-                                    className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                    className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
                                 >
                                     <div className="flex items-center gap-2">
                                         ID
-                                        {sortConfig.key === 'id' ? (
-                                            sortConfig.direction === 'asc' ?
-                                                <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> :
-                                                <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
-                                        ) : (
-                                            <ArrowUpDown size={14} className="opacity-40" />
-                                        )}
+                                        <SortIcon sortKey="id" />
                                     </div>
                                 </th>
                                 <th
                                     onClick={() => handleSort('name')}
-                                    className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                    className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
                                 >
                                     <div className="flex items-center gap-2">
                                         Nombre
-                                        {sortConfig.key === 'name' ? (
-                                            sortConfig.direction === 'asc' ?
-                                                <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> :
-                                                <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
-                                        ) : (
-                                            <ArrowUpDown size={14} className="opacity-40" />
-                                        )}
+                                        <SortIcon sortKey="name" />
                                     </div>
                                 </th>
                                 <th
                                     onClick={() => handleSort('address')}
-                                    className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                    className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
                                 >
                                     <div className="flex items-center gap-2">
                                         Direccion
-                                        {sortConfig.key === 'address' ? (
-                                            sortConfig.direction === 'asc' ?
-                                                <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> :
-                                                <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
-                                        ) : (
-                                            <ArrowUpDown size={14} className="opacity-40" />
-                                        )}
+                                        <SortIcon sortKey="address" />
                                     </div>
                                 </th>
-                                <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Estudiantes Asignados</th>
-                                <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-right">Acciones</th>
+                                <th className="py-3 px-4 font-medium text-muted">Estudiantes Asignados</th>
+                                <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {paginatedData.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                    <td colSpan={5} className="text-center py-8 text-muted">
                                         {searchTerm ? 'No se encontraron resultados' : 'No hay unidades de observación registradas'}
                                     </td>
                                 </tr>
@@ -320,14 +308,15 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
                                 paginatedData.map(observationUnit => (
                                     <tr
                                         key={observationUnit.id}
-                                        className={`border-b border-gray-100 dark:border-gray-700 last:border-none transition-all ${
+                                        className={`border-b last:border-none transition-colors ${
                                             editingObservationUnit.id === observationUnit.id
-                                                ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 dark:ring-blue-400 ring-inset'
-                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                                ? 'bg-accent-800/20 ring-1 ring-accent ring-inset'
+                                                : 'hover:bg-accent-800/10'
                                         }`}
+                                        style={{ borderColor: 'var(--color-divider)' }}
                                     >
-                                        <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{observationUnit.id}</td>
-                                        <td className="py-3 px-4 text-gray-800 dark:text-gray-200">
+                                        <td className="py-3 px-4 text-muted">{observationUnit.id}</td>
+                                        <td className="py-3 px-4 text-ink">
                                             {editingObservationUnit.id === observationUnit.id ? (
                                                 <input
                                                     ref={editInputRef}
@@ -338,13 +327,13 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
                                                         if (e.key === 'Enter') handleSaveObservationUnitEdit();
                                                         if (e.key === 'Escape') cancelEditing();
                                                     }}
-                                                    className="w-full p-2 border-2 border-blue-500 dark:border-blue-400 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="input"
                                                 />
                                             ) : (
                                                 observationUnit.name
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
+                                        <td className="py-3 px-4 text-muted">
                                             {editingObservationUnit.id === observationUnit.id ? (
                                                 <input
                                                     type="text"
@@ -354,7 +343,7 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
                                                         if (e.key === 'Enter') handleSaveObservationUnitEdit();
                                                         if (e.key === 'Escape') cancelEditing();
                                                     }}
-                                                    className="w-full p-2 border-2 border-blue-500 dark:border-blue-400 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="input"
                                                 />
                                             ) : (
                                                 observationUnit.address
@@ -367,42 +356,38 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
                                             />
                                         </td>
                                         <td className="py-3 px-4">
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-1">
                                                 {editingObservationUnit.id === observationUnit.id ? (
                                                     <>
-                                                        <button
-                                                            onClick={handleSaveObservationUnitEdit}
-                                                            className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-                                                            title="Guardar"
-                                                        >
+                                                        <Button variant="ghost" size="icon-sm" onClick={handleSaveObservationUnitEdit} className="text-success hover:bg-success/10" title="Guardar">
                                                             <Check size={18} />
-                                                        </button>
-                                                        <button
-                                                            onClick={cancelEditing}
-                                                            className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                            title="Cancelar"
-                                                        >
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar">
                                                             <X size={18} />
-                                                        </button>
+                                                        </Button>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <button
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
                                                             onClick={() => startEditingObservationUnit(observationUnit)}
                                                             disabled={editingObservationUnit.id !== null}
-                                                            className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="text-accent-300"
                                                             title="Editar"
                                                         >
                                                             <Edit size={18} />
-                                                        </button>
-                                                        <button
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
                                                             onClick={() => confirmDeleteObservationUnit(observationUnit)}
                                                             disabled={editingObservationUnit.id !== null}
-                                                            className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="text-danger hover:bg-danger/10"
                                                             title="Eliminar"
                                                         >
                                                             <Trash2 size={18} />
-                                                        </button>
+                                                        </Button>
                                                     </>
                                                 )}
                                             </div>
@@ -427,110 +412,82 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
             )}
 
             {/* Add Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">
-                            Agregar Unidad de Observación
-                        </h3>
+            <Dialog open={showAddModal} onOpenChange={(open) => { if (!open) { setShowAddModal(false); setNewObservationUnit({ name: '', address: '' }); } }}>
+                <DialogContent className="rounded-[var(--nc-radius-lg)] w-full max-w-md sm:max-w-md">
+                    <DialogTitle className="text-xl font-medium text-ink">Agregar Unidad de Observación</DialogTitle>
 
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                    Nombre
-                                </label>
-                                <input
-                                    type="text"
-                                    value={newObservationUnit.name}
-                                    onChange={e => setNewObservationUnit({ ...newObservationUnit, name: e.target.value })}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && newObservationUnit.address) {
-                                            handleAddObservationUnit();
-                                        }
-                                    }}
-                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Nombre de la unidad de observación"
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                    Direccion
-                                </label>
-                                <input
-                                    type="text"
-                                    value={newObservationUnit.address}
-                                    onChange={e => setNewObservationUnit({ ...newObservationUnit, address: e.target.value })}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                            handleAddObservationUnit();
-                                        }
-                                    }}
-                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Direccion de la unidad de observación"
-                                />
-                            </div>
+                    <div className="space-y-3">
+                        <div className="field">
+                            <label>Nombre</label>
+                            <input
+                                type="text"
+                                value={newObservationUnit.name}
+                                onChange={e => setNewObservationUnit({ ...newObservationUnit, name: e.target.value })}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && newObservationUnit.address) {
+                                        handleAddObservationUnit();
+                                    }
+                                }}
+                                className="input"
+                                placeholder="Nombre de la unidad de observación"
+                                autoFocus
+                            />
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button
-                                onClick={() => {
-                                    setShowAddModal(false);
-                                    setNewObservationUnit({ name: '', address: '' });
+                        <div className="field">
+                            <label>Direccion</label>
+                            <input
+                                type="text"
+                                value={newObservationUnit.address}
+                                onChange={e => setNewObservationUnit({ ...newObservationUnit, address: e.target.value })}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                        handleAddObservationUnit();
+                                    }
                                 }}
-                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleAddObservationUnit}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                            >
-                                Agregar
-                            </button>
+                                className="input"
+                                placeholder="Direccion de la unidad de observación"
+                            />
                         </div>
                     </div>
-                </div>
-            )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setShowAddModal(false);
+                                setNewObservationUnit({ name: '', address: '' });
+                            }}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleAddObservationUnit}>Agregar</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Delete Confirmation Modal */}
-            {showDeleteModal && observationUnitToDelete && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-                        <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
-                            <AlertTriangle size={24} />
-                            <h3 className="text-xl font-bold">Confirmar Eliminacion</h3>
-                        </div>
-
-                        <p className="text-gray-700 dark:text-gray-300">
-                            Estas seguro de que deseas eliminar la unidad de observación{' '}
-                            <strong>{observationUnitToDelete.name}</strong>?
-                            <span className="block mt-2 text-sm text-red-600 dark:text-red-400">
+            <AlertDialog open={showDeleteModal} onOpenChange={(open) => { if (!open) { setShowDeleteModal(false); setObservationUnitToDelete(null); } }}>
+                <AlertDialogContent className="rounded-[var(--nc-radius-lg)]">
+                    <AlertDialogHeader>
+                        <AlertDialogMedia className="text-danger" style={{ background: 'color-mix(in srgb, var(--color-danger) 15%, transparent)' }}>
+                            <AlertTriangle size={20} />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle className="text-ink">Confirmar Eliminación</AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted">
+                            ¿Estás seguro de que deseas eliminar la unidad de observación{' '}
+                            <strong className="text-ink">{observationUnitToDelete?.name}</strong>?
+                            <span className="block mt-2 text-xs text-danger">
                                 Advertencia: no se puede eliminar si ya tiene observaciones registradas (se preservan los datos históricos).
                             </span>
-                        </p>
-
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button
-                                onClick={() => {
-                                    setShowDeleteModal(false);
-                                    setObservationUnitToDelete(null);
-                                }}
-                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleDeleteObservationUnit}
-                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                            >
-                                Eliminar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={handleDeleteObservationUnit}>Eliminar</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

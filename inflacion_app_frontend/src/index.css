@@ -1,4 +1,13 @@
 @import "tailwindcss";
+@import "./styles/nocturne.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Unused: the app is dark-only (ThemeContext forces `.dark` on <html>
+   permanently, no toggle exists), so nothing reads the `dark:` variant --
+   kept only as a safety net in case a copy-pasted shadcn registry
+   component ever includes one defensively. */
+@custom-variant dark (&:is(.dark *));
 
 /* Toast animations */
 @keyframes slide-in {
@@ -60,4 +69,66 @@
 
 .animate-scale-in {
   animation: scale-in 0.2s ease-out;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * shadcn/ui bridge -- maps the semantic vars shadcn-generated components
+ * read (--background, --card, --border, --ring, ...) onto the Nocturne
+ * tokens in nocturne.css, instead of shadcn's own default light/dark
+ * palette. The app is dark-only (ThemeContext forces `.dark` on <html>
+ * permanently, no toggle exists), so these live in one unconditional
+ * block, same as nocturne.css's own :root -- no separate light/.dark set.
+ *
+ * `--color-accent` is deliberately NOT remapped here: it's already a real
+ * Nocturne @theme key (the brand purple, used by text-accent/bg-accent
+ * pervasively across the shipped Nocturne redesign). shadcn's registry
+ * components assume an unrelated "accent" role under the same name (a
+ * neutral hover/selected tint) -- mapping it here would silently repoint
+ * every existing text-accent/bg-accent usage in the app to a hover-tint
+ * color. When a generated component's className needs an accent hover
+ * state, use the existing accent ramp instead (bg-accent-800/
+ * text-accent-100), the same idiom .tag-accent already uses.
+ * ───────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-bg);
+  --color-secondary: var(--color-nc-neutral-800);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: var(--color-nc-neutral-800);
+  --color-muted-foreground: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  --color-destructive: oklch(0.704 0.191 22.216);
+  --color-border: var(--color-divider);
+  --color-input: var(--color-divider);
+  --color-ring: var(--color-accent);
+
+  /* Same scale as --nc-radius-sm/md/lg, extended past `lg` (14px) using
+     the two larger radii the mockup itself specifies: 22px (login's hero-
+     to-sheet transition) and 32px (the phone-frame corner). */
+  --radius-sm: var(--nc-radius-sm);
+  --radius-md: var(--nc-radius-md);
+  --radius-lg: var(--nc-radius-lg);
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 26px;
+  --radius-4xl: 32px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

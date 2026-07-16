@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Tooltip } from './Tooltip';
+import { Button } from './button';
 
 export interface PaginationProps {
     currentPage: number;
@@ -14,49 +15,33 @@ export const Pagination = ({ currentPage, totalPages, totalItems, itemsPerPage, 
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
     return (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-            <div className="text-sm text-gray-700 dark:text-gray-300">
-                Mostrando <span className="font-semibold">{startItem}</span> a <span className="font-semibold">{endItem}</span> de <span className="font-semibold">{totalItems}</span> resultados
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 mt-2" style={{ borderTop: '1px solid var(--color-divider)' }}>
+            <div className="text-sm text-muted">
+                Mostrando <span className="font-medium text-ink">{startItem}</span> a <span className="font-medium text-ink">{endItem}</span> de <span className="font-medium text-ink">{totalItems}</span> resultados
             </div>
             <div className="flex items-center gap-1">
                 <Tooltip content="Primera página">
-                    <button
-                        onClick={() => onPageChange(1)}
-                        disabled={currentPage === 1}
-                        className="p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition text-gray-700 dark:text-gray-200"
-                    >
+                    <Button variant="secondary" size="icon-sm" onClick={() => onPageChange(1)} disabled={currentPage === 1}>
                         <ChevronsLeft size={18} />
-                    </button>
+                    </Button>
                 </Tooltip>
                 <Tooltip content="Página anterior">
-                    <button
-                        onClick={() => onPageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition text-gray-700 dark:text-gray-200"
-                    >
+                    <Button variant="secondary" size="icon-sm" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>
                         <ChevronLeft size={18} />
-                    </button>
+                    </Button>
                 </Tooltip>
-                <span className="px-3 py-1 text-sm text-gray-700 dark:text-gray-300">
-                    Página <span className="font-semibold">{currentPage}</span> de <span className="font-semibold">{totalPages}</span>
+                <span className="px-3 py-1 text-sm text-muted">
+                    Página <span className="font-medium text-ink">{currentPage}</span> de <span className="font-medium text-ink">{totalPages}</span>
                 </span>
                 <Tooltip content="Página siguiente">
-                    <button
-                        onClick={() => onPageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition text-gray-700 dark:text-gray-200"
-                    >
+                    <Button variant="secondary" size="icon-sm" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}>
                         <ChevronRight size={18} />
-                    </button>
+                    </Button>
                 </Tooltip>
                 <Tooltip content="Última página">
-                    <button
-                        onClick={() => onPageChange(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition text-gray-700 dark:text-gray-200"
-                    >
+                    <Button variant="secondary" size="icon-sm" onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages}>
                         <ChevronsRight size={18} />
-                    </button>
+                    </Button>
                 </Tooltip>
             </div>
         </div>

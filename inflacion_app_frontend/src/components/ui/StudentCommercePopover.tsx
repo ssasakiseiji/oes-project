@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Users, Store, X } from 'lucide-react';
+import { Users, Store } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from './popover';
 
 export interface PopoverItem {
     id: number;
@@ -13,96 +13,53 @@ export interface StudentCommercePopoverProps {
     type?: 'students' | 'observationUnits';
 }
 
+// Antes: un botón-badge que abría un Modal completo para una lista corta
+// de nombres. Conceptualmente es solo texto anclado a un botón -- pasa a
+// un Popover de verdad en vez de un Dialog más.
 export const StudentCommercePopover = ({ items = [], type = 'students' }: StudentCommercePopoverProps) => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
     const count = items.length;
     const Icon = type === 'students' ? Users : Store;
 
     if (count === 0) {
-        return (
-            <span className="text-gray-400 dark:text-gray-500 text-sm italic">
-                Ninguno
-            </span>
-        );
+        return <span className="text-muted text-sm italic">Ninguno</span>;
     }
 
     if (count === 1) {
-        return (
-            <span className="text-gray-800 dark:text-gray-200 font-medium">
-                {items[0].name}
-            </span>
-        );
+        return <span className="text-ink font-medium">{items[0].name}</span>;
     }
 
-    // Multiple items - show badge with modal trigger
     return (
-        <>
-            <button
-                onClick={() => setIsModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-medium"
-            >
-                <Icon size={14} />
-                <span>{count} {type === 'students' ? 'estudiantes' : 'unidades'}</span>
-            </button>
-
-            {/* Floating Modal */}
-            {isModalOpen && (
-                <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4"
-                    onClick={() => setIsModalOpen(false)}
-                >
-                    <div
-                        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Header */}
-                        <div className="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                <Icon size={20} />
-                                {type === 'students' ? 'Estudiantes Asignados' : 'Unidades Asignadas'}
-                            </h3>
-                            <button
-                                onClick={() => setIsModalOpen(false)}
-                                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="overflow-y-auto flex-grow divide-y divide-gray-100 dark:divide-gray-700">
-                            {items.map((item) => (
-                                <div
-                                    key={item.id}
-                                    className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                                >
-                                    <div className="font-semibold text-gray-800 dark:text-gray-200">
-                                        {item.name}
-                                    </div>
-                                    {item.email && (
-                                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                            {item.email}
-                                        </div>
-                                    )}
-                                    {item.address && (
-                                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                            {item.address}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Footer */}
-                        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-                            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                                Total: <span className="font-semibold text-gray-800 dark:text-gray-200">{count}</span> {type === 'students' ? 'estudiante(s)' : 'unidad(es)'}
-                            </p>
-                        </div>
-                    </div>
+        <Popover>
+            <PopoverTrigger asChild>
+                <button className="tag tag-accent inline-flex items-center gap-1.5 cursor-pointer">
+                    <Icon size={14} />
+                    <span>{count} {type === 'students' ? 'estudiantes' : 'unidades'}</span>
+                </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0 gap-0" align="start">
+                <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                    <Icon size={16} className="text-accent-300" />
+                    <h4 className="font-medium text-ink text-sm">
+                        {type === 'students' ? 'Estudiantes Asignados' : 'Unidades Asignadas'}
+                    </h4>
                 </div>
-            )}
-        </>
+                <div className="max-h-72 overflow-y-auto">
+                    {items.map((item, i) => (
+                        <div
+                            key={item.id}
+                            className={`px-3 py-2.5 ${i > 0 ? 'border-t' : ''}`}
+                            style={i > 0 ? { borderColor: 'var(--color-divider)' } : undefined}
+                        >
+                            <div className="font-medium text-sm text-ink">{item.name}</div>
+                            {item.email && <div className="text-xs text-muted mt-0.5">{item.email}</div>}
+                            {item.address && <div className="text-xs text-muted mt-0.5">{item.address}</div>}
+                        </div>
+                    ))}
+                </div>
+                <div className="px-3 py-2 border-t text-xs text-muted text-center" style={{ borderColor: 'var(--color-divider)' }}>
+                    Total: <span className="font-medium text-ink">{count}</span> {type === 'students' ? 'estudiante(s)' : 'unidad(es)'}
+                </div>
+            </PopoverContent>
+        </Popover>
     );
 };
