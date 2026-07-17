@@ -38,7 +38,7 @@ export class StudyFieldsController {
     @Body(new ZodValidationPipe(createStudyFieldSchema))
     body: CreateStudyFieldDto,
   ) {
-    return this.studyFieldsService.create(body.name, body.projectId);
+    return this.studyFieldsService.create(body);
   }
 
   @Put(':id')
@@ -48,7 +48,7 @@ export class StudyFieldsController {
     @Body(new ZodValidationPipe(createStudyFieldSchema))
     body: CreateStudyFieldDto,
   ) {
-    return this.studyFieldsService.update(id, body.name, body.projectId);
+    return this.studyFieldsService.update(id, body);
   }
 
   @Delete(':id')

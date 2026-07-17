@@ -115,11 +115,18 @@ model ProjectMembership {
   @@map("project_memberships")
 }
 
+// unitOfMeasure (Fase Z): unidad en la que se miden los valores observados de
+// las variables NUMÉRICAS de este campo ('₲', '°C', '%'). Es el eje de
+// agrupación de las métricas agregadas — solo se suman/promedian juntas
+// variables que comparten unidad. Ortogonal a Variable.unit, que es el
+// descriptor de presentación ('1 kg'). NULL = campo puramente cualitativo, o
+// unidad todavía no declarada por el admin.
 model StudyField {
-  id        Int       @id @default(autoincrement())
-  name      String    @db.VarChar(255)
-  projectId Int       @map("project_id")
-  createdAt DateTime? @default(now()) @map("created_at")
+  id            Int       @id @default(autoincrement())
+  name          String    @db.VarChar(255)
+  unitOfMeasure String?   @map("unit_of_measure") @db.VarChar(50)
+  projectId     Int       @map("project_id")
+  createdAt     DateTime? @default(now()) @map("created_at")
 
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   variables Variable[]

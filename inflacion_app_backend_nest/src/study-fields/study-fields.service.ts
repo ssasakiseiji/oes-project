@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { CreateStudyFieldDto } from './dto/study-field.schema';
 
 // Fase H: renombrado de dominio, Category -> StudyField (port 1:1 de
 // categories.service.ts). El chequeo de duplicado se hace a nivel de
@@ -16,6 +17,10 @@ import { PrismaService } from '../prisma/prisma.service';
 // que el registro pertenezca al projectId recibido antes de tocarlo, para
 // que un admin del Proyecto A no pueda editar/borrar datos del Proyecto B
 // adivinando ids.
+//
+// Fase Z: create/update pasan a recibir el DTO completo en vez de `name`
+// suelto, ahora que hay un segundo campo editable (unitOfMeasure) y sumar
+// parámetros posicionales se volvía frágil.
 @Injectable()
 export class StudyFieldsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -27,7 +32,9 @@ export class StudyFieldsService {
     });
   }
 
-  async create(name: string, projectId: number) {
+  async create(dto: CreateStudyFieldDto) {
+    const { name, unitOfMeasure, projectId } = dto;
+
     const existing = await this.prisma.studyField.findFirst({
       where: { name: { equals: name, mode: 'insensitive' }, projectId },
     });
@@ -38,10 +45,13 @@ export class StudyFieldsService {
       );
     }
 
-    return this.prisma.studyField.create({ data: { name, projectId } });
+    return this.prisma.studyField.create({
+      data: { name, unitOfMeasure: unitOfMeasure ?? null, projectId },
+    });
   }
 
-  async update(id: number, name: string, projectId: number) {
+  async update(id: number, dto: CreateStudyFieldDto) {
+    const { name, unitOfMeasure, projectId } = dto;
     const existingRecord = await this.prisma.studyField.findUnique({
       where: { id },
       select: { projectId: true },
@@ -67,7 +77,11 @@ export class StudyFieldsService {
     try {
       return await this.prisma.studyField.update({
         where: { id },
-        data: { name },
+        // unitOfMeasure ausente (undefined) = "no la toques"; null = borrarla
+        // explícitamente. Prisma ya distingue undefined de null, así que se
+        // pasa tal cual sin normalizar (a diferencia de create, donde no hay
+        // valor previo que preservar).
+        data: { name, unitOfMeasure },
       });
     } catch (error) {
       if (
