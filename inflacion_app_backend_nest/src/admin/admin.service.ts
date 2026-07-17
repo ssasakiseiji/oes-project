@@ -9,6 +9,18 @@ import type { Period } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { toObservationValueFields } from '../common/validation/variable-value';
+import {
+  buildAnalysis,
+  buildStudyFieldHistory,
+  isCurrencyVariable,
+} from './analysis';
+import type {
+  AggregateMethod,
+  AnalysisObservationInput,
+  AnalysisResult,
+  HistoryRow,
+  StudyFieldHistoryInputRow,
+} from './analysis';
 import type {
   CreatePeriodDto,
   UpdatePeriodDto,
@@ -168,144 +180,68 @@ export class AdminService {
 
   // Analysis
 
-  // Restringido a variables numéricas Y de moneda (config.isCurrency) --
-  // sumar/costear una lectura de temperatura junto a un precio no tiene
-  // sentido. Variables numéricas no-monetarias, categóricas, booleanas y de
-  // texto quedan fuera de este análisis "costo de canasta" (ver
-  // getVariableDistribution para categóricas/booleanas).
-  async getAnalysis(projectId: number, periodAId: number, periodBId: number) {
+  // Fase AA: el análisis dejó de ser solo "costo de canasta". Ahora cubre TODO
+  // el catálogo del proyecto, partido por campo de estudio y, dentro de cada
+  // uno, en un bloque cuantitativo (numeric) y uno cualitativo (categorical/
+  // boolean/text). La agregación es homogénea por StudyField.unitOfMeasure
+  // (Fase Z) -- ver src/admin/analysis.ts para las reglas y su porqué. Este
+  // método queda solo con el fetch; el cálculo vive ahí, en funciones puras.
+  async getAnalysis(
+    projectId: number,
+    periodAId: number,
+    periodBId: number,
+  ): Promise<AnalysisResult> {
     await this.assertPeriodInProject(periodAId, projectId);
     await this.assertPeriodInProject(periodBId, projectId);
 
-    const allVariables = await this.prisma.variable.findMany({
-      where: { dataType: 'numeric', studyField: { projectId } },
-      select: { id: true, name: true, studyFieldId: true, config: true },
-    });
-    const currencyVariables = allVariables.filter(
-      (v) => (v.config as { isCurrency?: boolean } | null)?.isCurrency === true,
-    );
-    const currencyVariableIds = new Set(currencyVariables.map((v) => v.id));
-
-    const [observationsA, observationsB, allStudyFields] = await Promise.all([
-      this.prisma.observation.findMany({
-        where: {
-          periodId: periodAId,
-          variableId: { in: [...currencyVariableIds] },
-        },
-        select: { variableId: true, numericValue: true },
-      }),
-      this.prisma.observation.findMany({
-        where: {
-          periodId: periodBId,
-          variableId: { in: [...currencyVariableIds] },
-        },
-        select: { variableId: true, numericValue: true },
-      }),
+    const [studyFields, variables] = await Promise.all([
       this.prisma.studyField.findMany({
         where: { projectId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, unitOfMeasure: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.variable.findMany({
+        where: { studyField: { projectId } },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          dataType: true,
+          config: true,
+          studyFieldId: true,
+        },
+        orderBy: { name: 'asc' },
       }),
     ]);
 
-    const calculateAverages = (
-      rows: {
-        variableId: number | null;
-        numericValue: Prisma.Decimal | null;
-      }[],
-    ) => {
-      const valueMap = new Map<number, number[]>();
-      rows.forEach((row) => {
-        if (row.variableId == null || row.numericValue == null) return;
-        if (!valueMap.has(row.variableId)) valueMap.set(row.variableId, []);
-        const value = Number(row.numericValue);
-        if (!isNaN(value)) {
-          valueMap.get(row.variableId)!.push(value);
-        }
-      });
+    const variableIds = variables.map((v) => v.id);
+    const [observationsA, observationsB] = await Promise.all([
+      this.fetchAnalysisObservations(periodAId, variableIds),
+      this.fetchAnalysisObservations(periodBId, variableIds),
+    ]);
 
-      const avgMap = new Map<number, number>();
-      valueMap.forEach((values, variableId) => {
-        if (values.length > 0) {
-          // Primera pasada: media y desvío estándar
-          const mean = values.reduce((a, b) => a + b, 0) / values.length;
-          const stdDev =
-            values.length > 1
-              ? Math.sqrt(
-                  values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) /
-                    values.length,
-                )
-              : 0;
-
-          // Segunda pasada: descarta outliers con la regla de 2-sigma (igual que getObservations)
-          const filtered =
-            stdDev > 0
-              ? values.filter((v) => Math.abs(v - mean) <= 2 * stdDev)
-              : values;
-
-          if (filtered.length > 0) {
-            const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
-            avgMap.set(variableId, avg);
-          }
-        }
-      });
-      return avgMap;
-    };
-
-    const avgValuesA = calculateAverages(observationsA);
-    const avgValuesB = calculateAverages(observationsB);
-
-    let totalCostA = 0;
-    let totalCostB = 0;
-
-    const calculateVariation = (costA: number, costB: number) => {
-      if (costB > 0) {
-        return ((costA - costB) / costB) * 100;
-      }
-      return costA > 0 ? 100 : 0;
-    };
-
-    const studyFieldAnalysis = allStudyFields.map((field) => {
-      const fieldVariables = currencyVariables.filter(
-        (v) => v.studyFieldId === field.id,
-      );
-      let fieldCostA = 0;
-      let fieldCostB = 0;
-
-      const variableAnalysis = fieldVariables.map((v) => {
-        const valueA = avgValuesA.get(v.id) || 0;
-        const valueB = avgValuesB.get(v.id) || 0;
-        fieldCostA += valueA;
-        fieldCostB += valueB;
-        return {
-          id: v.id,
-          name: v.name,
-          valueA,
-          valueB,
-          variation: calculateVariation(valueA, valueB),
-        };
-      });
-
-      totalCostA += fieldCostA;
-      totalCostB += fieldCostB;
-
-      return {
-        id: field.id,
-        name: field.name,
-        costA: fieldCostA,
-        costB: fieldCostB,
-        variation: calculateVariation(fieldCostA, fieldCostB),
-        variables: variableAnalysis,
-      };
+    return buildAnalysis({
+      studyFields,
+      variables,
+      observationsA,
+      observationsB,
     });
+  }
 
-    const totalVariation = calculateVariation(totalCostA, totalCostB);
-
-    return {
-      studyFieldAnalysis,
-      totalCostA,
-      totalCostB,
-      totalVariation,
-    };
+  private fetchAnalysisObservations(periodId: number, variableIds: number[]) {
+    if (variableIds.length === 0) {
+      return Promise.resolve([] as AnalysisObservationInput[]);
+    }
+    return this.prisma.observation.findMany({
+      where: { periodId, variableId: { in: variableIds } },
+      select: {
+        variableId: true,
+        numericValue: true,
+        textValue: true,
+        booleanValue: true,
+        choiceValue: true,
+      },
+    });
   }
 
   getVariableHistory(
@@ -325,18 +261,72 @@ export class AdminService {
     }
 
     if (studyFieldId != null) {
-      return this.prisma.$queryRaw<VariableHistoryRow[]>`
-        SELECT p.name, AVG(o.numeric_value) as "avgValue"
-        FROM observations o
-        JOIN variables v ON o.variable_id = v.id
-        JOIN periods p ON o.period_id = p.id
-        WHERE v.study_field_id = ${studyFieldId} AND p.project_id = ${projectId}
-        GROUP BY p.id, p.name, p.year, p.month
-        ORDER BY p.year, p.month;
-      `;
+      return this.getStudyFieldHistory(projectId, studyFieldId);
     }
 
     throw new BadRequestException('Se requiere variableId o studyFieldId');
+  }
+
+  // Fase AA: ver buildStudyFieldHistory en src/admin/analysis.ts para los dos
+  // defectos que esto corrige. El SQL ya no agrega hasta el número final: solo
+  // promedia por (período, variable) y deja la agregación homogénea a la
+  // función pura, que necesita ver las variables por separado para aplicar el
+  // set comparable.
+  private async getStudyFieldHistory(
+    projectId: number,
+    studyFieldId: number,
+  ): Promise<HistoryRow[]> {
+    const studyField = await this.prisma.studyField.findUnique({
+      where: { id: studyFieldId },
+      select: { projectId: true, unitOfMeasure: true },
+    });
+
+    if (!studyField || studyField.projectId !== projectId) {
+      throw new NotFoundException('Campo de estudio no encontrado');
+    }
+
+    // Sin unidad declarada no hay historial agregado posible. Antes esto
+    // devolvía un número igual (promediando lo que fuera); ahora falla fuerte y
+    // le dice al admin exactamente qué le falta cargar.
+    if (studyField.unitOfMeasure == null) {
+      throw new BadRequestException(
+        'El campo de estudio no tiene una unidad de medida declarada, así que sus variables no se pueden agregar en una sola métrica. Cargá la unidad en Variables y Campos de Estudio.',
+      );
+    }
+
+    const variables = await this.prisma.variable.findMany({
+      where: { studyFieldId, dataType: 'numeric' },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        dataType: true,
+        config: true,
+        studyFieldId: true,
+      },
+    });
+
+    if (variables.length === 0) return [];
+
+    const method: AggregateMethod = variables.every(isCurrencyVariable)
+      ? 'sum'
+      : 'mean';
+
+    const rows = await this.prisma.$queryRaw<StudyFieldHistoryInputRow[]>`
+      SELECT p.id AS "periodId", p.name, o.variable_id AS "variableId",
+             AVG(o.numeric_value) AS "avgValue"
+      FROM observations o
+      JOIN variables v ON o.variable_id = v.id
+      JOIN periods p ON o.period_id = p.id
+      WHERE v.study_field_id = ${studyFieldId}
+        AND p.project_id = ${projectId}
+        AND v.data_type = 'numeric'
+        AND o.numeric_value IS NOT NULL
+      GROUP BY p.id, p.name, p.year, p.month, o.variable_id
+      ORDER BY p.year, p.month;
+    `;
+
+    return buildStudyFieldHistory(rows, method);
   }
 
   // Distribución de frecuencias por período -- equivalente de
