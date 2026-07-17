@@ -144,12 +144,19 @@ async function main() {
     // ---------- Encuesta de Precios: campos de estudio + variables ----------
     await tx.studyField.createMany({
       data: [
-        { name: 'Alimentos', projectId: precios.id },
-        { name: 'Bebidas', projectId: precios.id },
-        { name: 'Productos de Limpieza', projectId: precios.id },
-        { name: 'Productos de Cuidado Personal', projectId: precios.id },
-        { name: 'Lácteos', projectId: precios.id },
-        { name: 'Percepción y Contexto del Relevamiento', projectId: precios.id },
+        // Fase Z: unitOfMeasure es el eje de agregación homogénea. Los 5 campos
+        // de precios comparten '₲', así que sus canastas se suman entre sí en el
+        // total de esa unidad. 'Percepción y Contexto' va en '°C' a propósito:
+        // su única variable numérica es una temperatura, y quedar en una unidad
+        // aparte demuestra que el análisis ya no la mezcla con los precios (y
+        // que un campo con unidad no-monetaria se agrega por promedio, no por
+        // suma).
+        { name: 'Alimentos', unitOfMeasure: '₲', projectId: precios.id },
+        { name: 'Bebidas', unitOfMeasure: '₲', projectId: precios.id },
+        { name: 'Productos de Limpieza', unitOfMeasure: '₲', projectId: precios.id },
+        { name: 'Productos de Cuidado Personal', unitOfMeasure: '₲', projectId: precios.id },
+        { name: 'Lácteos', unitOfMeasure: '₲', projectId: precios.id },
+        { name: 'Percepción y Contexto del Relevamiento', unitOfMeasure: '°C', projectId: precios.id },
       ],
       skipDuplicates: true,
     });
@@ -231,8 +238,15 @@ async function main() {
     });
 
     // ---------- Encuesta del Rally: proyecto secundario, a menor escala ----------
+    // Campo mixto de demo: una variable categórica + una numérica no monetaria.
+    // La unidad ('puestos') describe la numérica; la categórica se analiza por
+    // frecuencias y no participa de ninguna agregación (Fase Z/AA).
     await tx.studyField.create({
-      data: { name: 'Percepción de Seguridad', projectId: rally.id },
+      data: {
+        name: 'Percepción de Seguridad',
+        unitOfMeasure: 'puestos',
+        projectId: rally.id,
+      },
     });
     const securityField = await tx.studyField.findFirstOrThrow({
       where: { name: 'Percepción de Seguridad', projectId: rally.id },
