@@ -10,6 +10,9 @@ export interface StatCardProps {
     change?: number | null;
     icon: ReactNode;
     color?: StatCardColor;
+    // Línea de contexto bajo el valor (ej. el valor del período base con el que
+    // se está comparando). Agregado en Fase AB.
+    subtitle?: ReactNode;
     sparklineData?: { value: number }[] | null;
 }
 
@@ -24,7 +27,7 @@ const colorMap: Record<StatCardColor, { stroke: string; iconClass: string }> = {
     red: { stroke: 'var(--color-danger)', iconClass: 'text-danger bg-danger/15' },
 };
 
-export const StatCard = ({ title, value, change, icon, color = 'blue', sparklineData = null }: StatCardProps) => {
+export const StatCard = ({ title, value, change, icon, color = 'blue', subtitle = null, sparklineData = null }: StatCardProps) => {
     const colors = colorMap[color] || colorMap.blue;
 
     return (
@@ -38,6 +41,7 @@ export const StatCard = ({ title, value, change, icon, color = 'blue', sparkline
                             {change >= 0 ? '▲' : '▼'} {change.toFixed(2)}%
                         </p>
                     )}
+                    {subtitle && <p className="text-xs text-muted mt-1">{subtitle}</p>}
                 </div>
                 <Tooltip content={title}>
                     <div className={`${colors.iconClass} p-3 rounded-full`}>{icon}</div>

@@ -85,9 +85,15 @@ export interface ProjectMember {
   roles: string[];
 }
 
+// unitOfMeasure (Fase Z): unidad en la que se miden los valores observados de
+// las variables numéricas del campo ('₲', '°C', '%'). Eje de agrupación de las
+// métricas agregadas. null = campo puramente cualitativo, o unidad no
+// declarada todavía. No confundir con Variable.unit, que es el descriptor de
+// presentación ('1 kg').
 export interface StudyField {
   id: number;
   name: string;
+  unitOfMeasure: string | null;
   createdAt?: string | null;
 }
 
@@ -160,28 +166,77 @@ export interface VariableDistributionEntry {
   counts: Record<string, number>;
 }
 
-export interface VariableAnalysis {
+// Fase AA: el análisis dejó de ser solo "canasta". Espeja
+// inflacion_app_backend_nest/src/admin/analysis.ts -- ver ese archivo para las
+// reglas de agregación y su porqué.
+//
+// Convención de signo: A = período comparado ("actual"), B = base ("anterior").
+// `null` en un valor/variación significa "indefinido" (sin datos, o base cero),
+// nunca 0 -- la UI debe mostrar "—", no un número inventado.
+
+export type AggregateMethod = 'sum' | 'mean';
+
+export interface FrequencyEntry {
+  value: string;
+  count: number;
+  share: number;
+}
+
+export interface QuantitativeVariableAnalysis {
   id: number;
   name: string;
-  valueA: number;
-  valueB: number;
-  variation: number;
+  unit: string | null;
+  isCurrency: boolean;
+  valueA: number | null;
+  valueB: number | null;
+  variation: number | null;
+  sampleA: number;
+  sampleB: number;
+}
+
+export interface QualitativeVariableAnalysis {
+  id: number;
+  name: string;
+  dataType: 'categorical' | 'boolean' | 'text';
+  distributionA: FrequencyEntry[];
+  distributionB: FrequencyEntry[];
+  responsesA: number;
+  responsesB: number;
+}
+
+export interface StudyFieldAggregate {
+  method: AggregateMethod;
+  isCurrency: boolean;
+  valueA: number | null;
+  valueB: number | null;
+  variation: number | null;
+  comparableVariables: number;
+  excludedVariables: number;
 }
 
 export interface StudyFieldAnalysis {
   id: number;
   name: string;
-  costA: number;
-  costB: number;
-  variation: number;
-  variables: VariableAnalysis[];
+  unitOfMeasure: string | null;
+  quantitative: QuantitativeVariableAnalysis[];
+  qualitative: QualitativeVariableAnalysis[];
+  aggregate: StudyFieldAggregate | null;
+}
+
+export interface UnitTotal {
+  unitOfMeasure: string;
+  method: AggregateMethod;
+  isCurrency: boolean;
+  valueA: number | null;
+  valueB: number | null;
+  variation: number | null;
+  studyFieldIds: number[];
 }
 
 export interface AnalysisResult {
   studyFieldAnalysis: StudyFieldAnalysis[];
-  totalCostA: number;
-  totalCostB: number;
-  totalVariation: number;
+  unitTotals: UnitTotal[];
+  unitlessNumericStudyFields: { id: number; name: string }[];
 }
 
 // Students module
@@ -279,6 +334,8 @@ export interface ObservationUnitStudent {
 
 export interface CreateStudyFieldPayload {
   name: string;
+  unitOfMeasure?: string | null;
+  projectId: number;
 }
 
 export interface CreateVariablePayload {

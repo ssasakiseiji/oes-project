@@ -24,7 +24,7 @@ import type {
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 type ManagedItem = StudyField | Variable;
-type SortKey = 'id' | 'name' | 'unit' | 'studyFieldName' | 'dataType';
+type SortKey = 'id' | 'name' | 'unit' | 'unitOfMeasure' | 'studyFieldName' | 'dataType';
 type Tab = 'study-fields' | 'variables';
 
 const DATA_TYPE_LABELS: Record<VariableDataType, string> = {
@@ -148,26 +148,42 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
         try {
             const response = await apiFetch<StudyField>('/api/study-fields', {
                 method: 'POST',
-                body: JSON.stringify({ name: newItemName.trim(), projectId })
+                body: JSON.stringify({
+                    name: newItemName.trim(),
+                    unitOfMeasure: newItemUnit.trim() || null,
+                    projectId,
+                })
             });
 
             setStudyFields(prev => [...prev, response]);
             toast.success('Campo de estudio creado exitosamente');
             setShowAddModal(false);
             setNewItemName('');
+            setNewItemUnit('');
         } catch (err) {
             toast.error(`Error al crear campo de estudio: ${getErrorMessage(err)}`);
         }
     };
 
+    // Fase Z: el campo `unit` del estado de edición se reutiliza para
+    // unitOfMeasure en esta pestaña (en la de variables representa
+    // Variable.unit, el descriptor de presentación -- son conceptos distintos
+    // que nunca se editan en la misma fila).
     const startEditingStudyField = (studyField: StudyField) => {
-        setEditingItem({ id: studyField.id, name: studyField.name, unit: '', originalName: studyField.name, originalUnit: null });
+        setEditingItem({
+            id: studyField.id,
+            name: studyField.name,
+            unit: studyField.unitOfMeasure ?? '',
+            originalName: studyField.name,
+            originalUnit: studyField.unitOfMeasure ?? '',
+        });
     };
 
     const handleSaveStudyFieldEdit = async () => {
         const trimmedName = editingItem.name.trim();
+        const trimmedUnit = editingItem.unit.trim();
 
-        if (trimmedName === editingItem.originalName) {
+        if (trimmedName === editingItem.originalName && trimmedUnit === editingItem.originalUnit) {
             toast.info('No se detectaron cambios');
             setEditingItem({ id: null, name: '', unit: '', originalName: null, originalUnit: null });
             return;
@@ -178,14 +194,16 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
             return;
         }
 
+        const unitOfMeasure = trimmedUnit || null;
+
         try {
             await apiFetch(`/api/study-fields/${editingItem.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name: trimmedName, projectId })
+                body: JSON.stringify({ name: trimmedName, unitOfMeasure, projectId })
             });
 
             setStudyFields(prev =>
-                prev.map(f => f.id === editingItem.id ? { ...f, name: trimmedName } : f)
+                prev.map(f => f.id === editingItem.id ? { ...f, name: trimmedName, unitOfMeasure } : f)
             );
 
             toast.success('Campo de estudio actualizado exitosamente');
@@ -432,7 +450,9 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
         const filtered = data.filter(item => {
             const searchLower = searchTerm.toLowerCase();
             if (activeTab === 'study-fields') {
-                return item.name.toLowerCase().includes(searchLower);
+                const unitOfMeasure = (item as StudyField).unitOfMeasure || '';
+                return item.name.toLowerCase().includes(searchLower) ||
+                       unitOfMeasure.toLowerCase().includes(searchLower);
             } else {
                 const variable = item as Variable;
                 const studyFieldName = studyFields.find(f => f.id === variable.studyFieldId)?.name || '';
@@ -562,13 +582,19 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                                 <SortIcon sortKey="name" />
                                             </div>
                                         </th>
+                                        <th onClick={() => handleSort('unitOfMeasure')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                Unidad de Medida
+                                                <SortIcon sortKey="unitOfMeasure" />
+                                            </div>
+                                        </th>
                                         <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {paginatedStudyFields.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} className="text-center py-8 text-muted">
+                                            <td colSpan={4} className="text-center py-8 text-muted">
                                                 {searchTerm ? 'No se encontraron resultados' : 'No hay campos de estudio registrados'}
                                             </td>
                                         </tr>
@@ -590,6 +616,25 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                                         className="input"
                                                     />
                                                 ) : studyField.name}
+                                            </td>
+                                            <td className="py-3 px-4 text-ink">
+                                                {editingItem.id === studyField.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editingItem.unit}
+                                                        onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveStudyFieldEdit();
+                                                            if (e.key === 'Escape') cancelEditing();
+                                                        }}
+                                                        placeholder="Ej: ₲, °C, %"
+                                                        className="input w-32"
+                                                    />
+                                                ) : studyField.unitOfMeasure ? (
+                                                    <span className="font-mono">{studyField.unitOfMeasure}</span>
+                                                ) : (
+                                                    <span className="text-muted text-xs italic">Sin unidad</span>
+                                                )}
                                             </td>
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center justify-end gap-1">
@@ -633,7 +678,7 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                             <div className="flex items-center gap-2">Tipo <SortIcon sortKey="dataType" /></div>
                                         </th>
                                         <th onClick={() => handleSort('unit')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">Unidad <SortIcon sortKey="unit" /></div>
+                                            <div className="flex items-center gap-2">Presentación <SortIcon sortKey="unit" /></div>
                                         </th>
                                         <th onClick={() => handleSort('studyFieldName')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
                                             <div className="flex items-center gap-2">Campo de Estudio <SortIcon sortKey="studyFieldName" /></div>
@@ -747,6 +792,25 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                             />
                         </div>
 
+                        {activeTab === 'study-fields' && (
+                            <div className="field">
+                                <label>Unidad de Medida (opcional)</label>
+                                <input
+                                    type="text"
+                                    value={newItemUnit}
+                                    onChange={e => setNewItemUnit(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') handleAddStudyField(); }}
+                                    className="input"
+                                    placeholder="ej: ₲, °C, %"
+                                />
+                                <p className="text-xs text-muted mt-1">
+                                    Unidad en la que se miden las variables numéricas de este campo. Solo se
+                                    agregan entre sí métricas que comparten unidad. Déjala vacía si el campo
+                                    es puramente cualitativo.
+                                </p>
+                            </div>
+                        )}
+
                         {activeTab === 'variables' && (
                             <>
                                 <div className="field">
@@ -763,14 +827,18 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                                 </div>
 
                                 <div className="field">
-                                    <label>Unidad de Medida (opcional)</label>
+                                    <label>Presentación (opcional)</label>
                                     <input
                                         type="text"
                                         value={newItemUnit}
                                         onChange={e => setNewItemUnit(e.target.value)}
                                         className="input"
-                                        placeholder="ej: 1 kg, 500 g, °C"
+                                        placeholder="ej: 1 kg, 500 g, 2 L"
                                     />
+                                    <p className="text-xs text-muted mt-1">
+                                        Cantidad de referencia a la que se le observa el valor. La unidad en la
+                                        que se mide ese valor la define el campo de estudio.
+                                    </p>
                                 </div>
 
                                 {newItemDataType === 'numeric' && (
