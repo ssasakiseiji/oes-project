@@ -1,0 +1,275 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// Escrito a mano a partir de supabase-setup.sql + migrations/*.sql
+// (inflacion_app_backend).
+//
+// Verificado (Fase F, 2026-07-13) con `prisma db pull --print` contra el
+// Postgres local de docker-compose (bootstrapeado por los mismos SQL de
+// arriba) — sin mismatches semánticos: tipos, nullability, defaults,
+// índices, unique constraints y onDelete/onUpdate de cada FK coinciden
+// modelo por modelo. La única diferencia superficial fue que introspección
+// omite `onDelete: SetNull` en CommerceAssignment.assignedByUser porque
+// coincide con el default implícito de Prisma para relaciones opcionales
+// (confirmado además contra la DDL: `assigned_by ... REFERENCES users(id)
+// ON DELETE SET NULL`) — no es un gap real. Pendiente (fuera de esta
+// verificación, no bloqueante): confirmar que la Supabase real en producción
+// no divergió de supabase-setup.sql vía ediciones manuales en el dashboard.
+//
+// Fase H (2026-07-13): renombrado de dominio — la app deja de ser una app
+// de "precios" para ser una plataforma genérica de recolección de datos de
+// variables. Category/Product/Commerce/Price/DraftPrice/CommerceAssignment
+// pasan a StudyField/Variable/ObservationUnit/Observation/DraftObservation/
+// ObservationUnitAssignment. Variable gana `dataType`/`config` para soportar
+// tipos de dato más allá de numérico (categórico/booleano/texto); Observation
+// y DraftObservation guardan el valor en columnas tipadas separadas
+// (numericValue/textValue/booleanValue/choiceValue) en vez de un único
+// campo `price` — así el análisis estadístico (AVG/STDDEV) sigue corriendo
+// nativo sobre `numericValue` sin casts, y automáticamente queda
+// numeric-only (las filas no numéricas tienen `numericValue IS NULL`, que
+// los agregados de Postgres ya ignoran). Ver prisma/migrations/ para el
+// rename+backfill que preserva los datos existentes.
+
+// Se usa el generador clásico "prisma-client-js" (en vez del nuevo "prisma-client")
+// porque el segundo emite `import.meta.url` de forma incondicional y este proyecto
+// Nest compila a CommonJS por defecto (sin "type": "module" en package.json) — con
+// el generador nuevo, `nest build`/`tsc` falla al toparse con import.meta en un
+// archivo resuelto como CJS. prisma-client-js es CJS/UMD-safe.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 ya no acepta `url` acá — la connection string se pasa como
+// "driver adapter" al constructor de PrismaClient (ver src/prisma/prisma.service.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+// Todas las relaciones abajo declaran `onUpdate: NoAction` explícitamente
+// porque ninguna FK original (supabase-setup.sql / migrations/*.sql)
+// especifica ON UPDATE, y el default de Postgres para eso es NO ACTION —
+// pero el default IMPLÍCITO de Prisma (cuando se omite onUpdate) es CASCADE.
+// Sin esta anotación explícita, `prisma migrate diff` genera constraints con
+// ON UPDATE CASCADE, que es un comportamiento real distinto al de la base
+// original (ver Fase G).
+
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(255)
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  // Fase O (2026-07-14): deja de contener admin/monitor/student (eso ahora
+  // vive en ProjectMembership.roles, por proyecto) — el único valor global
+  // que sobrevive es 'superadmin'. Fase T retiró los roles legacy de todas
+  // las filas existentes y cambió el default: un usuario nuevo ya no nace
+  // con 'student' global (ese rol ahora se otorga vía ProjectMembership).
+  roles        String[]  @default([])
+  createdAt    DateTime? @default(now()) @map("created_at")
+
+  observations               Observation[]
+  draftObservations          DraftObservation[]
+  observationUnitAssignments ObservationUnitAssignment[] @relation("AssignedUser")
+  assignmentsMade            ObservationUnitAssignment[] @relation("AssignedByUser")
+  projectMemberships         ProjectMembership[]
+
+  @@map("users")
+}
+
+// Fase O (2026-07-14): un Project agrupa un conjunto de recolección de datos
+// completamente aislado (StudyFields/Variables/ObservationUnits/Periods/
+// Observations propios) — soporte para correr múltiples campañas de
+// recolección en la misma instancia (no es multi-tenancy: una sola DB, un
+// solo deploy, sin aislamiento de infraestructura).
+model Project {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  description String?
+  isArchived  Boolean   @default(false) @map("is_archived")
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  memberships      ProjectMembership[]
+  studyFields      StudyField[]
+  observationUnits ObservationUnit[]
+  periods          Period[]
+
+  @@map("projects")
+}
+
+// Reemplaza el rol global de User para todo lo scoped a un proyecto: un
+// usuario puede ser 'admin' en un Project y solo 'student' en otro. roles
+// reusa la misma forma (String[]) que User.roles tenía antes de Fase O, para
+// que el backfill (Fase O) sea una copia directa columna-a-columna.
+model ProjectMembership {
+  id        Int       @id @default(autoincrement())
+  projectId Int       @map("project_id")
+  userId    Int       @map("user_id")
+  roles     String[]  @default([])
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([projectId, userId])
+  @@index([userId], map: "idx_project_memberships_user")
+  @@index([projectId], map: "idx_project_memberships_project")
+  @@map("project_memberships")
+}
+
+// unitOfMeasure (Fase Z): unidad en la que se miden los valores observados de
+// las variables NUMÉRICAS de este campo ('₲', '°C', '%'). Es el eje de
+// agrupación de las métricas agregadas — solo se suman/promedian juntas
+// variables que comparten unidad. Ortogonal a Variable.unit, que es el
+// descriptor de presentación ('1 kg'). NULL = campo puramente cualitativo, o
+// unidad todavía no declarada por el admin.
+model StudyField {
+  id            Int       @id @default(autoincrement())
+  name          String    @db.VarChar(255)
+  unitOfMeasure String?   @map("unit_of_measure") @db.VarChar(50)
+  projectId     Int       @map("project_id")
+  createdAt     DateTime? @default(now()) @map("created_at")
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variables Variable[]
+
+  @@index([projectId], map: "idx_study_fields_project")
+  @@map("study_fields")
+}
+
+// dataType: 'numeric' | 'categorical' | 'boolean' | 'text' — String + CHECK
+// constraint (ver migrations/), mismo patrón que Period.status en vez de un
+// enum de Prisma, para seguir la convención ya establecida en este schema.
+//
+// config (Json?, forma depende de dataType, validada por Zod en el backend
+// — Postgres no modela esto, igual que la unicidad de nombre de categoría
+// ya es solo app-level):
+//   numeric:     { isCurrency: boolean, min?: number, max?: number, decimals?: number }
+//   categorical: { options: string[] }
+//   boolean:     null (sin config)
+//   text:        { maxLength?: number }
+model Variable {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(255)
+  unit         String?   @db.VarChar(50)
+  dataType     String    @default("numeric") @map("data_type") @db.VarChar(20)
+  config       Json?
+  studyFieldId Int?      @map("study_field_id")
+  createdAt    DateTime? @default(now()) @map("created_at")
+
+  studyField        StudyField?        @relation(fields: [studyFieldId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observations      Observation[]
+  draftObservations DraftObservation[]
+
+  @@index([studyFieldId], map: "idx_variables_study_field")
+  @@map("variables")
+}
+
+model ObservationUnit {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  address   String?
+  projectId Int       @map("project_id")
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  project                    Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observations               Observation[]
+  draftObservations          DraftObservation[]
+  observationUnitAssignments ObservationUnitAssignment[]
+
+  @@index([projectId], map: "idx_observation_units_project")
+  @@map("observation_units")
+}
+
+model Period {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  month     Int
+  year      Int
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime  @map("end_date") @db.Date
+  status    String    @default("Scheduled") @db.VarChar(50)
+  projectId Int       @map("project_id")
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observations      Observation[]
+  draftObservations DraftObservation[]
+
+  // Scoped por proyecto (Fase O) -- dos proyectos distintos pueden cada uno
+  // tener su propio período "Julio 2026".
+  @@unique([projectId, month, year])
+  @@index([projectId], map: "idx_periods_project")
+  @@map("periods")
+}
+
+// Solo una de numericValue/textValue/booleanValue/choiceValue debería estar
+// poblada por fila (la que corresponde al dataType de la Variable referenciada)
+// — enforced en el service layer (variable-value.ts), no en Postgres: un
+// CHECK constraint no puede validar contra el dataType de otra tabla. El
+// value_presence_check (ver migrations/) solo garantiza que AL MENOS una
+// esté poblada.
+model Observation {
+  id                Int       @id @default(autoincrement())
+  numericValue      Decimal?  @map("numeric_value") @db.Decimal(12, 2)
+  textValue         String?   @map("text_value")
+  booleanValue      Boolean?  @map("boolean_value")
+  choiceValue       String?   @map("choice_value") @db.VarChar(255)
+  periodId          Int?      @map("period_id")
+  variableId        Int?      @map("variable_id")
+  userId            Int?      @map("user_id")
+  observationUnitId Int?      @map("observation_unit_id")
+  createdAt         DateTime? @default(now()) @map("created_at")
+
+  period          Period?          @relation(fields: [periodId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variable        Variable?        @relation(fields: [variableId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observationUnit ObservationUnit? @relation(fields: [observationUnitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  // migrations/002-prices-integrity.sql (heredado de Price)
+  @@unique([userId, variableId, observationUnitId, periodId], map: "observations_unique_submission")
+  @@index([periodId], map: "idx_observations_period")
+  @@index([variableId], map: "idx_observations_variable")
+  @@index([userId], map: "idx_observations_user")
+  @@index([observationUnitId], map: "idx_observations_observation_unit")
+  @@index([userId, periodId, observationUnitId], map: "idx_observations_user_period_observation_unit")
+  @@map("observations")
+}
+
+model DraftObservation {
+  id                Int       @id @default(autoincrement())
+  numericValue      Decimal?  @map("numeric_value") @db.Decimal(12, 2)
+  textValue         String?   @map("text_value")
+  booleanValue      Boolean?  @map("boolean_value")
+  choiceValue       String?   @map("choice_value") @db.VarChar(255)
+  periodId          Int?      @map("period_id")
+  variableId        Int?      @map("variable_id")
+  userId            Int?      @map("user_id")
+  observationUnitId Int?      @map("observation_unit_id")
+  createdAt         DateTime? @default(now()) @map("created_at")
+  updatedAt         DateTime? @default(now()) @map("updated_at")
+
+  period          Period?          @relation(fields: [periodId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variable        Variable?        @relation(fields: [variableId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observationUnit ObservationUnit? @relation(fields: [observationUnitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId, observationUnitId, periodId], map: "idx_draft_observations_user_observation_unit_period")
+  @@map("draft_observations")
+}
+
+// migrations/add-commerce-assignments.sql (heredado de CommerceAssignment)
+model ObservationUnitAssignment {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @map("user_id")
+  observationUnitId Int       @map("observation_unit_id")
+  assignedAt        DateTime? @default(now()) @map("assigned_at")
+  assignedBy        Int?      @map("assigned_by")
+
+  user            User            @relation("AssignedUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  observationUnit ObservationUnit @relation(fields: [observationUnitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assignedByUser  User?           @relation("AssignedByUser", fields: [assignedBy], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([userId, observationUnitId])
+  @@index([userId], map: "idx_observation_unit_assignments_user")
+  @@index([observationUnitId], map: "idx_observation_unit_assignments_observation_unit")
+  @@map("observation_unit_assignments")
+}

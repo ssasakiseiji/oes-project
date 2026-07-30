@@ -1,4 +1,9 @@
 services:
+  # Sin scripts de init: el schema lo crea `prisma migrate deploy`, que el
+  # servicio backend corre al arrancar (ver inflacion_app_backend_nest/
+  # Dockerfile y prisma/migrations/, Fase G). Antes se bootstrapeaba acá
+  # con supabase-setup.sql + inflacion_app_backend/migrations/*.sql — esos
+  # archivos quedan como referencia histórica, ya no los usa nada.
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -8,9 +13,6 @@ services:
       POSTGRES_DB: ${DB_DATABASE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./supabase-setup.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./inflacion_app_backend/migrations/002-prices-integrity.sql:/docker-entrypoint-initdb.d/02-prices-integrity.sql:ro
-      - ./inflacion_app_backend/migrations/add-commerce-assignments.sql:/docker-entrypoint-initdb.d/03-commerce-assignments.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE}"]
       interval: 5s
@@ -18,26 +20,20 @@ services:
       retries: 10
 
   backend:
-    build: ./inflacion_app_backend
+    build: ./inflacion_app_backend_nest
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      PORT: 3001
+      PORT: 3002
       NODE_ENV: production
-      DB_USER: ${DB_USER}
-      DB_HOST: postgres
-      DB_DATABASE: ${DB_DATABASE}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_PORT: 5432
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_DATABASE}
       DB_SSL: "false"
-      DB_POOL_MAX: 10
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
-      SENTRY_DSN: ${SENTRY_DSN:-}
     expose:
-      - "3001"
+      - "3002"
 
   frontend:
     build:
@@ -46,7 +42,7 @@ services:
         # Vacío a propósito: mismo origen, detrás del proxy nginx que monta
         # /api (ver nginx.conf). El código del frontend ya antepone /api a
         # cada request — un valor no vacío acá duplicaría el prefijo
-        # (/api/api/...). Ver comentario en src/api.js.
+        # (/api/api/...). Ver comentario en src/api.ts.
         VITE_API_URL: ${VITE_API_URL:-}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     restart: unless-stopped
