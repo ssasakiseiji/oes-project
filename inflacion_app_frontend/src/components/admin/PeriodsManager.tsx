@@ -13,6 +13,23 @@ import type { CreatePeriodPayload, Period } from '../../types/api';
 
 const getErrorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+// start_date/end_date son columnas DATE (sin hora) en la DB, pero la API las
+// serializa como medianoche UTC: "2026-08-04T00:00:00.000Z". Pasarlas por
+// `new Date()` las interpreta como un instante y las reproyecta al huso del
+// navegador, así que en cualquier zona al oeste de UTC — Asunción es UTC-3 —
+// la fecha retrocede un día: el 04/08 se muestra como 03/08.
+//
+// Esto no era solo cosmético: el auto-cierre de abajo comparaba ese Date
+// corrido contra hoy, y cerraba los períodos un día antes de su fecha de fin,
+// robándole a los estudiantes el último día de recolección.
+//
+// Tomamos los componentes Y-M-D literales y armamos un Date local, que es lo
+// que representa una fecha-sin-hora.
+const parseDateOnly = (value: string): Date => {
+    const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+    return new Date(year, month - 1, day);
+};
+
 type SortKey = 'name' | 'status' | 'year' | 'month';
 
 interface PeriodsManagerProps {
@@ -98,8 +115,7 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
 
             periods.forEach(period => {
                 if (period.status === 'Open') {
-                    const endDate = new Date(period.end_date);
-                    endDate.setHours(0, 0, 0, 0);
+                    const endDate = parseDateOnly(period.end_date);
 
                     if (endDate < today) {
                         handleUpdateStatus(period.id, 'Closed', true);
@@ -148,8 +164,8 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
         if (!editingPeriod) return;
         try {
             // Validate dates
-            const startDate = new Date(editingPeriod.start_date);
-            const endDate = new Date(editingPeriod.end_date);
+            const startDate = parseDateOnly(editingPeriod.start_date);
+            const endDate = parseDateOnly(editingPeriod.end_date);
 
             if (endDate <= startDate) {
                 toast.error('La fecha de fin debe ser posterior a la fecha de inicio');
@@ -331,7 +347,7 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
                                                 </div>
                                             ) : (
                                                 <span className="font-mono text-muted">
-                                                    {new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}
+                                                    {parseDateOnly(p.start_date).toLocaleDateString()} - {parseDateOnly(p.end_date).toLocaleDateString()}
                                                 </span>
                                             )}
                                         </td>
