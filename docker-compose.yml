@@ -2,8 +2,9 @@ services:
   # Sin scripts de init: el schema lo crea `prisma migrate deploy`, que el
   # servicio backend corre al arrancar (ver inflacion_app_backend_nest/
   # Dockerfile y prisma/migrations/, Fase G). Antes se bootstrapeaba acá
-  # con supabase-setup.sql + inflacion_app_backend/migrations/*.sql — esos
-  # archivos quedan como referencia histórica, ya no los usa nada.
+  # con supabase-setup.sql + inflacion_app_backend/migrations/*.sql; el
+  # backend Express quedó eliminado en el cutover y sus migraciones viven
+  # sólo en el historial de git (ver tag backup/pre-cutover-main).
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
