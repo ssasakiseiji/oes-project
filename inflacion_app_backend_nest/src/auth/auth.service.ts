@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeEmail } from '../common/validation/email';
 
 export interface AuthUserPayload {
   id: number;
@@ -15,7 +16,11 @@ export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    // Normaliza acá además del schema: esta búsqueda es el control de acceso,
+    // no debe depender de que la entrada haya pasado por loginSchema.
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizeEmail(email) },
+    });
 
     if (!user) {
       throw new UnauthorizedException('Credenciales incorrectas');

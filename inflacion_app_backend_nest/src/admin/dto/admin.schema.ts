@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { emailSchema } from '../../common/validation/email';
 
 // Port 1:1 de inflacion_app_backend/validators/adminValidators.js, mas los
 // esquemas que en adminController.js eran chequeos manuales (`if (!x) return
@@ -54,7 +55,7 @@ export const updateObservationSchema = z.object({
 // ahora solo existe para 'superadmin').
 export const createUserSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido'),
-  email: z.string().email('Email inválido'),
+  email: emailSchema,
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   projectId: z.number({ error: 'projectId es requerido' }),
   roles: z.array(z.string()).min(1, 'Debe asignar al menos un rol al usuario'),
@@ -68,7 +69,7 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z
   .object({
     name: z.string().min(1).optional(),
-    email: z.string().email('Email inválido').optional(),
+    email: emailSchema.optional(),
     projectId: z.number({ error: 'projectId es requerido' }),
   })
   .refine((data) => data.name || data.email, {
