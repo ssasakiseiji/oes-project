@@ -1,0 +1,54 @@
+/* Descarga en PDF.
+ *
+ * Se resuelve con el "Imprimir → Guardar como PDF" del navegador en vez de
+ * jsPDF/html2canvas: sin dependencias nuevas, y el texto sale vectorial (se
+ * puede seleccionar y buscar dentro del PDF) en vez de una captura rasterizada
+ * que se pixela al hacer zoom.
+ *
+ * El overlay de pantalla NO se puede imprimir tal cual: es position:fixed y
+ * muestra una sola diapositiva por vez. Por eso PresentacionOverlay monta
+ * aparte, en un portal sobre <body>, un contenedor con las N diapositivas
+ * apiladas — invisible en pantalla, y lo único visible al imprimir. */
+
+.presentacion-impresion {
+    display: none;
+}
+
+@media print {
+    /* 338.7 x 190.5 mm es el 16:9 estándar de presentaciones. Margen 0 porque
+       cada diapositiva ya trae el suyo. */
+    @page {
+        size: 338.7mm 190.5mm;
+        margin: 0;
+    }
+
+    /* La app entera se oculta: dejarla montada haría que el overlay fixed se
+       repita o se corte en cada página. */
+    #root {
+        display: none !important;
+    }
+
+    .presentacion-impresion {
+        display: block !important;
+    }
+
+    .presentacion-impresion-pagina {
+        width: 338.7mm;
+        height: 190.5mm;
+        overflow: hidden;
+        background: var(--color-bg);
+        color: var(--color-ink);
+        break-after: page;
+        /* Sin esto el navegador descarta los fondos salvo que el usuario tilde
+           "Gráficos de fondo" en el diálogo -- y sobre papel blanco, un texto
+           casi blanco queda invisible. Es propiedad heredada, así que alcanza
+           con declararla acá para toda la diapositiva. */
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Sin esto el navegador emite una última página en blanco. */
+    .presentacion-impresion-pagina:last-child {
+        break-after: auto;
+    }
+}
