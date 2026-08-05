@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Users, ArrowUpDown, Trash2, Shield, ShieldOff, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, Trash2, Shield, ShieldOff, ArrowUp, ArrowDown } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Pagination } from '../ui/Pagination';
-import { TableSkeleton } from '../ui/TableSkeleton';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { EmptyState } from '../ui/EmptyState';
 import { RoleTag } from '../ui/RoleTag';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -136,87 +137,86 @@ export const PlatformUsersManager = () => {
                     Esta lista incluye todos los usuarios de todos los proyectos. Para crear un usuario nuevo, hacelo desde la vista de Miembros de un proyecto específico.
                 </p>
 
-                {isLoading ? (
-                    <TableSkeleton rows={5} columns={4} />
-                ) : filteredUsers.length === 0 ? (
-                    <EmptyState
-                        icon={Users}
-                        title="No se encontraron usuarios"
-                        description="No hay usuarios que coincidan con la búsqueda."
-                    />
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full text-left text-sm">
-                                <thead>
-                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <th onClick={() => handleSort('id')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                ID
-                                                {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('name')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Nombre
-                                                {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('email')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Email
-                                                {sortConfig.key === 'email' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
-                                            </div>
-                                        </th>
-                                        <th className="p-3 font-medium text-muted">Rol de Plataforma</th>
-                                        <th className="p-3 text-right font-medium text-muted">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedUsers.map(u => {
-                                        const isSuperadmin = u.roles.includes('superadmin');
-                                        return (
-                                            <tr key={u.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
-                                                <td className="p-3 text-muted">{u.id}</td>
-                                                <td className="p-3 font-medium text-ink">{u.name}</td>
-                                                <td className="p-3 text-muted">{u.email}</td>
-                                                <td className="p-3">
-                                                    {isSuperadmin ? <RoleTag role="superadmin" /> : <span className="text-muted text-sm">Ninguno</span>}
-                                                </td>
-                                                <td className="p-3">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <Tooltip content={isSuperadmin ? 'Revocar superadmin' : 'Otorgar superadmin'}>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon-sm"
-                                                                onClick={() => setRoleChangeTarget({ user: u, grant: !isSuperadmin })}
-                                                                className={isSuperadmin ? 'text-accent-300' : 'text-muted hover:text-ink'}
-                                                            >
-                                                                {isSuperadmin ? <ShieldOff size={16} /> : <Shield size={16} />}
-                                                            </Button>
-                                                        </Tooltip>
-                                                        <Tooltip content="Eliminar cuenta">
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTarget(u)} className="text-danger hover:bg-danger/10">
-                                                                <Trash2 size={16} />
-                                                            </Button>
-                                                        </Tooltip>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            totalItems={sortedUsers.length}
-                            itemsPerPage={itemsPerPage}
-                            onPageChange={setCurrentPage}
+                <LoadingArea isLoading={isLoading} skeleton={<TableSkeleton rows={5} columns={4} />}>
+                    {filteredUsers.length === 0 ? (
+                        <EmptyState
+                            title="No se encontraron usuarios"
+                            description="No hay usuarios que coincidan con la búsqueda."
                         />
-                    </>
-                )}
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <th onClick={() => handleSort('id')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    ID
+                                                    {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('name')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Nombre
+                                                    {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('email')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Email
+                                                    {sortConfig.key === 'email' ? (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />) : <ArrowUpDown size={14} className="opacity-40" />}
+                                                </div>
+                                            </th>
+                                            <th className="p-3 font-medium text-muted">Rol de Plataforma</th>
+                                            <th className="p-3 text-right font-medium text-muted">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedUsers.map(u => {
+                                            const isSuperadmin = u.roles.includes('superadmin');
+                                            return (
+                                                <tr key={u.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                                    <td className="p-3 text-muted">{u.id}</td>
+                                                    <td className="p-3 font-medium text-ink">{u.name}</td>
+                                                    <td className="p-3 text-muted">{u.email}</td>
+                                                    <td className="p-3">
+                                                        {isSuperadmin ? <RoleTag role="superadmin" /> : <span className="text-muted text-sm">Ninguno</span>}
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <Tooltip content={isSuperadmin ? 'Revocar superadmin' : 'Otorgar superadmin'}>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    onClick={() => setRoleChangeTarget({ user: u, grant: !isSuperadmin })}
+                                                                    className={isSuperadmin ? 'text-accent-300' : 'text-muted hover:text-ink'}
+                                                                >
+                                                                    {isSuperadmin ? <ShieldOff size={16} /> : <Shield size={16} />}
+                                                                </Button>
+                                                            </Tooltip>
+                                                            <Tooltip content="Eliminar cuenta">
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTarget(u)} className="text-danger hover:bg-danger/10">
+                                                                    <Trash2 size={16} />
+                                                                </Button>
+                                                            </Tooltip>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={sortedUsers.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={setCurrentPage}
+                            />
+                        </>
+                    )}
+                </LoadingArea>
             </div>
 
             <ConfirmModal

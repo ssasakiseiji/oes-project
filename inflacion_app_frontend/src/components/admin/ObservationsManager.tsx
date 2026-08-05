@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Select from 'react-select';
-import { Filter, MoreVertical, Download, Search, Check, X, Edit, Trash2, AlertTriangle, Database, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Filter, MoreVertical, Download, Search, Check, X, Edit, Trash2, AlertTriangle, SlidersHorizontal, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
@@ -9,7 +9,8 @@ import { getReactSelectStyles } from '../../utils/reactSelectStyles';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { Pagination } from '../ui/Pagination';
-import { TableSkeleton } from '../ui/TableSkeleton';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
@@ -367,8 +368,10 @@ export const ObservationsManager = ({ projectId }: ObservationsManagerProps) => 
 
     return (
         <>
-            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Registros' }]} />
-            <div className="card elev-sm p-6 space-y-4">
+            <Breadcrumbs items={[{ label: 'Administración' }, { label: 'Registros' }]} />
+            {/* Sin card propia: el cuerpo del panel ya es una sola superficie
+                (.admin-surface en AdminDashboard) */}
+            <div className="space-y-4">
                 {/* Header con título y botones de acción */}
                 <div className="flex justify-between items-center flex-wrap gap-3">
                     <h3 className="text-lg font-medium text-ink">Auditoría de Observaciones</h3>
@@ -552,185 +555,184 @@ export const ObservationsManager = ({ projectId }: ObservationsManagerProps) => 
                         </div>
                     </div>
                 )}
-                {isLoading ? (
-                    <TableSkeleton rows={5} columns={6} />
-                ) : observations.length === 0 ? (
-                    <EmptyState
-                        icon={Database}
-                        title="No hay observaciones registradas"
-                        description="Los estudiantes aún no han registrado observaciones, o los filtros aplicados no coinciden con ningún registro."
-                    />
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full text-left text-sm">
-                                <thead>
-                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <th onClick={() => handleSort('variableName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Variable
-                                                {sortConfig.key === 'variableName' ? (
-                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('studyFieldName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Campo de Estudio
-                                                {sortConfig.key === 'studyFieldName' ? (
-                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th className="p-3 font-medium text-muted">Valor</th>
-                                        <th onClick={() => handleSort('observationUnitName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Unidad de Observación
-                                                {sortConfig.key === 'observationUnitName' ? (
-                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('userName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Estudiante
-                                                {sortConfig.key === 'userName' ? (
-                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('periodName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Período
-                                                {sortConfig.key === 'periodName' ? (
-                                                    sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th className="p-3 font-medium text-muted">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                {paginatedObservations.map(o => (
-                            <tr key={o.id} className={`border-b last:border-none transition-colors ${
-                                editingObservation.id === o.id
-                                    ? 'bg-accent-800/20 ring-1 ring-accent ring-inset'
-                                    : o.isOutlier
-                                        ? 'bg-danger/10 hover:bg-danger/15'
-                                        : 'hover:bg-accent-800/10'
-                            }`} style={{ borderColor: 'var(--color-divider)' }}>
-                                <td className="p-3 font-medium text-ink">{o.variableName}</td>
-                                <td className="p-3">
-                                    <span className="tag tag-accent">
-                                        {o.studyFieldName}
-                                    </span>
-                                </td>
-                                <td className="p-3 font-mono text-ink">
-                                    {editingObservation.id === o.id ? (
-                                        editingObservation.dataType === 'numeric' ? (
-                                            <input
-                                                ref={editInputRef}
-                                                type="text"
-                                                inputMode="numeric"
-                                                pattern="[0-9]*"
-                                                value={editingObservation.value ? new Intl.NumberFormat('es-PY').format(parseInt(editingObservation.value) || 0) : ''}
-                                                onChange={e => {
-                                                    const value = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-                                                    setEditingObservation({...editingObservation, value});
-                                                }}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') handleSaveEdit(o.id);
-                                                    if (e.key === 'Escape') cancelEditing();
-                                                }}
-                                                className="input w-32 py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            />
-                                        ) : editingObservation.dataType === 'boolean' ? (
-                                            <select
-                                                value={editingObservation.booleanValue ? 'true' : 'false'}
-                                                onChange={e => setEditingObservation({...editingObservation, booleanValue: e.target.value === 'true'})}
-                                                className="input py-1"
-                                            >
-                                                <option value="true">Sí</option>
-                                                <option value="false">No</option>
-                                            </select>
-                                        ) : (
-                                            <input
-                                                ref={editInputRef}
-                                                type="text"
-                                                value={editingObservation.value}
-                                                onChange={e => setEditingObservation({...editingObservation, value: e.target.value})}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') handleSaveEdit(o.id);
-                                                    if (e.key === 'Escape') cancelEditing();
-                                                }}
-                                                className="input w-40 py-1"
-                                            />
-                                        )
-                                    ) : (
-                                        <div className="flex items-center gap-2">
-                                            <span>{formatObservationValue(o) || <span className="text-muted italic">Sin valor</span>}</span>
-                                            {o.isOutlier && <AlertTriangle size={16} className="text-danger"/>}
-                                        </div>
-                                    )}
-                                </td>
-                                <td className="p-3 text-muted">{o.observationUnitName}</td>
-                                <td className="p-3 text-muted">{o.userName}</td>
-                                <td className="p-3 text-muted">{o.periodName}</td>
-                                <td className="p-3">
-                                    <div className="flex gap-1">
-                                        {editingObservation.id === o.id ? (
-                                            <>
-                                                <Tooltip content="Guardar (Enter)">
-                                                    <Button variant="ghost" size="icon-sm" onClick={() => handleSaveEdit(o.id)} className="text-success hover:bg-success/10">
-                                                        <Check size={16} />
-                                                    </Button>
-                                                </Tooltip>
-                                                <Tooltip content="Cancelar (Esc)">
-                                                    <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink">
-                                                        <X size={16} />
-                                                    </Button>
-                                                </Tooltip>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Tooltip content="Editar valor">
-                                                    <Button variant="ghost" size="icon-sm" onClick={() => startEditing(o)} disabled={editingObservation.id !== null} className="text-accent-300">
-                                                        <Edit size={16} />
-                                                    </Button>
-                                                </Tooltip>
-                                                <Tooltip content="Eliminar registro">
-                                                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(o.id)} disabled={editingObservation.id !== null} className="text-danger hover:bg-danger/10">
-                                                        <Trash2 size={16} />
-                                                    </Button>
-                                                </Tooltip>
-                                            </>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            totalItems={sortedObservations.length}
-                            itemsPerPage={itemsPerPage}
-                            onPageChange={setCurrentPage}
+                <LoadingArea isLoading={isLoading} skeleton={<TableSkeleton rows={5} columns={6} />}>
+                    {observations.length === 0 ? (
+                        <EmptyState
+                            title="No hay observaciones registradas"
+                            description="Los estudiantes aún no han registrado observaciones, o los filtros aplicados no coinciden con ningún registro."
                         />
-                    </>
-                )}
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <th onClick={() => handleSort('variableName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Variable
+                                                    {sortConfig.key === 'variableName' ? (
+                                                        sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('studyFieldName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Campo de Estudio
+                                                    {sortConfig.key === 'studyFieldName' ? (
+                                                        sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th className="p-3 font-medium text-muted">Valor</th>
+                                            <th onClick={() => handleSort('observationUnitName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Unidad de Observación
+                                                    {sortConfig.key === 'observationUnitName' ? (
+                                                        sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('userName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Estudiante
+                                                    {sortConfig.key === 'userName' ? (
+                                                        sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('periodName')} className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Período
+                                                    {sortConfig.key === 'periodName' ? (
+                                                        sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-accent-300" /> : <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th className="p-3 font-medium text-muted">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    {paginatedObservations.map(o => (
+                                <tr key={o.id} className={`border-b last:border-none transition-colors ${
+                                    editingObservation.id === o.id
+                                        ? 'bg-accent-800/20 ring-1 ring-accent ring-inset'
+                                        : o.isOutlier
+                                            ? 'bg-danger/10 hover:bg-danger/15'
+                                            : 'hover:bg-accent-800/10'
+                                }`} style={{ borderColor: 'var(--color-divider)' }}>
+                                    <td className="p-3 font-medium text-ink">{o.variableName}</td>
+                                    <td className="p-3">
+                                        <span className="tag tag-accent">
+                                            {o.studyFieldName}
+                                        </span>
+                                    </td>
+                                    <td className="p-3 tabular-nums text-ink">
+                                        {editingObservation.id === o.id ? (
+                                            editingObservation.dataType === 'numeric' ? (
+                                                <input
+                                                    ref={editInputRef}
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
+                                                    value={editingObservation.value ? new Intl.NumberFormat('es-PY').format(parseInt(editingObservation.value) || 0) : ''}
+                                                    onChange={e => {
+                                                        const value = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                                                        setEditingObservation({...editingObservation, value});
+                                                    }}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleSaveEdit(o.id);
+                                                        if (e.key === 'Escape') cancelEditing();
+                                                    }}
+                                                    className="input w-32 py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                />
+                                            ) : editingObservation.dataType === 'boolean' ? (
+                                                <select
+                                                    value={editingObservation.booleanValue ? 'true' : 'false'}
+                                                    onChange={e => setEditingObservation({...editingObservation, booleanValue: e.target.value === 'true'})}
+                                                    className="input py-1"
+                                                >
+                                                    <option value="true">Sí</option>
+                                                    <option value="false">No</option>
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    ref={editInputRef}
+                                                    type="text"
+                                                    value={editingObservation.value}
+                                                    onChange={e => setEditingObservation({...editingObservation, value: e.target.value})}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleSaveEdit(o.id);
+                                                        if (e.key === 'Escape') cancelEditing();
+                                                    }}
+                                                    className="input w-40 py-1"
+                                                />
+                                            )
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <span>{formatObservationValue(o) || <span className="text-muted italic">Sin valor</span>}</span>
+                                                {o.isOutlier && <AlertTriangle size={16} className="text-danger"/>}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="p-3 text-muted">{o.observationUnitName}</td>
+                                    <td className="p-3 text-muted">{o.userName}</td>
+                                    <td className="p-3 text-muted">{o.periodName}</td>
+                                    <td className="p-3">
+                                        <div className="flex gap-1">
+                                            {editingObservation.id === o.id ? (
+                                                <>
+                                                    <Tooltip content="Guardar (Enter)">
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => handleSaveEdit(o.id)} className="text-success hover:bg-success/10">
+                                                            <Check size={16} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Cancelar (Esc)">
+                                                        <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink">
+                                                            <X size={16} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Tooltip content="Editar valor">
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => startEditing(o)} disabled={editingObservation.id !== null} className="text-accent-300">
+                                                            <Edit size={16} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Eliminar registro">
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(o.id)} disabled={editingObservation.id !== null} className="text-danger hover:bg-danger/10">
+                                                            <Trash2 size={16} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={sortedObservations.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={setCurrentPage}
+                            />
+                        </>
+                    )}
+                </LoadingArea>
             </div>
             <ConfirmModal
                 isOpen={confirmModal.isOpen}

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Check, X, Edit, Trash2, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
-import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { Pagination } from '../ui/Pagination';
 import { StudentCommercePopover } from '../ui/StudentCommercePopover';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
@@ -235,7 +236,9 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
         );
 
     return (
-        <div className="card elev-sm p-6 space-y-4">
+        // Sin card propia: el cuerpo del panel ya es una sola superficie
+        // (.admin-surface en AdminDashboard)
+        <div className="space-y-4">
             {/* Header with Search and Add Button */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h3 className="text-lg font-medium text-ink">Gestión de Unidades de Observación</h3>
@@ -259,157 +262,157 @@ export const ObservationUnitsView = ({ projectId }: ObservationUnitsViewProps) =
             </div>
 
             {/* Observation Units Table */}
-            {isLoading ? (
-                <LoadingSpinner />
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
-                                <th
-                                    onClick={() => handleSort('id')}
-                                    className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        ID
-                                        <SortIcon sortKey="id" />
-                                    </div>
-                                </th>
-                                <th
-                                    onClick={() => handleSort('name')}
-                                    className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Nombre
-                                        <SortIcon sortKey="name" />
-                                    </div>
-                                </th>
-                                <th
-                                    onClick={() => handleSort('address')}
-                                    className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Direccion
-                                        <SortIcon sortKey="address" />
-                                    </div>
-                                </th>
-                                <th className="py-3 px-4 font-medium text-muted">Estudiantes Asignados</th>
-                                <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {paginatedData.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="text-center py-8 text-muted">
-                                        {searchTerm ? 'No se encontraron resultados' : 'No hay unidades de observación registradas'}
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedData.map(observationUnit => (
-                                    <tr
-                                        key={observationUnit.id}
-                                        className={`border-b last:border-none transition-colors ${
-                                            editingObservationUnit.id === observationUnit.id
-                                                ? 'bg-accent-800/20 ring-1 ring-accent ring-inset'
-                                                : 'hover:bg-accent-800/10'
-                                        }`}
-                                        style={{ borderColor: 'var(--color-divider)' }}
+            <LoadingArea isLoading={isLoading} skeleton={<TableSkeleton rows={5} columns={5} />}>
+                {(
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
+                                    <th
+                                        onClick={() => handleSort('id')}
+                                        className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
                                     >
-                                        <td className="py-3 px-4 text-muted">{observationUnit.id}</td>
-                                        <td className="py-3 px-4 text-ink">
-                                            {editingObservationUnit.id === observationUnit.id ? (
-                                                <input
-                                                    ref={editInputRef}
-                                                    type="text"
-                                                    value={editingObservationUnit.name}
-                                                    onChange={e => setEditingObservationUnit({ ...editingObservationUnit, name: e.target.value })}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleSaveObservationUnitEdit();
-                                                        if (e.key === 'Escape') cancelEditing();
-                                                    }}
-                                                    className="input"
-                                                />
-                                            ) : (
-                                                observationUnit.name
-                                            )}
-                                        </td>
-                                        <td className="py-3 px-4 text-muted">
-                                            {editingObservationUnit.id === observationUnit.id ? (
-                                                <input
-                                                    type="text"
-                                                    value={editingObservationUnit.address}
-                                                    onChange={e => setEditingObservationUnit({ ...editingObservationUnit, address: e.target.value })}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleSaveObservationUnitEdit();
-                                                        if (e.key === 'Escape') cancelEditing();
-                                                    }}
-                                                    className="input"
-                                                />
-                                            ) : (
-                                                observationUnit.address
-                                            )}
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <StudentCommercePopover
-                                                items={observationUnit.assigned_students || []}
-                                                type="students"
-                                            />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center justify-end gap-1">
-                                                {editingObservationUnit.id === observationUnit.id ? (
-                                                    <>
-                                                        <Button variant="ghost" size="icon-sm" onClick={handleSaveObservationUnitEdit} className="text-success hover:bg-success/10" title="Guardar">
-                                                            <Check size={18} />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar">
-                                                            <X size={18} />
-                                                        </Button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            onClick={() => startEditingObservationUnit(observationUnit)}
-                                                            disabled={editingObservationUnit.id !== null}
-                                                            className="text-accent-300"
-                                                            title="Editar"
-                                                        >
-                                                            <Edit size={18} />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            onClick={() => confirmDeleteObservationUnit(observationUnit)}
-                                                            disabled={editingObservationUnit.id !== null}
-                                                            className="text-danger hover:bg-danger/10"
-                                                            title="Eliminar"
-                                                        >
-                                                            <Trash2 size={18} />
-                                                        </Button>
-                                                    </>
-                                                )}
-                                            </div>
+                                        <div className="flex items-center gap-2">
+                                            ID
+                                            <SortIcon sortKey="id" />
+                                        </div>
+                                    </th>
+                                    <th
+                                        onClick={() => handleSort('name')}
+                                        className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            Nombre
+                                            <SortIcon sortKey="name" />
+                                        </div>
+                                    </th>
+                                    <th
+                                        onClick={() => handleSort('address')}
+                                        className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            Direccion
+                                            <SortIcon sortKey="address" />
+                                        </div>
+                                    </th>
+                                    <th className="py-3 px-4 font-medium text-muted">Estudiantes Asignados</th>
+                                    <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paginatedData.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="text-center py-8 text-muted">
+                                            {searchTerm ? 'No se encontraron resultados' : 'No hay unidades de observación registradas'}
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                ) : (
+                                    paginatedData.map(observationUnit => (
+                                        <tr
+                                            key={observationUnit.id}
+                                            className={`border-b last:border-none transition-colors ${
+                                                editingObservationUnit.id === observationUnit.id
+                                                    ? 'bg-accent-800/20 ring-1 ring-accent ring-inset'
+                                                    : 'hover:bg-accent-800/10'
+                                            }`}
+                                            style={{ borderColor: 'var(--color-divider)' }}
+                                        >
+                                            <td className="py-3 px-4 text-muted">{observationUnit.id}</td>
+                                            <td className="py-3 px-4 text-ink">
+                                                {editingObservationUnit.id === observationUnit.id ? (
+                                                    <input
+                                                        ref={editInputRef}
+                                                        type="text"
+                                                        value={editingObservationUnit.name}
+                                                        onChange={e => setEditingObservationUnit({ ...editingObservationUnit, name: e.target.value })}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveObservationUnitEdit();
+                                                            if (e.key === 'Escape') cancelEditing();
+                                                        }}
+                                                        className="input"
+                                                    />
+                                                ) : (
+                                                    observationUnit.name
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-4 text-muted">
+                                                {editingObservationUnit.id === observationUnit.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editingObservationUnit.address}
+                                                        onChange={e => setEditingObservationUnit({ ...editingObservationUnit, address: e.target.value })}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveObservationUnitEdit();
+                                                            if (e.key === 'Escape') cancelEditing();
+                                                        }}
+                                                        className="input"
+                                                    />
+                                                ) : (
+                                                    observationUnit.address
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <StudentCommercePopover
+                                                    items={observationUnit.assigned_students || []}
+                                                    type="students"
+                                                />
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {editingObservationUnit.id === observationUnit.id ? (
+                                                        <>
+                                                            <Button variant="ghost" size="icon-sm" onClick={handleSaveObservationUnitEdit} className="text-success hover:bg-success/10" title="Guardar">
+                                                                <Check size={18} />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar">
+                                                                <X size={18} />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                onClick={() => startEditingObservationUnit(observationUnit)}
+                                                                disabled={editingObservationUnit.id !== null}
+                                                                className="text-accent-300"
+                                                                title="Editar"
+                                                            >
+                                                                <Edit size={18} />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                onClick={() => confirmDeleteObservationUnit(observationUnit)}
+                                                                disabled={editingObservationUnit.id !== null}
+                                                                className="text-danger hover:bg-danger/10"
+                                                                title="Eliminar"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            onPageChange={handlePageChange}
-                            totalItems={filteredData.length}
-                            itemsPerPage={itemsPerPage}
-                        />
-                    )}
-                </div>
-            )}
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={handlePageChange}
+                                totalItems={filteredData.length}
+                                itemsPerPage={itemsPerPage}
+                            />
+                        )}
+                    </div>
+                )}
+            </LoadingArea>
 
             {/* Add Modal */}
             <Dialog open={showAddModal} onOpenChange={(open) => { if (!open) { setShowAddModal(false); setNewObservationUnit({ name: '', address: '' }); } }}>

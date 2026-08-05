@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import Select from 'react-select';
-import { Variable as VariableIcon, Tag, Search, Plus, Check, X, Edit, Trash2, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, Settings, AreaChart } from 'lucide-react';
+import { Search, Plus, Check, X, Edit, Trash2, AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, Settings, AreaChart } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
 import { getReactSelectStyles } from '../../utils/reactSelectStyles';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Pagination } from '../ui/Pagination';
-import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { DistributionChartModal } from '../ui/DistributionChartModal';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
@@ -520,17 +521,17 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
 
     return (
         <>
-            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Variables y Campos de Estudio' }]} />
-            <div className="card elev-sm p-6 space-y-4">
+            <Breadcrumbs items={[{ label: 'Administración' }, { label: 'Variables y Campos de Estudio' }]} />
+            {/* Sin card propia: el cuerpo del panel ya es una sola superficie
+                (.admin-surface en AdminDashboard) */}
+            <div className="space-y-4">
                 {/* Tabs */}
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
                     <TabsList>
                         <TabsTrigger value="variables" disabled={editingItem.id !== null}>
-                            <VariableIcon size={16} />
                             Variables
                         </TabsTrigger>
                         <TabsTrigger value="study-fields" disabled={editingItem.id !== null}>
-                            <Tag size={16} />
                             Campos de Estudio
                         </TabsTrigger>
                     </TabsList>
@@ -560,213 +561,217 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                     </div>
                 </div>
 
-                {/* Content */}
-                {isLoading ? (
-                    <LoadingSpinner />
-                ) : activeTab === 'study-fields' ? (
-                    // Study Fields Table
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <th onClick={() => handleSort('id')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                ID
-                                                <SortIcon sortKey="id" />
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('name')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Nombre
-                                                <SortIcon sortKey="name" />
-                                            </div>
-                                        </th>
-                                        <th onClick={() => handleSort('unitOfMeasure')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                Unidad de Medida
-                                                <SortIcon sortKey="unitOfMeasure" />
-                                            </div>
-                                        </th>
-                                        <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedStudyFields.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={4} className="text-center py-8 text-muted">
-                                                {searchTerm ? 'No se encontraron resultados' : 'No hay campos de estudio registrados'}
-                                            </td>
+                {/* Content -- el skeleton lleva las columnas de la tabla de la
+                    pestaña activa (Campos de Estudio: 4, Variables: 6). */}
+                <LoadingArea
+                    isLoading={isLoading}
+                    skeleton={<TableSkeleton rows={5} columns={activeTab === 'study-fields' ? 4 : 6} />}
+                >
+                    {activeTab === 'study-fields' ? (
+                        // Study Fields Table
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <th onClick={() => handleSort('id')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    ID
+                                                    <SortIcon sortKey="id" />
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('name')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Nombre
+                                                    <SortIcon sortKey="name" />
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleSort('unitOfMeasure')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    Unidad de Medida
+                                                    <SortIcon sortKey="unitOfMeasure" />
+                                                </div>
+                                            </th>
+                                            <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
                                         </tr>
-                                    ) : (
-                                        paginatedStudyFields.map(studyField => (
-                                        <tr key={studyField.id} className={`border-b last:border-none transition-colors ${editingItem.id === studyField.id ? 'bg-accent-800/20 ring-1 ring-accent ring-inset' : 'hover:bg-accent-800/10'}`} style={{ borderColor: 'var(--color-divider)' }}>
-                                            <td className="py-3 px-4 text-muted">{studyField.id}</td>
-                                            <td className="py-3 px-4 text-ink">
-                                                {editingItem.id === studyField.id ? (
-                                                    <input
-                                                        ref={editInputRef}
-                                                        type="text"
-                                                        value={editingItem.name}
-                                                        onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') handleSaveStudyFieldEdit();
-                                                            if (e.key === 'Escape') cancelEditing();
-                                                        }}
-                                                        className="input"
-                                                    />
-                                                ) : studyField.name}
-                                            </td>
-                                            <td className="py-3 px-4 text-ink">
-                                                {editingItem.id === studyField.id ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editingItem.unit}
-                                                        onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') handleSaveStudyFieldEdit();
-                                                            if (e.key === 'Escape') cancelEditing();
-                                                        }}
-                                                        placeholder="Ej: ₲, °C, %"
-                                                        className="input w-32"
-                                                    />
-                                                ) : studyField.unitOfMeasure ? (
-                                                    <span className="font-mono">{studyField.unitOfMeasure}</span>
-                                                ) : (
-                                                    <span className="text-muted text-xs italic">Sin unidad</span>
-                                                )}
-                                            </td>
-                                            <td className="py-3 px-4">
-                                                <div className="flex items-center justify-end gap-1">
+                                    </thead>
+                                    <tbody>
+                                        {paginatedStudyFields.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={4} className="text-center py-8 text-muted">
+                                                    {searchTerm ? 'No se encontraron resultados' : 'No hay campos de estudio registrados'}
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedStudyFields.map(studyField => (
+                                            <tr key={studyField.id} className={`border-b last:border-none transition-colors ${editingItem.id === studyField.id ? 'bg-accent-800/20 ring-1 ring-accent ring-inset' : 'hover:bg-accent-800/10'}`} style={{ borderColor: 'var(--color-divider)' }}>
+                                                <td className="py-3 px-4 text-muted">{studyField.id}</td>
+                                                <td className="py-3 px-4 text-ink">
                                                     {editingItem.id === studyField.id ? (
-                                                        <>
-                                                            <Button variant="ghost" size="icon-sm" onClick={handleSaveStudyFieldEdit} className="text-success hover:bg-success/10" title="Guardar"><Check size={18} /></Button>
-                                                            <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar"><X size={18} /></Button>
-                                                        </>
+                                                        <input
+                                                            ref={editInputRef}
+                                                            type="text"
+                                                            value={editingItem.name}
+                                                            onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleSaveStudyFieldEdit();
+                                                                if (e.key === 'Escape') cancelEditing();
+                                                            }}
+                                                            className="input"
+                                                        />
+                                                    ) : studyField.name}
+                                                </td>
+                                                <td className="py-3 px-4 text-ink">
+                                                    {editingItem.id === studyField.id ? (
+                                                        <input
+                                                            type="text"
+                                                            value={editingItem.unit}
+                                                            onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleSaveStudyFieldEdit();
+                                                                if (e.key === 'Escape') cancelEditing();
+                                                            }}
+                                                            placeholder="Ej: ₲, °C, %"
+                                                            className="input w-32"
+                                                        />
+                                                    ) : studyField.unitOfMeasure ? (
+                                                        <span>{studyField.unitOfMeasure}</span>
                                                     ) : (
-                                                        <>
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => startEditingStudyField(studyField)} disabled={editingItem.id !== null} className="text-accent-300" title="Editar"><Edit size={18} /></Button>
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => confirmDeleteStudyField(studyField)} disabled={editingItem.id !== null} className="text-danger hover:bg-danger/10" title="Eliminar"><Trash2 size={18} /></Button>
-                                                        </>
+                                                        <span className="text-muted text-xs italic">Sin unidad</span>
                                                     )}
-                                                </div>
-                                            </td>
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        {editingItem.id === studyField.id ? (
+                                                            <>
+                                                                <Button variant="ghost" size="icon-sm" onClick={handleSaveStudyFieldEdit} className="text-success hover:bg-success/10" title="Guardar"><Check size={18} /></Button>
+                                                                <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar"><X size={18} /></Button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => startEditingStudyField(studyField)} disabled={editingItem.id !== null} className="text-accent-300" title="Editar"><Edit size={18} /></Button>
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => confirmDeleteStudyField(studyField)} disabled={editingItem.id !== null} className="text-danger hover:bg-danger/10" title="Eliminar"><Trash2 size={18} /></Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                            </div>
+                            {totalPages > 1 && (
+                                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} totalItems={filteredData.length} itemsPerPage={itemsPerPage} />
+                            )}
+                        </>
+                    ) : (
+                        // Variables Table
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <th onClick={() => handleSort('id')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">ID <SortIcon sortKey="id" /></div>
+                                            </th>
+                                            <th onClick={() => handleSort('name')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">Nombre <SortIcon sortKey="name" /></div>
+                                            </th>
+                                            <th onClick={() => handleSort('dataType')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">Tipo <SortIcon sortKey="dataType" /></div>
+                                            </th>
+                                            <th onClick={() => handleSort('unit')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">Presentación <SortIcon sortKey="unit" /></div>
+                                            </th>
+                                            <th onClick={() => handleSort('studyFieldName')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
+                                                <div className="flex items-center gap-2">Campo de Estudio <SortIcon sortKey="studyFieldName" /></div>
+                                            </th>
+                                            <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                        </div>
-                        {totalPages > 1 && (
-                            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} totalItems={filteredData.length} itemsPerPage={itemsPerPage} />
-                        )}
-                    </>
-                ) : (
-                    // Variables Table
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b text-left" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <th onClick={() => handleSort('id')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">ID <SortIcon sortKey="id" /></div>
-                                        </th>
-                                        <th onClick={() => handleSort('name')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">Nombre <SortIcon sortKey="name" /></div>
-                                        </th>
-                                        <th onClick={() => handleSort('dataType')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">Tipo <SortIcon sortKey="dataType" /></div>
-                                        </th>
-                                        <th onClick={() => handleSort('unit')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">Presentación <SortIcon sortKey="unit" /></div>
-                                        </th>
-                                        <th onClick={() => handleSort('studyFieldName')} className="py-3 px-4 font-medium text-muted cursor-pointer hover:text-ink transition-colors">
-                                            <div className="flex items-center gap-2">Campo de Estudio <SortIcon sortKey="studyFieldName" /></div>
-                                        </th>
-                                        <th className="py-3 px-4 font-medium text-muted text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedVariables.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="text-center py-8 text-muted">
-                                                {searchTerm ? 'No se encontraron resultados' : 'No hay variables registradas'}
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        paginatedVariables.map(variable => (
-                                        <tr key={variable.id} className={`border-b last:border-none transition-colors ${editingItem.id === variable.id ? 'bg-accent-800/20 ring-1 ring-accent ring-inset' : 'hover:bg-accent-800/10'}`} style={{ borderColor: 'var(--color-divider)' }}>
-                                            <td className="py-3 px-4 text-muted">{variable.id}</td>
-                                            <td className="py-3 px-4 text-ink">
-                                                {editingItem.id === variable.id ? (
-                                                    <input
-                                                        ref={editInputRef}
-                                                        type="text"
-                                                        value={editingItem.name}
-                                                        onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') handleSaveVariableEdit();
-                                                            if (e.key === 'Escape') cancelEditing();
-                                                        }}
-                                                        className="input"
-                                                    />
-                                                ) : variable.name}
-                                            </td>
-                                            <td className="py-3 px-4 text-muted">
-                                                <span className="tag tag-neutral" title={configSummary(variable)}>
-                                                    {DATA_TYPE_LABELS[variable.dataType]}
-                                                </span>
-                                            </td>
-                                            <td className="py-3 px-4 text-muted">
-                                                {editingItem.id === variable.id ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editingItem.unit}
-                                                        onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') handleSaveVariableEdit();
-                                                            if (e.key === 'Escape') cancelEditing();
-                                                        }}
-                                                        placeholder="ej: 1 kg"
-                                                        className="input"
-                                                    />
-                                                ) : (variable.unit || 'N/A')}
-                                            </td>
-                                            <td className="py-3 px-4 text-muted">
-                                                {studyFields.find(f => f.id === variable.studyFieldId)?.name || 'N/A'}
-                                            </td>
-                                            <td className="py-3 px-4">
-                                                <div className="flex items-center justify-end gap-1">
+                                    </thead>
+                                    <tbody>
+                                        {paginatedVariables.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="text-center py-8 text-muted">
+                                                    {searchTerm ? 'No se encontraron resultados' : 'No hay variables registradas'}
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedVariables.map(variable => (
+                                            <tr key={variable.id} className={`border-b last:border-none transition-colors ${editingItem.id === variable.id ? 'bg-accent-800/20 ring-1 ring-accent ring-inset' : 'hover:bg-accent-800/10'}`} style={{ borderColor: 'var(--color-divider)' }}>
+                                                <td className="py-3 px-4 text-muted">{variable.id}</td>
+                                                <td className="py-3 px-4 text-ink">
                                                     {editingItem.id === variable.id ? (
-                                                        <>
-                                                            <Button variant="ghost" size="icon-sm" onClick={handleSaveVariableEdit} className="text-success hover:bg-success/10" title="Guardar"><Check size={18} /></Button>
-                                                            <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar"><X size={18} /></Button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            {(variable.dataType === 'categorical' || variable.dataType === 'boolean') && (
-                                                                <Button variant="ghost" size="icon-sm" onClick={() => setDistributionTarget(variable)} disabled={editingItem.id !== null} className="text-muted hover:text-ink" title="Ver distribución"><AreaChart size={18} /></Button>
-                                                            )}
-                                                            {variable.dataType !== 'boolean' && (
-                                                                <Button variant="ghost" size="icon-sm" onClick={() => openConfigEditor(variable)} disabled={editingItem.id !== null} className="text-muted hover:text-ink" title="Editar configuración"><Settings size={18} /></Button>
-                                                            )}
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => startEditingVariable(variable)} disabled={editingItem.id !== null} className="text-accent-300" title="Editar"><Edit size={18} /></Button>
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => confirmDeleteVariable(variable)} disabled={editingItem.id !== null} className="text-danger hover:bg-danger/10" title="Eliminar"><Trash2 size={18} /></Button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                        </div>
-                        {totalPages > 1 && (
-                            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} totalItems={filteredData.length} itemsPerPage={itemsPerPage} />
-                        )}
-                    </>
-                )}
+                                                        <input
+                                                            ref={editInputRef}
+                                                            type="text"
+                                                            value={editingItem.name}
+                                                            onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleSaveVariableEdit();
+                                                                if (e.key === 'Escape') cancelEditing();
+                                                            }}
+                                                            className="input"
+                                                        />
+                                                    ) : variable.name}
+                                                </td>
+                                                <td className="py-3 px-4 text-muted">
+                                                    <span className="tag tag-neutral" title={configSummary(variable)}>
+                                                        {DATA_TYPE_LABELS[variable.dataType]}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-4 text-muted">
+                                                    {editingItem.id === variable.id ? (
+                                                        <input
+                                                            type="text"
+                                                            value={editingItem.unit}
+                                                            onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleSaveVariableEdit();
+                                                                if (e.key === 'Escape') cancelEditing();
+                                                            }}
+                                                            placeholder="ej: 1 kg"
+                                                            className="input"
+                                                        />
+                                                    ) : (variable.unit || 'N/A')}
+                                                </td>
+                                                <td className="py-3 px-4 text-muted">
+                                                    {studyFields.find(f => f.id === variable.studyFieldId)?.name || 'N/A'}
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        {editingItem.id === variable.id ? (
+                                                            <>
+                                                                <Button variant="ghost" size="icon-sm" onClick={handleSaveVariableEdit} className="text-success hover:bg-success/10" title="Guardar"><Check size={18} /></Button>
+                                                                <Button variant="ghost" size="icon-sm" onClick={cancelEditing} className="text-muted hover:text-ink" title="Cancelar"><X size={18} /></Button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {(variable.dataType === 'categorical' || variable.dataType === 'boolean') && (
+                                                                    <Button variant="ghost" size="icon-sm" onClick={() => setDistributionTarget(variable)} disabled={editingItem.id !== null} className="text-muted hover:text-ink" title="Ver distribución"><AreaChart size={18} /></Button>
+                                                                )}
+                                                                {variable.dataType !== 'boolean' && (
+                                                                    <Button variant="ghost" size="icon-sm" onClick={() => openConfigEditor(variable)} disabled={editingItem.id !== null} className="text-muted hover:text-ink" title="Editar configuración"><Settings size={18} /></Button>
+                                                                )}
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => startEditingVariable(variable)} disabled={editingItem.id !== null} className="text-accent-300" title="Editar"><Edit size={18} /></Button>
+                                                                <Button variant="ghost" size="icon-sm" onClick={() => confirmDeleteVariable(variable)} disabled={editingItem.id !== null} className="text-danger hover:bg-danger/10" title="Eliminar"><Trash2 size={18} /></Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                            </div>
+                            {totalPages > 1 && (
+                                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} totalItems={filteredData.length} itemsPerPage={itemsPerPage} />
+                            )}
+                        </>
+                    )}
+                </LoadingArea>
             </div>
 
             {/* Add Modal */}
@@ -1017,6 +1022,7 @@ export const VariablesManager = ({ projectId }: VariablesManagerProps) => {
                 onClose={() => setDistributionTarget(null)}
                 variableId={distributionTarget?.id ?? null}
                 name={distributionTarget?.name ?? ''}
+                dataType={distributionTarget?.dataType}
                 projectId={projectId}
             />
         </>

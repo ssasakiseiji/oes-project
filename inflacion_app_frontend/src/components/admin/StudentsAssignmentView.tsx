@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Search, Users, Store, X, Plus, ArrowRight } from 'lucide-react';
+import { Search, X, Plus, ArrowRight } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
-import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { EmptyState } from '../ui/EmptyState';
+import { ListSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { Button } from '../ui/button';
 import type { ObservationUnit, StudentWithAssignments, StudentsWithAssignmentsResponse } from '../../types/api';
 
@@ -120,10 +122,10 @@ export const StudentsAssignmentView = ({ projectId }: StudentsAssignmentViewProp
         u.name.toLowerCase().includes(searchObservationUnit.toLowerCase())
     ) || [];
 
-    if (isLoading) {
-        return <LoadingSpinner />;
-    }
-
+    // Sin early return: el cromo de la vista (títulos, buscador, el panel de
+    // "elegí un estudiante") no depende de la request, así que se dibuja de
+    // una y el placeholder ocupa sólo la lista -- mismo criterio que el resto
+    // de los módulos, donde el header y el buscador nunca se van.
     return (
         <div className="card elev-sm p-0 overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-2">
@@ -131,8 +133,7 @@ export const StudentsAssignmentView = ({ projectId }: StudentsAssignmentViewProp
                 {/* Left Column - Students List */}
                 <div className="p-6 space-y-4">
                     <div>
-                        <h3 className="text-lg font-medium text-ink mb-2 flex items-center gap-2">
-                            <Users size={20} />
+                        <h3 className="text-lg font-medium text-ink mb-2">
                             Estudiantes
                         </h3>
                         <p className="text-sm text-muted">
@@ -153,54 +154,58 @@ export const StudentsAssignmentView = ({ projectId }: StudentsAssignmentViewProp
                     </div>
 
                     {/* Students List */}
-                    <div className="max-h-[600px] overflow-y-auto pr-2">
-                        {filteredStudents.length === 0 ? (
-                            <div className="text-center py-8 text-muted">
-                                No se encontraron estudiantes
-                            </div>
-                        ) : (
-                            filteredStudents.map(student => (
-                                <button
-                                    key={student.id}
-                                    onClick={() => handleSelectStudent(student)}
-                                    className={`w-full text-left p-3 flex items-center justify-between gap-2 border-t first:border-t-0 rounded-md transition-colors ${
-                                        selectedStudent?.id === student.id ? 'bg-accent-800/40' : 'hover:bg-accent-800/10'
-                                    }`}
-                                    style={{ borderColor: 'var(--color-divider)' }}
-                                >
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-semibold text-ink truncate">
-                                            {student.name}
+                    {/* scroll-stable en vez de pr-2: el padding a mano no evitaba
+                        el salto, solo separaba el pulgar del contenido */}
+                    <div className="max-h-[600px] overflow-y-auto scroll-stable">
+                        <LoadingArea isLoading={isLoading} skeleton={<ListSkeleton rows={5} />}>
+                            {filteredStudents.length === 0 ? (
+                                <EmptyState
+                                    title="No se encontraron estudiantes"
+                                    description={searchStudent
+                                        ? 'Ningún estudiante de este proyecto coincide con la búsqueda.'
+                                        : 'Este proyecto todavía no tiene estudiantes. Agregalos desde Miembros.'}
+                                />
+                            ) : (
+                                filteredStudents.map(student => (
+                                    <button
+                                        key={student.id}
+                                        onClick={() => handleSelectStudent(student)}
+                                        className={`w-full text-left p-3 flex items-center justify-between gap-2 border-t first:border-t-0 rounded-md transition-colors ${
+                                            selectedStudent?.id === student.id ? 'bg-accent-800/40' : 'hover:bg-accent-800/10'
+                                        }`}
+                                        style={{ borderColor: 'var(--color-divider)' }}
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-semibold text-ink truncate">
+                                                {student.name}
+                                            </div>
+                                            <div className="text-sm text-muted truncate">
+                                                {student.email}
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-muted truncate">
-                                            {student.email}
+                                        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                                            <span className="tag tag-accent">
+                                                {student.assignedObservationUnitsData?.length || 0}
+                                            </span>
+                                            {selectedStudent?.id === student.id && (
+                                                <ArrowRight size={18} className="text-accent-300" />
+                                            )}
                                         </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-                                        <span className="tag tag-accent">
-                                            {student.assignedObservationUnitsData?.length || 0}
-                                        </span>
-                                        {selectedStudent?.id === student.id && (
-                                            <ArrowRight size={18} className="text-accent-300" />
-                                        )}
-                                    </div>
-                                </button>
-                            ))
-                        )}
+                                    </button>
+                                ))
+                            )}
+                        </LoadingArea>
                     </div>
                 </div>
 
                 {/* Right Column - Observation Unit Assignment */}
                 <div className="p-6 space-y-4 border-t lg:border-t-0 lg:border-l" style={{ borderColor: 'var(--color-divider)' }}>
                     {!selectedStudent ? (
-                        <div className="flex flex-col items-center justify-center h-full min-h-[400px] py-12 text-center">
-                            <Store size={48} className="text-muted mb-4" />
-                            <h3 className="text-lg font-medium text-ink mb-2">
-                                Selecciona un Estudiante
-                            </h3>
-                            <p className="text-sm text-muted max-w-xs">
-                                Elige un estudiante de la lista izquierda para gestionar sus unidades de observación asignadas
-                            </p>
+                        <div className="flex h-full min-h-[400px] items-center justify-center">
+                            <EmptyState
+                                title="Seleccioná un estudiante"
+                                description="Elegí un estudiante de la lista de la izquierda para gestionar sus unidades de observación asignadas."
+                            />
                         </div>
                     ) : (
                         <>
@@ -218,11 +223,10 @@ export const StudentsAssignmentView = ({ projectId }: StudentsAssignmentViewProp
 
                             {/* Assigned Observation Units */}
                             <div>
-                                <h4 className="text-[11px] uppercase tracking-wide text-accent-300 mb-2 flex items-center gap-2">
-                                    <Store size={13} />
+                                <h4 className="text-[11px] uppercase tracking-wide text-accent-300 mb-2">
                                     Unidades Asignadas ({filteredAssignedObservationUnits.length})
                                 </h4>
-                                <div className="max-h-[200px] overflow-y-auto pr-2">
+                                <div className="max-h-[200px] overflow-y-auto scroll-stable">
                                     {filteredAssignedObservationUnits.length === 0 ? (
                                         <div className="text-center py-4 text-sm text-muted">
                                             {searchObservationUnit ? 'No se encontraron unidades' : 'No hay unidades asignadas'}
@@ -264,7 +268,7 @@ export const StudentsAssignmentView = ({ projectId }: StudentsAssignmentViewProp
                                     <Plus size={13} />
                                     Unidades Disponibles ({filteredAvailableObservationUnits.length})
                                 </h4>
-                                <div className="max-h-[200px] overflow-y-auto pr-2">
+                                <div className="max-h-[200px] overflow-y-auto scroll-stable">
                                     {filteredAvailableObservationUnits.length === 0 ? (
                                         <div className="text-center py-4 text-sm text-muted">
                                             {searchObservationUnit ? 'No se encontraron unidades' : 'Todas las unidades están asignadas'}

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
-import { Calendar, Loader, Search, Edit, ArrowUp, ArrowDown, ArrowUpDown, Plus, X, Save } from 'lucide-react';
+import { Loader, Search, Edit, ArrowUp, ArrowDown, ArrowUpDown, Plus, X, Save } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
 import { EmptyState } from '../ui/EmptyState';
-import { TableSkeleton } from '../ui/TableSkeleton';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { Pagination } from '../ui/Pagination';
@@ -263,10 +264,11 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
 
     return (
         <div className="space-y-6">
-            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Períodos' }]} />
+            <Breadcrumbs items={[{ label: 'Administración' }, { label: 'Períodos' }]} />
 
-            {/* Periods Table */}
-            <div className="card elev-sm p-6 space-y-4">
+            {/* Periods Table -- sin card propia: el cuerpo del panel ya es una
+                sola superficie (.admin-surface en AdminDashboard) */}
+            <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <h3 className="text-lg font-medium text-ink">Períodos de Recolección</h3>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -287,122 +289,121 @@ export const PeriodsManager = ({ projectId }: PeriodsManagerProps) => {
                     </div>
                 </div>
 
-                {isLoading ? (
-                    <TableSkeleton rows={5} columns={5} />
-                ) : filteredPeriods.length === 0 ? (
-                    <EmptyState
-                        icon={Calendar}
-                        title="No hay períodos registrados"
-                        description="Crea tu primer período para comenzar a recopilar datos de variables."
-                    />
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full text-left text-sm">
-                                <thead>
-                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <th
-                                            onClick={() => handleSort('name')}
-                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                Nombre
-                                                <SortIcon sortKey="name" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            onClick={() => handleSort('status')}
-                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                Estado
-                                                <SortIcon sortKey="status" />
-                                            </div>
-                                        </th>
-                                        <th className="p-3 font-medium text-muted">Fechas</th>
-                                        <th className="p-3 text-right font-medium text-muted">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedPeriods.map(p => (
-                                    <tr key={p.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <td className="p-3 font-medium text-ink">{p.name}</td>
-                                        <td className="p-3">{getStatusBadge(p.status)}</td>
-                                        <td className="p-3">
-                                            {editingPeriod?.id === p.id ? (
+                <LoadingArea isLoading={isLoading} skeleton={<TableSkeleton rows={5} columns={5} />}>
+                    {filteredPeriods.length === 0 ? (
+                        <EmptyState
+                            title="No hay períodos registrados"
+                            description="Crea tu primer período para comenzar a recopilar datos de variables."
+                        />
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <th
+                                                onClick={() => handleSort('name')}
+                                                className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                            >
                                                 <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="date"
-                                                        value={editingPeriod.start_date}
-                                                        onChange={e => setEditingPeriod({...editingPeriod, start_date: e.target.value})}
-                                                        className="input py-1 text-xs"
-                                                    />
-                                                    <span className="text-muted">-</span>
-                                                    <input
-                                                        type="date"
-                                                        value={editingPeriod.end_date}
-                                                        onChange={e => setEditingPeriod({...editingPeriod, end_date: e.target.value})}
-                                                        className="input py-1 text-xs"
-                                                    />
+                                                    Nombre
+                                                    <SortIcon sortKey="name" />
                                                 </div>
-                                            ) : (
-                                                <span className="font-mono text-muted">
-                                                    {parseDateOnly(p.start_date).toLocaleDateString()} - {parseDateOnly(p.end_date).toLocaleDateString()}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="p-3 text-right">
-                                            <div className="flex items-center justify-end gap-2">
+                                            </th>
+                                            <th
+                                                onClick={() => handleSort('status')}
+                                                className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Estado
+                                                    <SortIcon sortKey="status" />
+                                                </div>
+                                            </th>
+                                            <th className="p-3 font-medium text-muted">Fechas</th>
+                                            <th className="p-3 text-right font-medium text-muted">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedPeriods.map(p => (
+                                        <tr key={p.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <td className="p-3 font-medium text-ink">{p.name}</td>
+                                            <td className="p-3">{getStatusBadge(p.status)}</td>
+                                            <td className="p-3">
                                                 {editingPeriod?.id === p.id ? (
-                                                    <>
-                                                        <Button size="sm" onClick={handleSaveEdit}>
-                                                            <Save size={14} />
-                                                            Guardar
-                                                        </Button>
-                                                        <Button size="icon-sm" variant="ghost" onClick={() => setEditingPeriod(null)} className="text-muted hover:text-ink">
-                                                            <X size={14} />
-                                                        </Button>
-                                                    </>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="date"
+                                                            value={editingPeriod.start_date}
+                                                            onChange={e => setEditingPeriod({...editingPeriod, start_date: e.target.value})}
+                                                            className="input py-1 text-xs"
+                                                        />
+                                                        <span className="text-muted">-</span>
+                                                        <input
+                                                            type="date"
+                                                            value={editingPeriod.end_date}
+                                                            onChange={e => setEditingPeriod({...editingPeriod, end_date: e.target.value})}
+                                                            className="input py-1 text-xs"
+                                                        />
+                                                    </div>
                                                 ) : (
-                                                    <>
-                                                        {p.status !== 'Closed' && (
-                                                            <Button size="icon-sm" variant="ghost" onClick={() => handleEditPeriod(p)} className="text-accent-300" title="Editar fechas">
-                                                                <Edit size={14} />
-                                                            </Button>
-                                                        )}
-                                                        {p.status === 'Scheduled' && (
-                                                            <Button size="sm" variant="ghost" onClick={() => handleUpdateStatus(p.id, 'Open')} className="text-success hover:bg-success/10">
-                                                                Abrir
-                                                            </Button>
-                                                        )}
-                                                        {p.status === 'Open' && (
-                                                            <Button size="sm" variant="ghost" onClick={() => handleUpdateStatus(p.id, 'Closed')} className="text-danger hover:bg-danger/10">
-                                                                Cerrar
-                                                            </Button>
-                                                        )}
-                                                        {p.status === 'Closed' && (
-                                                            <span className="text-muted text-sm">Finalizado</span>
-                                                        )}
-                                                    </>
+                                                    <span className="tabular-nums text-muted">
+                                                        {parseDateOnly(p.start_date).toLocaleDateString()} - {parseDateOnly(p.end_date).toLocaleDateString()}
+                                                    </span>
                                                 )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        {totalPages > 1 && (
-                            <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                totalItems={sortedPeriods.length}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={setCurrentPage}
-                            />
-                        )}
-                    </>
-                )}
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {editingPeriod?.id === p.id ? (
+                                                        <>
+                                                            <Button size="sm" onClick={handleSaveEdit}>
+                                                                <Save size={14} />
+                                                                Guardar
+                                                            </Button>
+                                                            <Button size="icon-sm" variant="ghost" onClick={() => setEditingPeriod(null)} className="text-muted hover:text-ink">
+                                                                <X size={14} />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            {p.status !== 'Closed' && (
+                                                                <Button size="icon-sm" variant="ghost" onClick={() => handleEditPeriod(p)} className="text-accent-300" title="Editar fechas">
+                                                                    <Edit size={14} />
+                                                                </Button>
+                                                            )}
+                                                            {p.status === 'Scheduled' && (
+                                                                <Button size="sm" variant="ghost" onClick={() => handleUpdateStatus(p.id, 'Open')} className="text-success hover:bg-success/10">
+                                                                    Abrir
+                                                                </Button>
+                                                            )}
+                                                            {p.status === 'Open' && (
+                                                                <Button size="sm" variant="ghost" onClick={() => handleUpdateStatus(p.id, 'Closed')} className="text-danger hover:bg-danger/10">
+                                                                    Cerrar
+                                                                </Button>
+                                                            )}
+                                                            {p.status === 'Closed' && (
+                                                                <span className="text-muted text-sm">Finalizado</span>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {totalPages > 1 && (
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    totalItems={sortedPeriods.length}
+                                    itemsPerPage={itemsPerPage}
+                                    onPageChange={setCurrentPage}
+                                />
+                            )}
+                        </>
+                    )}
+                </LoadingArea>
             </div>
 
             {/* Create Period Dialog */}

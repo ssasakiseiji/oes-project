@@ -1,111 +1,84 @@
-import { memo, type CSSProperties } from 'react';
+import { memo } from 'react';
+import { Skeleton } from './ui/skeletons';
 
-type SkeletonVariant = 'text' | 'rectangular' | 'circular';
+// Placeholders propios del panel de estudiante. El bloque base y las formas
+// compartidas con el panel de admin (tabla, lista, gráfico) viven en
+// ui/skeletons.tsx.
 
-interface SkeletonProps {
-  className?: string;
-  variant?: SkeletonVariant;
-  width?: string | number;
-  height?: string | number;
-  circle?: boolean;
+interface TaskCardSkeletonProps {
+  // Los títulos reales tienen largos distintos; con todas las barras del
+  // mismo ancho la lista se lee como una tabla y no como tarjetas.
+  titleWidth?: string;
 }
 
-// Componente base de Skeleton con animación de shimmer
-const Skeleton = memo(({ className = '', variant = 'rectangular', width, height, circle = false }: SkeletonProps) => {
-  const baseClasses = 'animate-shimmer bg-gradient-to-r from-nc-neutral-800 via-nc-neutral-700 to-nc-neutral-800 bg-[length:200%_100%]';
+/*
+ * Calca la fila de <AccordionTrigger> de una tarjeta de tarea en
+ * StudentDashboard: misma caja (`card card-flat p-3`, no `card elev-sm`, que
+ * pintaba una superficie que la tarjeta real no tiene), mismo anillo de 48px,
+ * mismas TRES líneas de texto -- título, tag de estado y contador de
+ * variables -- y el chevron de 16px del trigger a la derecha. Antes eran dos
+ * líneas y un círculo de 20px en la derecha, así que al llegar los datos la
+ * tarjeta crecía y toda la lista saltaba hacia abajo.
+ */
+export const TaskCardSkeleton = memo(({ titleWidth = '55%' }: TaskCardSkeletonProps) => (
+  <div className="card card-flat p-3">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+        {/* anillo de progreso */}
+        <Skeleton circle width="48px" height="48px" className="flex-shrink-0" />
 
-  const variantClasses: Record<SkeletonVariant, string> = {
-    text: 'h-4 rounded',
-    rectangular: 'rounded-lg',
-    circular: 'rounded-full',
-  };
-
-  const styles: CSSProperties = {
-    width: width || '100%',
-    height: height || (variant === 'text' ? '1rem' : '100%'),
-  };
-
-  if (circle) {
-    return (
-      <div
-        className={`${baseClasses} rounded-full ${className}`}
-        style={styles}
-        aria-hidden="true"
-      />
-    );
-  }
-
-  return (
-    <div
-      className={`${baseClasses} ${variantClasses[variant]} ${className}`}
-      style={styles}
-      aria-hidden="true"
-    />
-  );
-});
-
-Skeleton.displayName = 'Skeleton';
-
-// Skeleton para tarjeta de tarea
-export const TaskCardSkeleton = memo(() => (
-  <div className="card elev-sm p-2 space-y-3">
-    <div className="flex items-center gap-3 sm:gap-4 p-3">
-      {/* Circular progress skeleton */}
-      <Skeleton circle width="48px" height="48px" />
-
-      {/* Content skeleton */}
-      <div className="flex-1 space-y-2">
-        <Skeleton variant="text" width="60%" height="20px" />
-        <Skeleton variant="text" width="40%" height="16px" />
+        <div className="min-w-0 flex-1">
+          {/* card-title text-base sm:text-lg */}
+          <Skeleton variant="text" width={titleWidth} height="20px" />
+          {/* .tag */}
+          <Skeleton variant="rectangular" width="74px" height="19px" className="mt-1" />
+          {/* contador "x / y variables" */}
+          <Skeleton variant="text" width="90px" height="17px" className="mt-1" />
+        </div>
       </div>
 
-      {/* Arrow icon skeleton */}
-      <Skeleton circle width="20px" height="20px" />
+      {/* chevron del AccordionTrigger */}
+      <Skeleton variant="text" width="16px" height="16px" className="flex-shrink-0" />
     </div>
   </div>
 ));
 
 TaskCardSkeleton.displayName = 'TaskCardSkeleton';
 
-// Skeleton para dashboard completo
+// Anchos de título fijos por posición (no aleatorios): con Math.random() cada
+// re-render redibuja las barras con otro largo y el skeleton "tiembla".
+const TASK_TITLE_WIDTHS = ['58%', '42%', '66%', '48%'];
+
+/*
+ * Espejo del encabezado real: título a la izquierda y el selector de período
+ * -- un pill chico con su leyenda de estado debajo -- arriba a la derecha, en
+ * la misma línea. Antes el selector se dibujaba como un campo de 40px de alto
+ * a todo el ancho debajo del título, que no es la forma que tiene desde el
+ * rediseño: al cargar, el bloque entero se reacomodaba.
+ */
 export const DashboardSkeleton = memo(() => (
   <div>
-    {/* Header skeleton */}
-    <div className="flex flex-col gap-4 mb-6">
+    <div className="flex items-start justify-between gap-3 mb-6">
+      {/* h2 "Tus Tareas" (text-2xl -> 32px de caja) */}
       <Skeleton variant="text" width="150px" height="32px" />
-      <div className="flex gap-3">
-        <Skeleton variant="rectangular" width="100%" height="40px" className="sm:w-64" />
+
+      <div className="flex flex-col items-end flex-shrink-0">
+        {/* botón del PeriodDropdown */}
+        <Skeleton circle width="150px" height="30px" />
+        {/* leyenda de estado (ACTIVO / VENCIDO / PROGRAMADO) */}
+        <Skeleton variant="text" width="56px" height="11px" className="mt-1 mr-1" />
       </div>
     </div>
+
     <hr className="hr" />
 
-    {/* Tasks skeleton */}
-    <div className="space-y-3 mt-3">
-      <TaskCardSkeleton />
-      <TaskCardSkeleton />
-      <TaskCardSkeleton />
-      <TaskCardSkeleton />
+    {/* Mismo contenedor que el <Accordion>: flex-col gap-3 mt-3 */}
+    <div className="flex flex-col gap-3 mt-3">
+      {TASK_TITLE_WIDTHS.map((width, i) => (
+        <TaskCardSkeleton key={i} titleWidth={width} />
+      ))}
     </div>
   </div>
 ));
 
 DashboardSkeleton.displayName = 'DashboardSkeleton';
-
-// Skeleton para lista de categorías
-export const CategoryListSkeleton = memo(() => (
-  <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-2xl space-y-3 mt-4">
-    <Skeleton variant="text" width="120px" height="16px" />
-    {[1, 2, 3].map(i => (
-      <div key={i} className="bg-white dark:bg-gray-800 p-3 rounded-xl">
-        <div className="flex justify-between items-center">
-          <Skeleton variant="text" width="40%" height="18px" />
-          <Skeleton variant="text" width="60px" height="16px" />
-        </div>
-      </div>
-    ))}
-  </div>
-));
-
-CategoryListSkeleton.displayName = 'CategoryListSkeleton';
-
-export default Skeleton;

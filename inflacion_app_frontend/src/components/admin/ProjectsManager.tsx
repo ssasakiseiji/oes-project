@@ -1,9 +1,10 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { FolderKanban, Loader, Plus, X, Save, Edit, Archive, ArchiveRestore } from 'lucide-react';
+import { Loader, Plus, X, Save, Edit, Archive, ArchiveRestore } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
 import { EmptyState } from '../ui/EmptyState';
-import { TableSkeleton } from '../ui/TableSkeleton';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
@@ -124,102 +125,101 @@ export const ProjectsManager = () => {
                     </Button>
                 </div>
 
-                {isLoading ? (
-                    <TableSkeleton rows={3} columns={4} />
-                ) : projects.length === 0 ? (
-                    <EmptyState
-                        icon={FolderKanban}
-                        title="No hay proyectos registrados"
-                        description="Crea el primer proyecto de recolección de datos para empezar."
-                    />
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
-                            <thead>
-                                <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                                    <th className="p-3 font-medium text-muted">Nombre</th>
-                                    <th className="p-3 font-medium text-muted">Descripción</th>
-                                    <th className="p-3 font-medium text-muted">Estado</th>
-                                    <th className="p-3 text-right font-medium text-muted">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {projects.map(p => (
-                                    <tr key={p.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <td className="p-3 font-medium text-ink">
-                                            {editingProject?.id === p.id ? (
-                                                <input
-                                                    type="text"
-                                                    value={editingProject.name}
-                                                    onChange={e => setEditingProject({ ...editingProject, name: e.target.value })}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleSaveEdit();
-                                                        if (e.key === 'Escape') setEditingProject(null);
-                                                    }}
-                                                    className="input"
-                                                />
-                                            ) : p.name}
-                                        </td>
-                                        <td className="p-3 text-muted">
-                                            {editingProject?.id === p.id ? (
-                                                <input
-                                                    type="text"
-                                                    value={editingProject.description}
-                                                    onChange={e => setEditingProject({ ...editingProject, description: e.target.value })}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleSaveEdit();
-                                                        if (e.key === 'Escape') setEditingProject(null);
-                                                    }}
-                                                    className="input"
-                                                />
-                                            ) : (p.description || <span className="italic">Sin descripción</span>)}
-                                        </td>
-                                        <td className="p-3">
-                                            <Tooltip content={p.isArchived ? 'Proyecto archivado' : 'Proyecto activo'}>
-                                                <span className={`tag ${p.isArchived ? 'tag-neutral' : 'tag-accent'}`}>
-                                                    {p.isArchived ? 'Archivado' : 'Activo'}
-                                                </span>
-                                            </Tooltip>
-                                        </td>
-                                        <td className="p-3 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {editingProject?.id === p.id ? (
-                                                    <>
-                                                        <Button size="sm" onClick={handleSaveEdit}>
-                                                            <Save size={14} />
-                                                            Guardar
-                                                        </Button>
-                                                        <Button size="icon-sm" variant="ghost" onClick={() => setEditingProject(null)} className="text-muted hover:text-ink">
-                                                            <X size={14} />
-                                                        </Button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Tooltip content="Editar proyecto">
-                                                            <Button size="icon-sm" variant="ghost" onClick={() => startEditing(p)} className="text-accent-300">
-                                                                <Edit size={14} />
-                                                            </Button>
-                                                        </Tooltip>
-                                                        <Tooltip content={p.isArchived ? 'Reactivar proyecto' : 'Archivar proyecto'}>
-                                                            <Button
-                                                                size="icon-sm"
-                                                                variant="ghost"
-                                                                onClick={() => handleToggleArchived(p)}
-                                                                className={p.isArchived ? 'text-success hover:bg-success/10' : 'text-muted hover:text-ink'}
-                                                            >
-                                                                {p.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                                                            </Button>
-                                                        </Tooltip>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </td>
+                <LoadingArea isLoading={isLoading} skeleton={<TableSkeleton rows={3} columns={4} />}>
+                    {projects.length === 0 ? (
+                        <EmptyState
+                            title="No hay proyectos registrados"
+                            description="Crea el primer proyecto de recolección de datos para empezar."
+                        />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-left text-sm">
+                                <thead>
+                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                        <th className="p-3 font-medium text-muted">Nombre</th>
+                                        <th className="p-3 font-medium text-muted">Descripción</th>
+                                        <th className="p-3 font-medium text-muted">Estado</th>
+                                        <th className="p-3 text-right font-medium text-muted">Acciones</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                                </thead>
+                                <tbody>
+                                    {projects.map(p => (
+                                        <tr key={p.id} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <td className="p-3 font-medium text-ink">
+                                                {editingProject?.id === p.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editingProject.name}
+                                                        onChange={e => setEditingProject({ ...editingProject, name: e.target.value })}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveEdit();
+                                                            if (e.key === 'Escape') setEditingProject(null);
+                                                        }}
+                                                        className="input"
+                                                    />
+                                                ) : p.name}
+                                            </td>
+                                            <td className="p-3 text-muted">
+                                                {editingProject?.id === p.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editingProject.description}
+                                                        onChange={e => setEditingProject({ ...editingProject, description: e.target.value })}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveEdit();
+                                                            if (e.key === 'Escape') setEditingProject(null);
+                                                        }}
+                                                        className="input"
+                                                    />
+                                                ) : (p.description || <span className="italic">Sin descripción</span>)}
+                                            </td>
+                                            <td className="p-3">
+                                                <Tooltip content={p.isArchived ? 'Proyecto archivado' : 'Proyecto activo'}>
+                                                    <span className={`tag ${p.isArchived ? 'tag-neutral' : 'tag-accent'}`}>
+                                                        {p.isArchived ? 'Archivado' : 'Activo'}
+                                                    </span>
+                                                </Tooltip>
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {editingProject?.id === p.id ? (
+                                                        <>
+                                                            <Button size="sm" onClick={handleSaveEdit}>
+                                                                <Save size={14} />
+                                                                Guardar
+                                                            </Button>
+                                                            <Button size="icon-sm" variant="ghost" onClick={() => setEditingProject(null)} className="text-muted hover:text-ink">
+                                                                <X size={14} />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Tooltip content="Editar proyecto">
+                                                                <Button size="icon-sm" variant="ghost" onClick={() => startEditing(p)} className="text-accent-300">
+                                                                    <Edit size={14} />
+                                                                </Button>
+                                                            </Tooltip>
+                                                            <Tooltip content={p.isArchived ? 'Reactivar proyecto' : 'Archivar proyecto'}>
+                                                                <Button
+                                                                    size="icon-sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => handleToggleArchived(p)}
+                                                                    className={p.isArchived ? 'text-success hover:bg-success/10' : 'text-muted hover:text-ink'}
+                                                                >
+                                                                    {p.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                                                                </Button>
+                                                            </Tooltip>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </LoadingArea>
             </div>
 
             {/* Create Project Dialog */}

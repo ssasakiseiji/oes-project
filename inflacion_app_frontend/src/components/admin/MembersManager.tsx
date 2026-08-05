@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import Select from 'react-select';
-import { Users, ArrowUpDown, Plus, Edit, UserMinus, Key, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, Plus, Edit, UserMinus, Key, ArrowUp, ArrowDown } from 'lucide-react';
 import { apiFetch } from '../../api';
 import { useToast } from '../Toast';
 import { getReactSelectStyles } from '../../utils/reactSelectStyles';
 import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Pagination } from '../ui/Pagination';
-import { TableSkeleton } from '../ui/TableSkeleton';
+import { TableSkeleton } from '../ui/skeletons';
+import { LoadingArea } from '../ui/LoadingArea';
 import { EmptyState } from '../ui/EmptyState';
 import { RoleTag } from '../ui/RoleTag';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -199,8 +200,10 @@ export const MembersManager = ({ projectId }: MembersManagerProps) => {
 
     return (
         <>
-            <Breadcrumbs items={[{ label: 'Panel Admin' }, { label: 'Miembros' }]} />
-            <div className="card elev-sm p-6 space-y-4">
+            <Breadcrumbs items={[{ label: 'Administración' }, { label: 'Miembros' }]} />
+            {/* Sin card propia: el cuerpo del panel ya es una sola superficie
+                (.admin-surface en AdminDashboard) */}
+            <div className="space-y-4">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <h3 className="text-lg font-medium text-ink">Miembros del Proyecto</h3>
@@ -234,108 +237,107 @@ export const MembersManager = ({ projectId }: MembersManagerProps) => {
                 </div>
 
                 {/* Table */}
-                {isLoading ? (
-                    <TableSkeleton rows={5} columns={4} />
-                ) : filteredMembers.length === 0 ? (
-                    <EmptyState
-                        icon={Users}
-                        title="No se encontraron miembros"
-                        description="No hay miembros de este proyecto que coincidan con los filtros aplicados."
-                    />
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full text-left text-sm">
-                                <thead>
-                                    <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                                        <th
-                                            onClick={() => handleSort('userId')}
-                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                ID
-                                                {sortConfig.key === 'userId' ? (
-                                                    sortConfig.direction === 'asc' ?
-                                                        <ArrowUp size={14} className="text-accent-300" /> :
-                                                        <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th
-                                            onClick={() => handleSort('name')}
-                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                Nombre
-                                                {sortConfig.key === 'name' ? (
-                                                    sortConfig.direction === 'asc' ?
-                                                        <ArrowUp size={14} className="text-accent-300" /> :
-                                                        <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th
-                                            onClick={() => handleSort('email')}
-                                            className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                Email
-                                                {sortConfig.key === 'email' ? (
-                                                    sortConfig.direction === 'asc' ?
-                                                        <ArrowUp size={14} className="text-accent-300" /> :
-                                                        <ArrowDown size={14} className="text-accent-300" />
-                                                ) : (
-                                                    <ArrowUpDown size={14} className="opacity-40" />
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th className="p-3 font-medium text-muted">Roles en el Proyecto</th>
-                                        <th className="p-3 text-right font-medium text-muted">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedMembers.map(m => (
-                                        <tr key={m.userId} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
-                                            <td className="p-3 text-muted">{m.userId}</td>
-                                            <td className="p-3 font-medium text-ink">{m.name}</td>
-                                            <td className="p-3 text-muted">{m.email}</td>
-                                            <td className="p-3">
-                                                <div className="flex gap-2 flex-wrap">
-                                                    {m.roles.map(r => <RoleTag key={r} role={r} />)}
-                                                </div>
-                                            </td>
-                                            <td className="p-3">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleEditUser(m)} className="text-accent-300" title="Editar usuario">
-                                                        <Edit size={16} />
-                                                        <span>Editar</span>
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon-sm" onClick={() => handleChangePassword(m)} className="text-ink/70 hover:text-ink" title="Cambiar contraseña">
-                                                        <Key size={16} />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon-sm" onClick={() => handleRemoveFromProject(m)} className="text-danger hover:bg-danger/10" title="Quitar del proyecto">
-                                                        <UserMinus size={16} />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            totalItems={sortedMembers.length}
-                            itemsPerPage={itemsPerPage}
-                            onPageChange={setCurrentPage}
+                <LoadingArea isLoading={isLoading} skeleton={<TableSkeleton rows={5} columns={4} />}>
+                    {filteredMembers.length === 0 ? (
+                        <EmptyState
+                            title="No se encontraron miembros"
+                            description="No hay miembros de este proyecto que coincidan con los filtros aplicados."
                         />
-                    </>
-                )}
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                                            <th
+                                                onClick={() => handleSort('userId')}
+                                                className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    ID
+                                                    {sortConfig.key === 'userId' ? (
+                                                        sortConfig.direction === 'asc' ?
+                                                            <ArrowUp size={14} className="text-accent-300" /> :
+                                                            <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th
+                                                onClick={() => handleSort('name')}
+                                                className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Nombre
+                                                    {sortConfig.key === 'name' ? (
+                                                        sortConfig.direction === 'asc' ?
+                                                            <ArrowUp size={14} className="text-accent-300" /> :
+                                                            <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th
+                                                onClick={() => handleSort('email')}
+                                                className="p-3 font-medium text-muted cursor-pointer hover:text-ink transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Email
+                                                    {sortConfig.key === 'email' ? (
+                                                        sortConfig.direction === 'asc' ?
+                                                            <ArrowUp size={14} className="text-accent-300" /> :
+                                                            <ArrowDown size={14} className="text-accent-300" />
+                                                    ) : (
+                                                        <ArrowUpDown size={14} className="opacity-40" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th className="p-3 font-medium text-muted">Roles en el Proyecto</th>
+                                            <th className="p-3 text-right font-medium text-muted">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedMembers.map(m => (
+                                            <tr key={m.userId} className="hover:bg-accent-800/10 border-b last:border-none transition-colors" style={{ borderColor: 'var(--color-divider)' }}>
+                                                <td className="p-3 text-muted">{m.userId}</td>
+                                                <td className="p-3 font-medium text-ink">{m.name}</td>
+                                                <td className="p-3 text-muted">{m.email}</td>
+                                                <td className="p-3">
+                                                    <div className="flex gap-2 flex-wrap">
+                                                        {m.roles.map(r => <RoleTag key={r} role={r} />)}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button variant="ghost" size="sm" onClick={() => handleEditUser(m)} className="text-accent-300" title="Editar usuario">
+                                                            <Edit size={16} />
+                                                            <span>Editar</span>
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => handleChangePassword(m)} className="text-ink/70 hover:text-ink" title="Cambiar contraseña">
+                                                            <Key size={16} />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => handleRemoveFromProject(m)} className="text-danger hover:bg-danger/10" title="Quitar del proyecto">
+                                                            <UserMinus size={16} />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={sortedMembers.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={setCurrentPage}
+                            />
+                        </>
+                    )}
+                </LoadingArea>
             </div>
 
             {/* Modals */}
