@@ -1,9 +1,14 @@
 node_modules
-# Keep environment variables out of version control
+# Keep environment variables out of version control. Los backups (.env.bak-*,
+# .env.local) traen las mismas credenciales que el .env que reemplazan, así que
+# se ignoran igual; .env.example no, que es el único sin secretos.
 .env
+.env.*
+!.env.example
 
 /generated/prisma
 
-# TypeScript incremental build cache — lives at the project root (not inside
-# dist/), so it survives `rm -rf dist` and must be ignored separately.
+# TypeScript incremental build cache. La del build vive dentro de dist/ (ver
+# tsconfig.build.json), pero un `tsc -b` sobre el tsconfig base todavía deja
+# una en la raíz, así que se ignora igual.
 *.tsbuildinfo

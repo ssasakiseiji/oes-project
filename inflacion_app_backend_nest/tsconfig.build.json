@@ -1,7 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // Dentro de dist/ a propósito. Por defecto la caché incremental queda en
+    // la raíz del proyecto y sobrevive al `deleteOutDir: true` de
+    // nest-cli.json: nest borraba dist/, tsc leía la caché, concluía que no
+    // había nada que recompilar ("Found 0 errors") y no emitía nada, así que
+    // `npm run start:dev` moría con "Cannot find module dist/main" en cada
+    // arranque en frío. Guardándola acá, su vida útil queda atada a la del
+    // output que describe: si se borra dist/, se borra la caché.
+    "tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"
   },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma.config.ts", "prisma"]
 }
