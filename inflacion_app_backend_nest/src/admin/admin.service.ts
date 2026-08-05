@@ -11,11 +11,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toObservationValueFields } from '../common/validation/variable-value';
 import {
   buildAnalysis,
+  buildAnalysisHistory,
   buildStudyFieldHistory,
   isCurrencyVariable,
 } from './analysis';
 import type {
   AggregateMethod,
+  AnalysisHistory,
   AnalysisObservationInput,
   AnalysisResult,
   HistoryRow,
@@ -244,17 +246,89 @@ export class AdminService {
     });
   }
 
+  // Fase AE: alimenta la pestaña de gráficos con las series completas del
+  // proyecto (por unidad y por campo de estudio) en una sola llamada, en vez de
+  // N pedidos a /variable-history -- que además devuelve una serie por vez.
+  //
+  // Solo períodos CERRADOS, igual que el selector de la comparación. Un período
+  // en curso trae datos a medio cargar, y en una canasta ('sum') eso no baja un
+  // punto: reduce el set comparable de TODA la serie a las pocas variables que
+  // alcanzaron a relevarse, y hunde la línea entera sin decir nada.
+  async getAnalysisHistory(projectId: number): Promise<AnalysisHistory> {
+    const [periods, studyFields, variables] = await Promise.all([
+      this.prisma.period.findMany({
+        where: { projectId, status: 'Closed' },
+        select: { id: true, name: true },
+        // Por year/month y no por start_date: esas fechas ya dieron problemas
+        // de zona horaria (ver 59aa598) y acá definen el orden del eje X.
+        orderBy: [{ year: 'asc' }, { month: 'asc' }],
+      }),
+      this.prisma.studyField.findMany({
+        where: { projectId },
+        select: { id: true, name: true, unitOfMeasure: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.variable.findMany({
+        where: { studyField: { projectId }, dataType: 'numeric' },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          dataType: true,
+          config: true,
+          studyFieldId: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    const periodIds = periods.map((p) => p.id);
+    const variableIds = variables.map((v) => v.id);
+
+    // Observaciones crudas y no un AVG en SQL: la media por variable la calcula
+    // summarizeNumeric, que descarta outliers a 2 sigma. Con el AVG plano, el
+    // último punto de cada línea no coincidía con el valor de la tabla de
+    // análisis de la misma pantalla.
+    const observations =
+      periodIds.length > 0 && variableIds.length > 0
+        ? await this.prisma.observation.findMany({
+            where: {
+              periodId: { in: periodIds },
+              variableId: { in: variableIds },
+              numericValue: { not: null },
+            },
+            select: {
+              periodId: true,
+              variableId: true,
+              numericValue: true,
+            },
+          })
+        : [];
+
+    return buildAnalysisHistory({
+      periods,
+      studyFields,
+      variables,
+      observations,
+    });
+  }
+
   getVariableHistory(
     projectId: number,
     variableId?: number,
     studyFieldId?: number,
   ) {
     if (variableId != null) {
+      // status = 'Closed' (Fase AE): el historial vive en el mismo eje de
+      // períodos que el resto del análisis, cuyo selector ya solo ofrece
+      // cerrados. Un período en curso aportaba un punto a medio relevar que se
+      // leía como una caída real.
       return this.prisma.$queryRaw<VariableHistoryRow[]>`
         SELECT p.name, AVG(o.numeric_value) as "avgValue"
         FROM observations o
         JOIN periods p ON o.period_id = p.id
         WHERE o.variable_id = ${variableId} AND p.project_id = ${projectId}
+          AND p.status = 'Closed'
         GROUP BY p.id, p.name, p.year, p.month
         ORDER BY p.year, p.month;
       `;
@@ -320,6 +394,7 @@ export class AdminService {
       JOIN periods p ON o.period_id = p.id
       WHERE v.study_field_id = ${studyFieldId}
         AND p.project_id = ${projectId}
+        AND p.status = 'Closed'
         AND v.data_type = 'numeric'
         AND o.numeric_value IS NOT NULL
       GROUP BY p.id, p.name, p.year, p.month, o.variable_id
@@ -364,6 +439,7 @@ export class AdminService {
       JOIN periods p ON o.period_id = p.id
       WHERE o.variable_id = ${variableId}
         AND p.project_id = ${projectId}
+        AND p.status = 'Closed'
         AND (o.choice_value IS NOT NULL OR o.boolean_value IS NOT NULL)
       GROUP BY p.id, p.name, p.year, p.month, COALESCE(o.choice_value, o.boolean_value::text)
       ORDER BY p.year, p.month;

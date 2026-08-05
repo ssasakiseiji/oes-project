@@ -86,6 +86,51 @@ export interface AnalysisResult {
   unitlessNumericStudyFields: { id: number; name: string }[];
 }
 
+// Fase AE: series históricas del proyecto entero, para la pestaña de gráficos.
+// Es el mismo agregado de buildAnalysis pero sobre TODOS los períodos cerrados
+// en vez de un par, y alineado a un eje de períodos común -- así el frontend
+// dibuja sin re-agrupar y todas las series comparten el eje X.
+//
+// `values` es paralelo a `periods`: null = ese período no tiene datos para el
+// grupo (la línea se corta ahí, no vale 0).
+export interface AggregateSeries {
+  unitOfMeasure: string;
+  method: AggregateMethod;
+  isCurrency: boolean;
+  values: (number | null)[];
+  // Cuántas variables sostienen la serie y cuántas tiene el grupo en total.
+  // Para 'sum' la primera es el set comparable (ver buildAggregateSeries), que
+  // suele ser menor: es el número que explica por qué la canasta del gráfico
+  // puede no coincidir con la de la comparación puntual de dos períodos.
+  seriesVariables: number;
+  totalVariables: number;
+}
+
+export interface StudyFieldSeries extends AggregateSeries {
+  id: number;
+  name: string;
+}
+
+export interface AnalysisHistory {
+  periods: { id: number; name: string }[];
+  units: AggregateSeries[];
+  studyFields: StudyFieldSeries[];
+}
+
+export interface HistoryObservationInput {
+  periodId: number | null;
+  variableId: number | null;
+  numericValue: Prisma.Decimal | null;
+}
+
+export interface BuildAnalysisHistoryInput {
+  // Cronológico y ya filtrado por el caller (solo cerrados).
+  periods: { id: number; name: string }[];
+  studyFields: AnalysisStudyFieldInput[];
+  variables: AnalysisVariableInput[];
+  observations: HistoryObservationInput[];
+}
+
 export interface AnalysisStudyFieldInput {
   id: number;
   name: string;
@@ -148,7 +193,7 @@ export function calculateVariation(
 // el promedio que muestra el análisis coincida con el que marca los outliers en
 // la grilla de Registros.
 function summarizeNumeric(
-  rows: AnalysisObservationInput[],
+  rows: { variableId: number | null; numericValue: Prisma.Decimal | null }[],
 ): Map<number, NumericSummary> {
   const valueMap = new Map<number, number[]>();
 
@@ -368,6 +413,158 @@ export function buildStudyFieldHistory(
       .map(([, value]) => value);
     return { name: period.name, avgValue: aggregateValues(values, method) };
   });
+}
+
+// Serie de un grupo homogéneo de variables (un campo de estudio, o todas las de
+// una unidad) período a período.
+//
+// `averagesByPeriod` ya trae la media por variable de cada período, calculada
+// con summarizeNumeric -- es decir, con el MISMO descarte de outliers que usa
+// buildAnalysis. Esto importa: el AVG plano de SQL que usaba el historial viejo
+// hacía que el último punto de la línea no coincidiera con el valor que la
+// misma pantalla mostraba en la tabla de la comparación.
+//
+// Para 'sum' vale el set comparable de buildStudyFieldHistory, extendido a
+// todos los períodos: solo las variables presentes en TODOS los que tienen
+// datos. Sin eso, un período al que le falta una variable dibuja una caída de
+// la canasta que nunca ocurrió. Para 'mean' no hace falta (promediar un
+// subconjunto distinto sigue siendo un promedio válido de lo observado).
+function buildAggregateSeries(
+  periods: { id: number }[],
+  groupVariables: AnalysisVariableInput[],
+  averagesByPeriod: Map<number, Map<number, number>>,
+  unitOfMeasure: string,
+): AggregateSeries {
+  const isCurrency =
+    groupVariables.length > 0 && groupVariables.every(isCurrencyVariable);
+  const method: AggregateMethod = isCurrency ? 'sum' : 'mean';
+  const groupIds = new Set(groupVariables.map((v) => v.id));
+
+  const perPeriod = periods.map((period) => {
+    const values = new Map<number, number>();
+    averagesByPeriod.get(period.id)?.forEach((value, variableId) => {
+      if (groupIds.has(variableId)) values.set(variableId, value);
+    });
+    return values;
+  });
+
+  const withData = perPeriod.filter((values) => values.size > 0);
+
+  let comparable: Set<number> | null = null;
+  if (method === 'sum' && withData.length > 0) {
+    comparable = new Set(withData[0].keys());
+    withData.slice(1).forEach((values) => {
+      comparable = new Set(
+        [...comparable!].filter((variableId) => values.has(variableId)),
+      );
+    });
+  }
+
+  const values = perPeriod.map((periodValues) => {
+    if (periodValues.size === 0) return null;
+    const included = [...periodValues.entries()]
+      .filter(
+        ([variableId]) => comparable == null || comparable.has(variableId),
+      )
+      .map(([, value]) => value);
+    return aggregateValues(included, method);
+  });
+
+  const observed = new Set<number>();
+  perPeriod.forEach((periodValues) =>
+    periodValues.forEach((_, variableId) => observed.add(variableId)),
+  );
+
+  return {
+    unitOfMeasure,
+    method,
+    isCurrency,
+    values,
+    seriesVariables: comparable ? comparable.size : observed.size,
+    totalVariables: groupVariables.length,
+  };
+}
+
+export function buildAnalysisHistory(
+  input: BuildAnalysisHistoryInput,
+): AnalysisHistory {
+  const { periods, studyFields, variables, observations } = input;
+
+  const numericVariables = variables.filter((v) => v.dataType === 'numeric');
+  if (periods.length === 0 || numericVariables.length === 0) {
+    return { periods, units: [], studyFields: [] };
+  }
+
+  const observationsByPeriod = new Map<number, HistoryObservationInput[]>();
+  observations.forEach((observation) => {
+    if (observation.periodId == null) return;
+    const bucket = observationsByPeriod.get(observation.periodId);
+    if (bucket) bucket.push(observation);
+    else observationsByPeriod.set(observation.periodId, [observation]);
+  });
+
+  const averagesByPeriod = new Map<number, Map<number, number>>();
+  periods.forEach((period) => {
+    const summaries = summarizeNumeric(
+      observationsByPeriod.get(period.id) ?? [],
+    );
+    const averages = new Map<number, number>();
+    summaries.forEach((summary, variableId) =>
+      averages.set(variableId, summary.avg),
+    );
+    averagesByPeriod.set(period.id, averages);
+  });
+
+  // Solo campos CON unidad declarada: sin ella no hay agregado posible, que es
+  // la misma regla de aggregateStudyField. Los campos sin unidad ya se
+  // reportan como pendientes en el análisis comparativo, así que acá se
+  // omiten en silencio en vez de dibujar una serie sin significado.
+  const studyFieldSeries: StudyFieldSeries[] = [];
+  studyFields.forEach((field) => {
+    if (field.unitOfMeasure == null) return;
+    const fieldVariables = numericVariables.filter(
+      (v) => v.studyFieldId === field.id,
+    );
+    if (fieldVariables.length === 0) return;
+    studyFieldSeries.push({
+      id: field.id,
+      name: field.name,
+      ...buildAggregateSeries(
+        periods,
+        fieldVariables,
+        averagesByPeriod,
+        field.unitOfMeasure,
+      ),
+    });
+  });
+
+  // Igual que unitTotals en buildAnalysis: se agrega sobre las VARIABLES de la
+  // unidad, no sobre los subtotales por campo, para que 'mean' sea el promedio
+  // real entre variables y no un promedio de promedios.
+  const variablesByUnit = new Map<string, AnalysisVariableInput[]>();
+  studyFields.forEach((field) => {
+    if (field.unitOfMeasure == null) return;
+    const fieldVariables = numericVariables.filter(
+      (v) => v.studyFieldId === field.id,
+    );
+    if (fieldVariables.length === 0) return;
+    const bucket = variablesByUnit.get(field.unitOfMeasure);
+    if (bucket) bucket.push(...fieldVariables);
+    else variablesByUnit.set(field.unitOfMeasure, [...fieldVariables]);
+  });
+
+  const units = [...variablesByUnit.entries()]
+    .map(([unitOfMeasure, unitVariables]) =>
+      buildAggregateSeries(
+        periods,
+        unitVariables,
+        averagesByPeriod,
+        unitOfMeasure,
+      ),
+    )
+    .sort((a, b) => a.unitOfMeasure.localeCompare(b.unitOfMeasure));
+
+  return { periods, units, studyFields: studyFieldSeries };
 }
 
 export function buildAnalysis(input: BuildAnalysisInput): AnalysisResult {

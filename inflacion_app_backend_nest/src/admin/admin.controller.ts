@@ -116,6 +116,13 @@ export class AdminController {
     );
   }
 
+  @Get('analysis-history')
+  @UseGuards(ProjectRolesGuard)
+  @Roles('admin')
+  getAnalysisHistory(@Query('projectId', ParseIntPipe) projectId: number) {
+    return this.adminService.getAnalysisHistory(projectId);
+  }
+
   @Get('variable-history')
   @UseGuards(ProjectRolesGuard)
   @Roles('admin')
