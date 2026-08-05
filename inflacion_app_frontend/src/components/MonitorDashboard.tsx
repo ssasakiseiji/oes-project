@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
-import { CheckCircle, Clock, Search, ChevronRight, PieChart, Users, ListFilter, Smile, Store, TrendingUp, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, XCircle, Check } from 'lucide-react';
+import { CheckCircle, Clock, Search, ListFilter, Smile, Store, ArrowUpDown, ChevronLeft, ChevronRight as ChevronRightIcon, SlidersHorizontal, XCircle, Check } from 'lucide-react';
 import { apiFetch } from '../api';
 import { useProject } from '../contexts/ProjectContext';
+import { LOADING_FADE_MS, useDelayedLoading } from '../hooks/useDelayedLoading';
 import PeriodDropdown, { type PeriodOption } from './student/PeriodDropdown';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './ui/accordion';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu';
@@ -47,16 +48,16 @@ const LoadingSpinner = () => (
 interface StatCardProps {
     title: string;
     value: ReactNode;
-    icon: ReactNode;
 }
 
-const StatCard = ({ title, value, icon }: StatCardProps) => (
-    <div className="card elev-sm p-5 flex items-center justify-between">
-        <div>
-            <p className="text-sm text-muted font-medium">{title}</p>
-            <p className="text-3xl font-medium text-ink">{value}</p>
-        </div>
-        <div className="text-accent-300 bg-accent-800/40 p-3 rounded-full">{icon}</div>
+// Misma identidad que las tarjetas del panel de estudiante: `card-flat`, sin
+// superficie propia. Sin ícono: no aportaba información (el KPI se lee por su
+// etiqueta y su número) y era el que forzaba la altura de la tarjeta -- sacarlo
+// deja una tira de tres tiles compactas en vez de tres bloques grandes.
+const StatCard = ({ title, value }: StatCardProps) => (
+    <div className="card card-flat px-3 py-2 gap-0">
+        <p className="text-[11px] uppercase tracking-wide text-muted font-medium truncate">{title}</p>
+        <p className="text-xl font-medium text-ink leading-tight">{value}</p>
     </div>
 );
 
@@ -125,7 +126,7 @@ const RegistrationSummary = ({ variables, studyFields, values }: RegistrationSum
                                         style={i > 0 ? { borderTop: '1px solid var(--color-divider)' } : undefined}
                                     >
                                         <span className="text-ink truncate">{v.name}</span>
-                                        <span className="font-mono text-accent-300 flex-shrink-0">{formatValuePreview(v, values[v.id])}</span>
+                                        <span className="tabular-nums text-accent-300 flex-shrink-0">{formatValuePreview(v, values[v.id])}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -215,6 +216,9 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   const [monitorData, setMonitorData] = useState<MonitorPeriod[]>([]);
   const [staticData, setStaticData] = useState<{ variables: Variable[]; studyFields: StudyField[] }>({ variables: [], studyFields: [] });
   const [isLoading, setIsLoading] = useState(true);
+  // Ver useDelayedLoading: nada durante la ventana de gracia, y un mínimo
+  // en pantalla una vez montado.
+  const showSpinner = useDelayedLoading(isLoading);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption | null>(null);
@@ -223,8 +227,10 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   const [sortBy, setSortBy] = useState<SortBy>('name'); // name, progress, status
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [openStudentId, setOpenStudentId] = useState<string | undefined>(undefined);
-  const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined);
+  // '' (y no undefined) para el estado "ninguno abierto": con undefined Radix
+  // trata al Accordion como no controlado y warnea al recibir un value real.
+  const [openStudentId, setOpenStudentId] = useState('');
+  const [openTaskId, setOpenTaskId] = useState('');
 
   useEffect(() => {
     const fetchMonitorData = async () => {
@@ -345,7 +351,15 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
   }, [sortedAndFilteredStudents, currentPage, itemsPerPage]);
 
   if (activeProjectId === null) return null;
-  if (isLoading) return <LoadingSpinner />;
+  // Nunca se pasa por el vacío: durante la ventana de gracia el spinner se
+  // monta igual pero invisible (ver LoadingArea, mismo criterio).
+  if (isLoading || showSpinner) {
+    return (
+      <div style={{ opacity: showSpinner ? 1 : 0, transition: `opacity ${LOADING_FADE_MS}ms ease` }}>
+        <LoadingSpinner />
+      </div>
+    );
+  }
   if (error) return <div className="text-center p-8 text-danger">Error: {error}</div>;
 
   const getStatusChip = (status: MonitorTaskStatus, completionLevel: CompletionLevel) => {
@@ -401,19 +415,21 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
       {/* Selector de Período */}
       <div className="field max-w-sm">
         <label>Período Activo</label>
-        <PeriodDropdown options={periodOptions} value={selectedPeriod} onChange={setSelectedPeriod} />
+        <PeriodDropdown options={periodOptions} value={selectedPeriod} onChange={setSelectedPeriod} align="start" />
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard title="Estudiantes Asignados" value={globalStats.totalStudents} icon={<Users size={22} />} />
-        <StatCard title="Tareas Completadas" value={`${globalStats.completedTasks}/${globalStats.totalTasks}`} icon={<TrendingUp size={22} />} />
-        <StatCard title="Progreso Global" value={`${globalStats.completionPercentage.toFixed(1)}%`} icon={<PieChart size={22} />} />
+      {/* Tres tiles chicas en una sola tira: ya no son bloques que compitan con
+          la lista de estudiantes, que es el contenido real del panel. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <StatCard title="Estudiantes" value={globalStats.totalStudents} />
+        <StatCard title="Tareas Completadas" value={`${globalStats.completedTasks}/${globalStats.totalTasks}`} />
+        <StatCard title="Progreso Global" value={`${globalStats.completionPercentage.toFixed(1)}%`} />
       </div>
 
       {/* Barra de progreso global */}
       {globalStats.totalTasks > 0 && (
-        <div className="card elev-sm p-5">
+        <div className="card card-flat p-5">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-ink">Progreso General del Período</h3>
             <span className="text-2xl font-medium text-accent-300">{globalStats.completionPercentage.toFixed(1)}%</span>
@@ -503,7 +519,7 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
               collapsible
               className="gap-3"
               value={openStudentId}
-              onValueChange={(v) => setOpenStudentId(v || undefined)}
+              onValueChange={setOpenStudentId}
             >
               {paginatedStudents.map((student: MonitorStudent & { completedTasksCount: number; totalTasksCount: number; progressPercentage: number }) => {
                 const { completedTasksCount, totalTasksCount, progressPercentage } = student;
@@ -511,7 +527,11 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
                 const studentValue = String(student.studentId);
 
                 return (
-                  <AccordionItem key={student.studentId} value={studentValue} className="card elev-sm p-3">
+                  <AccordionItem
+                    key={student.studentId}
+                    value={studentValue}
+                    className={`card card-flat p-3 ${openStudentId === studentValue ? 'border-accent/40' : ''}`}
+                  >
                     <AccordionTrigger>
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center gap-3 mb-2">
@@ -541,7 +561,7 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
                           type="single"
                           collapsible
                           value={openTaskId}
-                          onValueChange={(v) => setOpenTaskId(v || undefined)}
+                          onValueChange={setOpenTaskId}
                         >
                           {student.tasks.map(task => {
                             const currentTaskId = `${student.studentId}-${task.observationUnitId}`;
@@ -556,12 +576,23 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
                                       {getStatusChip(task.status, task.completionLevel)}
                                     </div>
                                     <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-mono text-muted">
+                                      <span className="text-xs tabular-nums text-muted">
                                         {task.progress.current} / {task.progress.total} variables
                                       </span>
                                       <span className="text-xs text-accent-300 font-semibold">
                                         {taskPercentage.toFixed(0)}%
                                       </span>
+                                      {/* Fase AD: las "no disponible" ya están contadas arriba
+                                          (relevarlas es trabajo), así que sin este dato un
+                                          registro con 10 ausencias se lee idéntico a uno con 10
+                                          datos. El chip de estado ya lo refleja -- su nivel de
+                                          completitud se calcula descontándolas -- pero esto dice
+                                          por qué. */}
+                                      {task.progress.unavailable > 0 && (
+                                        <span className="text-xs text-muted italic">
+                                          {task.progress.unavailable} sin dato
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="max-w-xs"><ProgressBar current={task.progress.current} total={task.progress.total} size="sm" /></div>
                                   </div>
@@ -595,14 +626,14 @@ function MonitorDashboard({ user: _user }: { user: AuthUser }) {
             )}
           </>
         ) : (
-            <div className="card elev-sm text-center py-16">
+            <div className="card card-flat text-center py-16">
                 <ListFilter size={48} className="mx-auto text-muted mb-4" />
                 <h3 className="text-lg font-medium text-ink">No se encontraron estudiantes</h3>
                 <p className="mt-2 text-muted">Prueba a cambiar el filtro o el término de búsqueda.</p>
             </div>
         )}
          {monitorData.length === 0 && !isLoading && (
-            <div className="card elev-sm text-center py-16">
+            <div className="card card-flat text-center py-16">
                 <Smile size={48} className="mx-auto text-accent mb-4" />
                 <h3 className="text-lg font-medium text-ink">Todo tranquilo por aquí</h3>
                 <p className="mt-2 text-muted">Aún no hay datos de períodos para mostrar.</p>

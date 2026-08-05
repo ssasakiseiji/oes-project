@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type TouchEvent as ReactTouchEvent } from 'react';
-import { ChevronLeft, ChevronRight, List, Send, Edit, X, ArrowLeft, Search, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, List, Edit, X, ArrowLeft, Search, CheckCircle2 } from 'lucide-react';
 import { apiFetch } from '../api';
 import { useToast } from './Toast';
 import LoadingOverlay from './LoadingOverlay';
@@ -181,7 +181,7 @@ const SearchModal = ({ variables, studyFields, values, onClose, onSelectVariable
                                             </div>
                                             <div className="flex items-center gap-2 flex-shrink-0">
                                                 {hasValue ? (
-                                                    <span className="font-mono text-sm text-success">
+                                                    <span className="tabular-nums text-sm text-success">
                                                         {formatValuePreview(variable, values[variable.id])}
                                                     </span>
                                                 ) : (
@@ -205,39 +205,38 @@ interface StudyFieldViewProps {
     studyField: StudyField;
     variables: Variable[];
     values: ObservationValueMap;
+    unavailableIds: Set<number>;
     onEdit: (index: number) => void;
     onBack: () => void;
 }
 
-const StudyFieldView = ({ studyField, variables, values, onEdit, onBack }: StudyFieldViewProps) => {
+const StudyFieldView = ({ studyField, variables, values, unavailableIds, onEdit, onBack }: StudyFieldViewProps) => {
     const fieldVariables = variables.filter(v => v.studyFieldId === studyField.id);
-    const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+    const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id]) || unavailableIds.has(v.id)).length;
     const percentage = fieldVariables.length > 0 ? Math.round((completedCount / fieldVariables.length) * 100) : 0;
 
     return (
-        <div className="card elev-lg max-h-[60vh] overflow-hidden flex flex-col max-w-full p-0 gap-0">
-            <div
-                className="p-4 overflow-x-hidden"
-                style={{ background: 'linear-gradient(160deg, var(--color-section) 0%, var(--color-section-glow) 100%)' }}
-            >
+        <div className="max-w-full">
+            <div className="pb-4 mb-1 overflow-x-hidden" style={{ borderBottom: '1px solid var(--color-divider)' }}>
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 text-ink/80 hover:text-ink mb-3 transition"
+                    className="flex items-center gap-2 text-muted hover:text-ink mb-3 transition"
                 >
                     <ArrowLeft size={18} />
                     <span className="text-sm font-medium">Volver al resumen</span>
                 </button>
                 <h2 className="text-xl font-medium text-ink mb-2">{studyField.name}</h2>
-                <div className="flex items-center gap-3 text-ink/90">
-                    <span className="text-2xl font-medium">{percentage}%</span>
-                    <span className="text-sm">{completedCount} de {fieldVariables.length} variables completadas</span>
+                <div className="flex items-center gap-3">
+                    <span className="text-2xl font-medium text-ink">{percentage}%</span>
+                    <span className="text-sm text-muted">{completedCount} de {fieldVariables.length} variables completadas</span>
                 </div>
             </div>
 
-            <div className="overflow-y-auto overflow-x-hidden p-4">
+            <div className="overflow-x-hidden">
                 {fieldVariables.map((variable, i) => {
                     const variableIndex = variables.findIndex(v => v.id === variable.id);
-                    const hasValue = hasValidValue(values[variable.id]);
+                    const isUnavailable = unavailableIds.has(variable.id);
+                    const hasValue = !isUnavailable && hasValidValue(values[variable.id]);
 
                     return (
                         <div
@@ -246,14 +245,16 @@ const StudyFieldView = ({ studyField, variables, values, onEdit, onBack }: Study
                             style={i > 0 ? { borderTop: '1px solid var(--color-divider)' } : undefined}
                         >
                             <div className="flex-1 min-w-0">
-                                <p className={`font-medium text-sm ${hasValue ? 'text-ink' : 'text-muted'}`}>
+                                <p className={`font-medium text-sm ${hasValue || isUnavailable ? 'text-ink' : 'text-muted'}`}>
                                     {variable.name}
                                 </p>
                                 {variable.unit && <p className="text-xs text-muted mt-1">({variable.unit})</p>}
                             </div>
                             <div className="flex items-center gap-3">
-                                <p className={`font-mono text-sm ${hasValue ? 'text-accent-300' : 'text-muted'}`}>
-                                    {hasValue ? formatValuePreview(variable, values[variable.id]) : 'Sin valor'}
+                                {/* "No disponible" es una respuesta, "Sin valor" es la falta
+                                    de una: distinguirlas acá es todo el punto de la fase. */}
+                                <p className={`text-sm ${isUnavailable ? 'text-muted italic' : `tabular-nums ${hasValue ? 'text-accent-300' : 'text-muted'}`}`}>
+                                    {isUnavailable ? 'No disponible' : hasValue ? formatValuePreview(variable, values[variable.id]) : 'Sin valor'}
                                 </p>
                                 <button
                                     onClick={() => onEdit(variableIndex)}
@@ -274,33 +275,32 @@ interface RegistrationSummaryProps {
     variables: Variable[];
     studyFields: StudyField[];
     values: ObservationValueMap;
+    unavailableIds: Set<number>;
     onEdit?: (index: number) => void;
     onStudyFieldClick: (studyFieldId: number) => void;
 }
 
-const RegistrationSummary = ({ variables, studyFields, values, onStudyFieldClick }: RegistrationSummaryProps) => {
+const RegistrationSummary = ({ variables, studyFields, values, unavailableIds, onStudyFieldClick }: RegistrationSummaryProps) => {
     const summaryData = useMemo(() => {
         return studyFields.map(field => {
             const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
-            const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+            // Relevada = tiene valor O está marcada como no disponible.
+            const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id]) || unavailableIds.has(v.id)).length;
             const percentage = fieldVariables.length > 0 ? Math.round((completedCount / fieldVariables.length) * 100) : 0;
             return { ...field, variables: fieldVariables, completedCount, totalCount: fieldVariables.length, percentage };
         });
-    }, [studyFields, variables, values]);
+    }, [studyFields, variables, values, unavailableIds]);
 
-    const totalCompleted = Object.values(values).filter(hasValidValue).length;
+    const totalCompleted = variables.filter(v => hasValidValue(values[v.id]) || unavailableIds.has(v.id)).length;
     const totalPercentage = variables.length > 0 ? Math.round((totalCompleted / variables.length) * 100) : 0;
 
     return (
-        <div className="card elev-lg p-4 md:p-6 max-h-[60vh] overflow-y-auto overflow-x-hidden space-y-4 max-w-full">
-            <div
-                className="p-4 rounded-2xl text-ink"
-                style={{ background: 'linear-gradient(160deg, var(--color-section) 0%, var(--color-section-glow) 100%)' }}
-            >
-                <p className="text-sm opacity-90 mb-1">Progreso Total</p>
+        <div className="max-w-full">
+            <div className="pb-4 mb-1" style={{ borderBottom: '1px solid var(--color-divider)' }}>
+                <p className="text-sm text-muted mb-1">Progreso Total</p>
                 <div className="flex items-end gap-3">
-                    <span className="text-3xl font-medium">{totalPercentage}%</span>
-                    <span className="text-base opacity-90 mb-1">{totalCompleted} / {variables.length} variables</span>
+                    <span className="text-3xl font-medium text-ink">{totalPercentage}%</span>
+                    <span className="text-base text-muted mb-1">{totalCompleted} / {variables.length} variables</span>
                 </div>
             </div>
 
@@ -316,13 +316,13 @@ const RegistrationSummary = ({ variables, studyFields, values, onStudyFieldClick
                         >
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                        isComplete ? 'bg-success/15' : 'bg-accent/15'
-                                    }`}>
-                                        <span className={`text-sm font-bold ${isComplete ? 'text-success' : 'text-accent'}`}>
-                                            {field.percentage}%
-                                        </span>
-                                    </div>
+                                    {/* Sin caja: el porcentaje va suelto sobre el fondo, igual
+                                        que el de "Progreso Total" acá arriba. El ancho fijo se
+                                        queda para que los nombres de los campos sigan alineados
+                                        en columna fila a fila. */}
+                                    <span className={`w-11 flex-shrink-0 text-sm font-bold ${isComplete ? 'text-success' : 'text-accent'}`}>
+                                        {field.percentage}%
+                                    </span>
                                     <div>
                                         <h3 className="font-medium text-lg text-ink">{field.name}</h3>
                                         <p className="text-sm text-muted">{field.completedCount} de {field.totalCount} variables</p>
@@ -348,7 +348,8 @@ export interface RegistrationWizardProps {
     variables: Variable[];
     studyFields: StudyField[];
     initialDraft?: ObservationValueMap;
-    onClose: (values: ObservationValueMap) => void;
+    initialUnavailable?: number[];
+    onClose: (values: ObservationValueMap, unavailableIds: number[]) => void;
     onSubmitSuccess: (observationUnitId: number) => void;
 }
 
@@ -359,13 +360,28 @@ interface TouchPoint {
 
 type WizardPhase = 'form' | 'summary' | 'confirmed';
 
-function toValueEntries(values: ObservationValueMap): ValueEntryPayload[] {
-    return Object.entries(values)
-        .filter(([, value]) => hasValidValue(value))
+// Clave hermana de `draft_${id}` en vez de un campo dentro del mismo JSON:
+// ese objeto ya está escrito en los navegadores de los estudiantes con la
+// forma ObservationValueMap, y cambiarle la forma obligaría a migrar
+// borradores en curso. Dos claves independientes no tienen ese problema.
+const unavailableKeyFor = (observationUnitId: number) => `draft_unavailable_${observationUnitId}`;
+
+// Una variable no disponible viaja con valor null + la marca; una con valor,
+// como siempre. Nunca las dos cosas: si el estudiante marca "no disponible"
+// sobre un valor ya cargado, gana la marca (el toggle además limpia el valor).
+function toValueEntries(values: ObservationValueMap, unavailableIds: Set<number>): ValueEntryPayload[] {
+    const entries: ValueEntryPayload[] = Object.entries(values)
+        .filter(([variableId, value]) => hasValidValue(value) && !unavailableIds.has(Number(variableId)))
         .map(([variableId, value]) => ({ variableId: Number(variableId), value }));
+
+    unavailableIds.forEach(variableId => {
+        entries.push({ variableId, value: null, isUnavailable: true });
+    });
+
+    return entries;
 }
 
-export default function RegistrationWizard({ observationUnit, variables, studyFields, initialDraft, onClose, onSubmitSuccess }: RegistrationWizardProps) {
+export default function RegistrationWizard({ observationUnit, variables, studyFields, initialDraft, initialUnavailable, onClose, onSubmitSuccess }: RegistrationWizardProps) {
     const toast = useToast();
     const [phase, setPhase] = useState<WizardPhase>('form');
     const [step, setStep] = useState(0);
@@ -381,11 +397,19 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedStudyFieldId, setSelectedStudyFieldId] = useState<number | null>(null);
     const [showSearchModal, setShowSearchModal] = useState(false);
-    // "Marcar como no disponible" es estado transitorio de UI, no se guarda en
-    // ObservationValueMap -- el dominio no tiene un sentinel de "marcado como
-    // no disponible" distinto de "vacío", así que no persiste entre visitas
-    // (buscar/resumen) al mismo paso. Se resetea a false en cada cambio de step.
-    const [isUnavailable, setIsUnavailable] = useState(false);
+    // Fase AD: "no disponible" dejó de ser estado transitorio de UI. Ahora es
+    // un dato del dominio (observations.is_unavailable), así que se guarda por
+    // variable y sobrevive al cambio de paso, al cierre del wizard y al envío.
+    // Mismo orden de precedencia que localValues: lo del servidor manda, y
+    // localStorage es el respaldo cuando el servidor todavía no sabe nada.
+    const [unavailableIds, setUnavailableIds] = useState<Set<number>>(() => {
+        if (initialUnavailable && initialUnavailable.length > 0) return new Set(initialUnavailable);
+        try {
+            const saved = localStorage.getItem(unavailableKeyFor(observationUnit.id));
+            const parsed: unknown = saved ? JSON.parse(saved) : [];
+            return new Set(Array.isArray(parsed) ? parsed.map(Number) : []);
+        } catch { return new Set(); }
+    });
     const textInputRef = useRef<HTMLTextAreaElement>(null);
 
     const [touchStart, setTouchStart] = useState<TouchPoint>({ x: null, y: null });
@@ -403,6 +427,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
     // Se detiene una vez confirmado el envío (fase 'confirmed'), como
     // resguardo extra aunque ningún flujo actual mute localValues después.
     const draftKey = `draft_${observationUnit.id}`;
+    const unavailableKey = unavailableKeyFor(observationUnit.id);
     useEffect(() => {
         if (phase === 'confirmed') return;
         const hasData = Object.values(localValues).some(hasValidValue);
@@ -410,6 +435,20 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
             localStorage.setItem(draftKey, JSON.stringify(localValues));
         }
     }, [localValues, draftKey, phase]);
+
+    // Las marcas se respaldan aunque no haya ningún valor cargado: un registro
+    // que es todo "no disponible" es trabajo real y no puede perderse por no
+    // tener datos numéricos. Por eso este efecto no comparte el guard de
+    // `hasData` de arriba -- y borra la clave al quedar vacío en vez de dejar
+    // un `[]` huérfano.
+    useEffect(() => {
+        if (phase === 'confirmed') return;
+        if (unavailableIds.size > 0) {
+            localStorage.setItem(unavailableKey, JSON.stringify([...unavailableIds]));
+        } else {
+            localStorage.removeItem(unavailableKey);
+        }
+    }, [unavailableIds, unavailableKey, phase]);
 
     const studyFieldsMap = useMemo(() => {
         const map: Record<number, StudyField> = {};
@@ -433,10 +472,6 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
             return a.name.localeCompare(b.name);
         });
     }, [variables, studyFieldsMap]);
-
-    useEffect(() => {
-        setIsUnavailable(false);
-    }, [step]);
 
     const handleStudyFieldClick = (studyFieldId: number) => {
         setSelectedStudyFieldId(studyFieldId);
@@ -483,9 +518,15 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
     };
 
     const handleToggleUnavailable = (checked: boolean) => {
-        setIsUnavailable(checked);
         const variable = sortedVariables[step];
-        if (checked && variable) {
+        if (!variable) return;
+        setUnavailableIds(prev => {
+            const next = new Set(prev);
+            if (checked) next.add(variable.id);
+            else next.delete(variable.id);
+            return next;
+        });
+        if (checked) {
             setLocalValues(prev => ({ ...prev, [variable.id]: '' }));
         }
     };
@@ -520,7 +561,13 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
 
     const confirmSubmission = () => {
         const filledCount = Object.values(localValues).filter(hasValidValue).length;
-        const confirmationMessage = `Has completado ${filledCount} de ${sortedVariables.length} variables. ¿Deseas enviar el formulario?`;
+        // Las no disponibles se cuentan aparte: sumarlas al total de
+        // "completadas" ocultaría, justo en la pantalla de confirmación, que
+        // ese registro trae menos datos de los que parece.
+        const unavailableCount = unavailableIds.size;
+        const confirmationMessage = unavailableCount > 0
+            ? `Has completado ${filledCount} de ${sortedVariables.length} variables, y marcaste ${unavailableCount} como no disponible${unavailableCount > 1 ? 's' : ''}. ¿Deseas enviar el formulario?`
+            : `Has completado ${filledCount} de ${sortedVariables.length} variables. ¿Deseas enviar el formulario?`;
         setAlertInfo({
             message: confirmationMessage,
             onConfirm: () => { handleSubmit(); setAlertInfo(null); },
@@ -529,7 +576,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
     };
 
     const handleSubmit = async () => {
-        const valuesToSubmit = toValueEntries(localValues);
+        const valuesToSubmit = toValueEntries(localValues, unavailableIds);
 
         setIsSubmitting(true);
         try {
@@ -539,6 +586,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                 skipAuthRedirect: true,
             });
             localStorage.removeItem(`draft_${observationUnit.id}`);
+            localStorage.removeItem(unavailableKey);
             setPhase('confirmed');
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'No se pudieron guardar los valores');
@@ -565,7 +613,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
             }
 
             if (e.key === 'Escape') {
-                onClose(localValues);
+                onClose(localValues, [...unavailableIds]);
             } else if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (phase === 'summary') {
@@ -573,6 +621,20 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                 } else {
                     handleNext();
                 }
+            } else if (phase === 'form' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+                // Equivalente de teclado del swipe horizontal que ya existe en
+                // móvil (ver onTouchEnd). Se ignora si el foco está en un campo
+                // de texto: ahí las flechas mueven el cursor, y robárselas haría
+                // saltar de variable a mitad de una respuesta. El teclado
+                // numérico y los botones de categórico/booleano no tienen
+                // cursor que mover, así que ahí sí aplica.
+                const el = document.activeElement;
+                const isTextField = el instanceof HTMLTextAreaElement
+                    || (el instanceof HTMLInputElement && el.type !== 'checkbox');
+                if (isTextField) return;
+                e.preventDefault();
+                if (e.key === 'ArrowRight') handleNext();
+                else handlePrev();
             }
         };
 
@@ -621,6 +683,9 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
     const currentVariable = sortedVariables[step];
     const currentValueValidation = currentVariable ? validateValue(currentVariable, localValues[currentVariable.id]) : { valid: true, message: '' };
     const currentIsCurrency = currentVariable ? isCurrencyVariable(currentVariable) : false;
+    // La marca es por variable, no por paso: se lee del set en cada render en
+    // vez de vivir en un booleano que había que resetear al navegar.
+    const isUnavailable = currentVariable ? unavailableIds.has(currentVariable.id) : false;
     const nextLabel = step === sortedVariables.length - 1 ? 'Ver resumen' : 'Siguiente';
 
     // Calculate study field breakpoints for progress bar
@@ -670,7 +735,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
             {phase === 'form' && currentVariable && (
                 <>
                     <header className="flex-none px-4 pt-4 pb-3 flex items-center gap-2.5 border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                        <button type="button" onClick={() => onClose(localValues)} className="btn btn-icon btn-secondary rounded-full" aria-label="Cerrar">
+                        <button type="button" onClick={() => onClose(localValues, [...unavailableIds])} className="btn btn-icon btn-secondary rounded-full" aria-label="Cerrar">
                             <X size={16} />
                         </button>
                         <div className="min-w-0 flex-1">
@@ -694,7 +759,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                                 <div className="mb-5">
                                     <div className="field text-left mb-3">
                                         <label>{currentIsCurrency ? 'Precio observado' : 'Valor observado'}</label>
-                                        <div className="card elev-sm items-center justify-center py-4 px-3" style={{ minHeight: 56 }}>
+                                        <div className="card card-flat items-center justify-center py-4 px-3" style={{ minHeight: 56 }}>
                                             <span
                                                 className="text-3xl font-medium"
                                                 style={{
@@ -779,12 +844,16 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                                 Marcar como no disponible
                             </label>
 
-                            {!currentValueValidation.valid && (
-                                <p className="text-sm font-semibold animate-fade-in mt-2" style={{ color: '#f87171' }}>{currentValueValidation.message}</p>
-                            )}
-                            {currentValueValidation.valid && hasValidValue(localValues[currentVariable.id]) && !isUnavailable && (
-                                <p className="text-success text-sm font-semibold animate-fade-in mt-2">✓ Valor registrado</p>
-                            )}
+                            {/* Slot de altura fija: reserva el espacio del mensaje para que
+                                el contenido del paso no se desplace al aparecer/desaparecer. */}
+                            <div className="mt-2 min-h-5" aria-live="polite">
+                                {!currentValueValidation.valid && (
+                                    <p className="text-sm font-semibold animate-fade-in" style={{ color: '#f87171' }}>{currentValueValidation.message}</p>
+                                )}
+                                {currentValueValidation.valid && hasValidValue(localValues[currentVariable.id]) && !isUnavailable && (
+                                    <p className="text-ink text-sm animate-fade-in">Valor registrado</p>
+                                )}
+                            </div>
                         </div>
                     </main>
 
@@ -833,7 +902,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                             <ArrowLeft size={16} />
                         </button>
                         <div className="text-base font-medium text-ink flex-1 truncate">Resumen — {observationUnit.name}</div>
-                        <button onClick={() => onClose(localValues)} className="btn btn-icon btn-secondary rounded-full" aria-label="Cerrar">
+                        <button onClick={() => onClose(localValues, [...unavailableIds])} className="btn btn-icon btn-secondary rounded-full" aria-label="Cerrar">
                             <X size={16} />
                         </button>
                     </header>
@@ -844,6 +913,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                                 studyField={studyFieldsMap[selectedStudyFieldId]}
                                 variables={sortedVariables}
                                 values={localValues}
+                                unavailableIds={unavailableIds}
                                 onEdit={(index) => {
                                     setSelectedStudyFieldId(null);
                                     setStep(index);
@@ -856,6 +926,7 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                                 variables={sortedVariables}
                                 studyFields={studyFields}
                                 values={localValues}
+                                unavailableIds={unavailableIds}
                                 onEdit={(index) => { setStep(index); setPhase('form'); }}
                                 onStudyFieldClick={handleStudyFieldClick}
                             />
@@ -863,8 +934,8 @@ export default function RegistrationWizard({ observationUnit, variables, studyFi
                     </main>
 
                     <footer className="flex-none px-4 py-4 border-t" style={{ borderColor: 'var(--color-divider)' }}>
-                        <button onClick={confirmSubmission} className="btn btn-primary btn-block">
-                            <Send size={16} /> Confirmar y enviar
+                        <button onClick={confirmSubmission} className="btn btn-primary btn-block py-3.5">
+                            Confirmar y enviar
                         </button>
                     </footer>
                 </>

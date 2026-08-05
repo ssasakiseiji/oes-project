@@ -239,6 +239,30 @@ export interface AnalysisResult {
   unitlessNumericStudyFields: { id: number; name: string }[];
 }
 
+// Fase AE: series históricas para la pestaña de gráficos. Espeja
+// buildAnalysisHistory en el backend. `values` es paralelo a `periods` y su
+// `null` significa "ese período no tiene datos para el grupo": la línea se
+// corta ahí, no baja a cero.
+export interface AggregateSeries {
+  unitOfMeasure: string;
+  method: AggregateMethod;
+  isCurrency: boolean;
+  values: (number | null)[];
+  seriesVariables: number;
+  totalVariables: number;
+}
+
+export interface StudyFieldSeries extends AggregateSeries {
+  id: number;
+  name: string;
+}
+
+export interface AnalysisHistory {
+  periods: { id: number; name: string }[];
+  units: AggregateSeries[];
+  studyFields: StudyFieldSeries[];
+}
+
 // Students module
 
 export interface StudentTasksResponse {
@@ -253,6 +277,10 @@ export interface StudentTask {
   observationUnitId: number;
   observationUnitName: string;
   status: StudentTaskStatus;
+  // Variables relevadas sin valor porque no había nada que observar. Van
+  // aparte de los mapas de valores a propósito: ahí serían indistinguibles
+  // de una variable sin cargar (ver students.service.ts, Fase AD).
+  unavailableVariableIds: number[];
   draftValues: ObservationValueMap;
   submittedValues: ObservationValueMap;
 }
@@ -274,7 +302,10 @@ export interface MonitorTask {
   observationUnitName: string;
   status: MonitorTaskStatus;
   completionLevel: CompletionLevel;
-  progress: { current: number; total: number };
+  // `current` incluye las no disponibles (son trabajo hecho); `unavailable`
+  // dice cuántas de esas no trajeron dato. completionLevel se calcula sobre
+  // current - unavailable.
+  progress: { current: number; total: number; unavailable: number };
   submittedValues: ObservationValueMap;
   draftValues: ObservationValueMap;
 }
@@ -391,7 +422,10 @@ export interface ObservationFilters {
 
 export interface ValueEntryPayload {
   variableId: number;
-  value: ObservationValue;
+  // null cuando la entrada va marcada como no disponible: es la única forma
+  // legítima de mandar una respuesta sin valor.
+  value: ObservationValue | null;
+  isUnavailable?: boolean;
 }
 
 export interface SaveDraftPayload {

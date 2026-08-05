@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, lazy, Suspense, memo } from 'react';
-import { Edit3, CheckCircle, Smile, RadioTower } from 'lucide-react';
+import { RadioTower } from 'lucide-react';
 import LoadingOverlay from './LoadingOverlay';
 import { DashboardSkeleton } from './Skeleton';
 import PeriodDropdown, { type PeriodOption } from './student/PeriodDropdown';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './ui/accordion';
 import { apiFetch } from '../api';
 import { useProject } from '../contexts/ProjectContext';
+import { LOADING_FADE_MS, useDelayedLoading } from '../hooks/useDelayedLoading';
 import { useToast } from './Toast';
 import type {
     AuthUser,
@@ -13,6 +14,7 @@ import type {
     ObservationValueMap,
     StudentDashboardPeriod,
     StudentTasksResponse,
+    StudentTaskStatus,
     StudyField,
     Variable,
     ValueEntryPayload,
@@ -36,10 +38,19 @@ function formatValuePreview(variable: Variable, value: unknown): string {
     }
 }
 
-function toValueEntries(values: ObservationValueMap): ValueEntryPayload[] {
-    return Object.entries(values)
-        .filter(([, value]) => hasValidValue(value))
+// Espeja a la del wizard: una variable no disponible viaja con valor null +
+// la marca, nunca con las dos cosas.
+function toValueEntries(values: ObservationValueMap, unavailableIds: number[]): ValueEntryPayload[] {
+    const unavailable = new Set(unavailableIds);
+    const entries: ValueEntryPayload[] = Object.entries(values)
+        .filter(([variableId, value]) => hasValidValue(value) && !unavailable.has(Number(variableId)))
         .map(([variableId, value]) => ({ variableId: Number(variableId), value }));
+
+    unavailable.forEach(variableId => {
+        entries.push({ variableId, value: null, isUnavailable: true });
+    });
+
+    return entries;
 }
 
 // Lazy load RegistrationWizard con recarga automática si el chunk cambió tras un deploy
@@ -50,14 +61,41 @@ const RegistrationWizard = lazy(() =>
     })
 );
 
+/*
+ * Los dos estados vacíos del panel son texto y nada más: sin ícono, sin caja
+ * y sin borde. Un estado vacío no es contenido -- si se lo encierra en una
+ * tarjeta con un ícono grande, termina pesando más que la pantalla llena que
+ * reemplaza. Ambas líneas van en el gris secundario; la jerarquía entre
+ * titular y detalle la marca el tamaño, no el color.
+ */
 const NoCollectionPanel = memo(() => (
-    <div className="card elev-sm p-8 text-center">
-        <Smile size={64} className="mx-auto text-accent mb-4" />
-        <h2 className="text-2xl font-medium mb-2 text-ink">¡Todo listo por aquí!</h2>
-        <p className="text-muted">No hay recolecciones disponibles para ti en este momento, ¡nos vemos pronto!</p>
+    <div className="py-12 text-center">
+        <p className="text-muted text-sm">¡Todo listo por aquí!</p>
+        <p className="text-muted mx-auto mt-1 max-w-md text-xs">
+            No hay recolecciones disponibles para ti en este momento, ¡nos vemos pronto!
+        </p>
     </div>
 ));
 NoCollectionPanel.displayName = 'NoCollectionPanel';
+
+/*
+ * El período existe pero no tiene ninguna tarea. Es un estado real y
+ * frecuente, no un borde: getStudentDashboard devuelve un item por CADA
+ * período del proyecto, y arma las tareas desde las asignaciones del
+ * estudiante -- con cero unidades asignadas quedaban un título, el selector y
+ * una línea horizontal sobre el vacío, sin una sola palabra que explicara
+ * qué había pasado.
+ */
+const NoTasksPanel = memo(({ periodName }: { periodName: string }) => (
+    <div className="py-12 text-center">
+        <p className="text-muted text-sm">Nada por el momento</p>
+        <p className="text-muted mx-auto mt-1 max-w-md text-xs">
+            No tenés unidades de observación asignadas para {periodName}. Cuando tu coordinador
+            te asigne alguna, va a aparecer acá.
+        </p>
+    </div>
+));
+NoTasksPanel.displayName = 'NoTasksPanel';
 
 // Color del anillo según status -- verde=completado, accent=en_proceso,
 // gris=pendiente, igual esquema que el mockup (dashboard, task ring).
@@ -90,7 +128,10 @@ const CircularProgress = memo(({ percentage, status }: { percentage: number; sta
                     style={{ transition: 'stroke-dashoffset 0.3s ease' }}
                 />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-ink">
+            {/* 10px y no text-xs: el hueco del anillo mide 32px de diámetro
+                (r=18 menos los 4 de trazo) y "100%" en bold a 12px lo desborda
+                -- el caso lleno es el que fija el tamaño de fuente acá. */}
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-ink">
                 {`${Math.round(percentage)}%`}
             </span>
         </div>
@@ -102,21 +143,26 @@ interface RegistrationSummaryProps {
     variables: Variable[];
     studyFields: StudyField[];
     values: ObservationValueMap;
+    unavailableIds: Set<number>;
     title: string;
 }
 
 // Un solo nivel de superficie más (la tarjeta de la tarea, en el padre) ya
 // cubierto -- esto es texto plano y filas separadas por líneas, sin fondos
 // tintados por fila (ver diagnóstico "de cajas a diseño integral").
-const RegistrationSummary = ({ variables, studyFields, values, title }: RegistrationSummaryProps) => {
+const RegistrationSummary = ({ variables, studyFields, values, unavailableIds, title }: RegistrationSummaryProps) => {
     const summaryData = useMemo(() => {
         return studyFields.map(field => {
             const fieldVariables = variables.filter(v => v.studyFieldId === field.id);
-            const completedCount = fieldVariables.filter(v => hasValidValue(values[v.id])).length;
+            // Una variable no disponible está relevada: cuenta para el
+            // contador del campo aunque no tenga valor que mostrar.
+            const completedCount = fieldVariables.filter(
+                v => hasValidValue(values[v.id]) || unavailableIds.has(v.id)
+            ).length;
             const percentage = fieldVariables.length > 0 ? (completedCount / fieldVariables.length) * 100 : 0;
             return { ...field, variables: fieldVariables, completedCount, percentage };
         });
-    }, [studyFields, variables, values]);
+    }, [studyFields, variables, values, unavailableIds]);
 
     return (
         <div className="pt-3 mt-1" style={{ borderTop: '1px solid var(--color-divider)' }}>
@@ -138,17 +184,26 @@ const RegistrationSummary = ({ variables, studyFields, values, title }: Registra
                             <AccordionContent>
                                 <ul className="pb-2">
                                     {field.variables.map((v, i) => {
-                                        const hasValue = hasValidValue(values[v.id]);
+                                        const isUnavailable = unavailableIds.has(v.id);
+                                        const hasValue = !isUnavailable && hasValidValue(values[v.id]);
                                         return (
                                             <li
                                                 key={v.id}
                                                 className="flex justify-between items-center gap-2 py-2 px-1 text-sm"
                                                 style={i > 0 ? { borderTop: '1px solid var(--color-divider)' } : undefined}
                                             >
-                                                <span className={hasValue ? 'text-ink truncate' : 'text-muted truncate'}>{v.name}</span>
-                                                <span className={`font-mono flex-shrink-0 ${hasValue ? 'text-accent-300' : 'text-muted'}`}>
-                                                    {formatValuePreview(v, values[v.id])}
-                                                </span>
+                                                <span className={hasValue || isUnavailable ? 'text-ink truncate' : 'text-muted truncate'}>{v.name}</span>
+                                                {/* "No disponible" no va en cifras tabulares ni en el color
+                                                    de valor: no es una lectura, es la ausencia declarada de
+                                                    una, y leerla como un dato más invita a compararla
+                                                    con los números de al lado. */}
+                                                {isUnavailable ? (
+                                                    <span className="flex-shrink-0 text-muted italic">No disponible</span>
+                                                ) : (
+                                                    <span className={`tabular-nums flex-shrink-0 ${hasValue ? 'text-accent-300' : 'text-muted'}`}>
+                                                        {formatValuePreview(v, values[v.id])}
+                                                    </span>
+                                                )}
                                             </li>
                                         );
                                     })}
@@ -166,6 +221,7 @@ interface EditingObservationUnit {
     id: number;
     name: string;
     initialDraft: ObservationValueMap;
+    initialUnavailable: number[];
 }
 
 function StudentDashboard({ user: _user }: { user: AuthUser }) {
@@ -178,7 +234,12 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
     const [error, setError] = useState<string | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption | null>(null);
     const [editingObservationUnit, setEditingObservationUnit] = useState<EditingObservationUnit | null>(null);
-    const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined);
+    // '' (y no undefined) para el estado "ninguno abierto": con undefined Radix
+    // trata al Accordion como no controlado y warnea al recibir un value real.
+    const [openTaskId, setOpenTaskId] = useState('');
+    // El skeleton solo se monta si la carga pasa de la ventana de gracia, y
+    // una vez montado se queda un mínimo: ver useDelayedLoading.
+    const showSkeleton = useDelayedLoading(isLoading);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -205,13 +266,13 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
         fetchInitialData();
     }, [activeProjectId]);
 
-    const handleCloseWizard = async (draftData: ObservationValueMap) => {
+    const handleCloseWizard = async (draftData: ObservationValueMap, unavailableIds: number[]) => {
         if (editingObservationUnit) {
             setIsSaving(true);
             try {
                 await apiFetch('/api/draft-observations', {
                     method: 'POST',
-                    body: JSON.stringify({ observationUnitId: editingObservationUnit.id, values: toValueEntries(draftData) }),
+                    body: JSON.stringify({ observationUnitId: editingObservationUnit.id, values: toValueEntries(draftData, unavailableIds) }),
                     skipAuthRedirect: true,
                 });
                 const newData = await apiFetch<StudentDashboardPeriod[]>(`/api/student/dashboard?projectId=${activeProjectId}`, { skipAuthRedirect: true });
@@ -247,36 +308,60 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
     const goToActivePeriod = () => { if (openPeriod) setSelectedPeriod({ value: openPeriod.periodId, label: openPeriod.periodName, status: openPeriod.status }); };
 
     if (activeProjectId === null) return null;
-    if (isLoading) return <DashboardSkeleton />;
-    if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
+    // Durante la ventana de gracia el skeleton se monta igual pero invisible:
+    // devolver null dejaba la pantalla vacía un cuarto de segundo y después la
+    // llenaba de golpe. Acá el panel entero se reemplaza (no es un área dentro
+    // de un contenedor), así que no hay alto que animar -- alcanza con no
+    // pasar nunca por el vacío.
+    if (isLoading || showSkeleton) {
+        return (
+            <div style={{ opacity: showSkeleton ? 1 : 0, transition: `opacity ${LOADING_FADE_MS}ms ease` }}>
+                <DashboardSkeleton />
+            </div>
+        );
+    }
+    if (error) return <div className="text-center p-8 text-danger">{error}</div>;
     if (dashboardData.length === 0) return <NoCollectionPanel />;
 
     return (
         <>
             <div className="animate-fade-in">
-                <div className="flex flex-col gap-4 mb-6">
+                {/* El selector de período dejó de ser un campo ancho: es un
+                    control secundario, así que va como botón chico arriba a la
+                    derecha, en la misma línea del título. */}
+                <div className="flex items-start justify-between gap-3 mb-6">
                     <h2 className="text-2xl sm:text-3xl font-medium text-ink">Tus Tareas</h2>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full">
+                    <div className="flex items-start gap-2 flex-shrink-0">
                         {openPeriod && selectedPeriod?.value !== openPeriod.periodId && (
                             <button
                                 onClick={goToActivePeriod}
-                                className="btn btn-primary order-2 sm:order-1 whitespace-nowrap animate-pulse"
+                                // En móvil queda solo el ícono: el texto no
+                                // entra al lado del selector sin empujar el
+                                // título, de ahí aria-label/title.
+                                aria-label="Ir al período activo"
+                                title="Ir al período activo"
+                                className="btn btn-primary rounded-full px-3 py-1.5 whitespace-nowrap animate-pulse"
                             >
                                 <RadioTower size={16} className="animate-bounce" />
-                                <span>Ir al período activo</span>
+                                <span className="hidden sm:inline">Ir al período activo</span>
                             </button>
                         )}
-                        <div className="w-full sm:flex-1 md:w-64 md:flex-initial order-1 sm:order-2">
-                            <PeriodDropdown
-                                options={periodOptions}
-                                value={selectedPeriod}
-                                onChange={setSelectedPeriod}
-                            />
-                        </div>
+                        <PeriodDropdown
+                            options={periodOptions}
+                            value={selectedPeriod}
+                            onChange={setSelectedPeriod}
+                        />
                     </div>
                 </div>
 
-                {activePeriodData && (
+                {activePeriodData && activePeriodData.tasks.length === 0 && (
+                    <>
+                        <hr className="hr" />
+                        <NoTasksPanel periodName={activePeriodData.periodName} />
+                    </>
+                )}
+
+                {activePeriodData && activePeriodData.tasks.length > 0 && (
                     <>
                         <hr className="hr" />
                         <Accordion
@@ -284,7 +369,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                             collapsible
                             className="gap-3 mt-3"
                             value={openTaskId}
-                            onValueChange={(v) => setOpenTaskId(v || undefined)}
+                            onValueChange={setOpenTaskId}
                         >
                             {activePeriodData.tasks.map((task, index) => {
                                 let values: ObservationValueMap = task.status === 'Completado' ? task.submittedValues : task.draftValues;
@@ -297,35 +382,57 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                                         if (localCount > serverCount) values = localDraft;
                                     } catch { /* ignorar errores de parse */ }
                                 }
-                                const completedCount = Object.values(values).filter(hasValidValue).length;
+                                // Una variable marcada "no disponible" es trabajo hecho: el
+                                // estudiante fue, miró y no había nada que observar. Cuenta
+                                // para el progreso aunque no tenga valor. Quien quiere ver
+                                // cuánto DATO trajo cada uno lo ve en el panel de monitor,
+                                // que las descuenta al calcular la completitud.
+                                const unavailableIds = new Set(task.unavailableVariableIds);
+                                const completedCount = Object.entries(values)
+                                    .filter(([variableId, value]) => hasValidValue(value) && !unavailableIds.has(Number(variableId)))
+                                    .length + unavailableIds.size;
                                 const totalCount = staticData.variables.length;
                                 const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
                                 const itemValue = String(task.observationUnitId);
 
+                                // El status del backend solo mira los borradores que llegaron al
+                                // servidor, pero `values` ya viene fusionado con el de
+                                // localStorage -- que puede tener más progreso, porque el wizard
+                                // escribe local en cada tecla y recién sincroniza al cerrarse. Si
+                                // esa sincronización nunca ocurrió (se cerró la pestaña a mitad,
+                                // o el POST falló y quedó en "Borrador guardado localmente"), la
+                                // tarjeta mostraba anillo y contador a medias pero el pill en
+                                // "Pendiente" y el botón en "Iniciar Registro". Todo lo que se ve
+                                // acá cuelga de este status derivado para que no se contradigan.
+                                const effectiveStatus: StudentTaskStatus =
+                                    task.status !== 'Pendiente'
+                                        ? task.status
+                                        : completedCount > 0 ? 'En Proceso' : 'Pendiente';
+
                                 const ActionButton = () => {
                                     if (activePeriodData.status !== 'Open') return null;
-                                    if (task.status === 'Completado') {
-                                        return <button disabled className="btn btn-secondary btn-block mb-1"><CheckCircle size={16} /> Registro Enviado</button>;
+                                    if (effectiveStatus === 'Completado') {
+                                        return <button disabled className="btn btn-secondary btn-block mb-1">Registro Enviado</button>;
                                     }
-                                    return <button onClick={() => setEditingObservationUnit({ id: task.observationUnitId, name: task.observationUnitName, initialDraft: task.draftValues })} className="btn btn-primary btn-block mb-1"><Edit3 size={16} /> {task.status === 'En Proceso' ? 'Continuar Registro' : 'Iniciar Registro'}</button>;
+                                    return <button onClick={() => setEditingObservationUnit({ id: task.observationUnitId, name: task.observationUnitName, initialDraft: task.draftValues, initialUnavailable: task.unavailableVariableIds })} className="btn btn-primary btn-block mb-1">{effectiveStatus === 'En Proceso' ? 'Continuar Registro' : 'Iniciar Registro'}</button>;
                                 };
 
                                 return (
                                     <AccordionItem
                                         key={task.observationUnitId}
                                         value={itemValue}
-                                        className={`card elev-sm p-3 animate-fade-in ${openTaskId === itemValue ? 'ring-1 ring-accent/50' : ''}`}
+                                        className={`card card-flat p-3 animate-fade-in ${openTaskId === itemValue ? 'border-accent/40' : ''}`}
                                         style={{ animationDelay: `${index * 0.1}s` }}
                                     >
                                         <AccordionTrigger
-                                            aria-label={`${task.observationUnitName} - ${task.status} - ${completedCount} de ${totalCount} variables registradas`}
+                                            aria-label={`${task.observationUnitName} - ${effectiveStatus} - ${completedCount} de ${totalCount} variables registradas`}
                                         >
                                             <span className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                                                <CircularProgress percentage={percentage} status={task.status} />
+                                                <CircularProgress percentage={percentage} status={effectiveStatus} />
                                                 <span className="min-w-0 flex-1 text-left">
                                                     <span className="card-title text-base sm:text-lg truncate block">{task.observationUnitName}</span>
-                                                    <span className={`tag mt-1 ${task.status === 'Completado' ? 'tag-accent' : task.status === 'En Proceso' ? 'tag-outline' : 'tag-neutral'}`}>
-                                                        {task.status === 'Completado' ? 'Completado' : task.status === 'En Proceso' ? 'En proceso' : 'Pendiente'}
+                                                    <span className={`tag mt-1 ${effectiveStatus === 'Completado' ? 'tag-accent' : effectiveStatus === 'En Proceso' ? 'tag-outline' : 'tag-neutral'}`}>
+                                                        {effectiveStatus === 'Completado' ? 'Completado' : effectiveStatus === 'En Proceso' ? 'En proceso' : 'Pendiente'}
                                                     </span>
                                                     <span className="text-muted text-xs sm:text-sm mt-1 block">{completedCount} / {totalCount} variables</span>
                                                 </span>
@@ -337,6 +444,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                                                 variables={staticData.variables}
                                                 studyFields={staticData.studyFields}
                                                 values={values}
+                                                unavailableIds={unavailableIds}
                                                 title={task.status === 'Completado' ? 'Valores Enviados' : 'Progreso de Registro'}
                                             />
                                         </AccordionContent>
@@ -355,6 +463,7 @@ function StudentDashboard({ user: _user }: { user: AuthUser }) {
                         variables={staticData.variables}
                         studyFields={staticData.studyFields}
                         initialDraft={editingObservationUnit.initialDraft}
+                        initialUnavailable={editingObservationUnit.initialUnavailable}
                         onClose={handleCloseWizard}
                         onSubmitSuccess={handleSubmissionSuccess}
                     />
