@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+} from '../ui/dropdown-menu';
 
 export interface PeriodOption {
     value: number;
@@ -7,92 +13,74 @@ export interface PeriodOption {
     status: string;
 }
 
-interface StatusDotConfig {
-    color: string;
-    label: string;
-}
-
-// Period.status en el backend real tiene 3 valores (Open/Closed/Scheduled);
-// el mockup solo diseñó 2 puntos de color (Activo/Cerrado) -- Scheduled usa
-// --color-accent-2 como tercer color, judgment call no cubierto por el diseño.
-const STATUS_DOTS: Record<string, StatusDotConfig> = {
-    Open: { color: 'var(--color-success)', label: 'Activo' },
-    Closed: { color: 'var(--color-nc-neutral-500)', label: 'Cerrado' },
-    Scheduled: { color: 'var(--color-accent-2)', label: 'Programado' },
+// Period.status en el backend real tiene 3 valores (Open/Closed/Scheduled).
+// El estado ya no se señala con un punto de color sino con la palabra en el
+// subtítulo del botón, y esa palabra va en el gris de texto secundario, no en
+// un color de acento: el estado lo dice el texto, no un semáforo.
+const STATUS_LABELS: Record<string, string> = {
+    Open: 'Activo',
+    Closed: 'Vencido',
+    Scheduled: 'Programado',
 };
 
 interface PeriodDropdownProps {
     options: PeriodOption[];
     value: PeriodOption | null;
     onChange: (option: PeriodOption) => void;
+    // El panel de monitor lo usa dentro de un .field alineado a la izquierda;
+    // en el de estudiante vive arriba a la derecha, junto al título.
+    align?: 'start' | 'end';
 }
 
-export default function PeriodDropdown({ options, value, onChange }: PeriodDropdownProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isOpen]);
-
-    const currentDot = value ? (STATUS_DOTS[value.status] ?? STATUS_DOTS.Closed) : STATUS_DOTS.Closed;
+export default function PeriodDropdown({ options, value, onChange, align = 'end' }: PeriodDropdownProps) {
+    const currentLabel = value ? (STATUS_LABELS[value.status] ?? STATUS_LABELS.Closed) : null;
 
     return (
-        <div className="relative" ref={containerRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen(prev => !prev)}
-                className="input flex w-full cursor-pointer items-center justify-between"
-                aria-expanded={isOpen}
-            >
-                <span className="flex min-w-0 items-center gap-2">
-                    <span
-                        className="h-[7px] w-[7px] flex-shrink-0 rounded-full"
-                        style={{
-                            background: currentDot.color,
-                            boxShadow: `0 0 0 4px color-mix(in srgb, ${currentDot.color} 18%, transparent)`,
-                        }}
-                    />
-                    <span className="truncate">{value?.label ?? 'Seleccionar período'}</span>
-                </span>
-                <ChevronDown
-                    size={14}
-                    className={`flex-shrink-0 opacity-60 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                />
-            </button>
-
-            {isOpen && (
-                <div className="card elev-md absolute left-0 right-0 top-[calc(100%+6px)] z-10 gap-0.5 p-1.5">
+        <div className={`flex flex-col ${align === 'end' ? 'items-end' : 'items-start'}`}>
+            {/* modal={false} a propósito: en modo modal Radix aplica aria-hidden
+                a todo #root mientras el menú está abierto, y al cerrar devuelve
+                el foco al trigger antes de sacar ese aria-hidden (el cleanup del
+                FocusScope hijo corre antes que el del padre). Chrome bloquea eso
+                y avisa por consola. Este menú no necesita trampa de foco ni
+                bloqueo de scroll, así que el modo no-modal lo evita de raíz. */}
+            <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        className="group/trigger btn btn-secondary rounded-full max-w-[14rem] px-3 py-1.5"
+                    >
+                        <span className="truncate">{value?.label ?? 'Seleccionar período'}</span>
+                        <ChevronDown
+                            size={14}
+                            className="flex-shrink-0 opacity-70 transition-transform duration-200 group-data-[state=open]/trigger:rotate-180"
+                        />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align={align} className="w-56">
+                    <DropdownMenuLabel className="text-muted">Cambiar período</DropdownMenuLabel>
                     {options.map(option => {
-                        const optionDot = STATUS_DOTS[option.status] ?? STATUS_DOTS.Closed;
                         const isActive = value?.value === option.value;
                         return (
-                            <button
+                            <DropdownMenuItem
                                 key={option.value}
-                                type="button"
-                                onClick={() => {
-                                    onChange(option);
-                                    setIsOpen(false);
-                                }}
-                                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
-                                    isActive ? 'bg-accent/15 text-ink font-semibold' : 'text-ink/85 hover:bg-nc-neutral-500/10'
-                                }`}
+                                onSelect={() => onChange(option)}
+                                className={`py-2.5 px-2.5 ${isActive ? 'text-ink font-semibold' : 'text-ink/80'}`}
                             >
-                                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: optionDot.color }} />
                                 <span className="flex-1 truncate">{option.label}</span>
-                                <span className="text-muted flex-shrink-0 text-[11px]">{optionDot.label}</span>
-                            </button>
+                                <span className="text-muted flex-shrink-0 text-[11px]">
+                                    {STATUS_LABELS[option.status] ?? STATUS_LABELS.Closed}
+                                </span>
+                                {isActive && <Check size={16} className="text-accent" />}
+                            </DropdownMenuItem>
                         );
                     })}
-                </div>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            {currentLabel && (
+                <span className="text-muted mt-1 px-1 text-[11px] uppercase tracking-wide">
+                    {currentLabel}
+                </span>
             )}
         </div>
     );

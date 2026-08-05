@@ -25,19 +25,8 @@
   animation: slide-in 0.3s ease-out;
 }
 
-/* Skeleton shimmer animation */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 2s infinite linear;
-}
+/* El shimmer de los skeletons vive en nocturne.css, junto a la clase
+   .skeleton que lo usa (era el único consumidor de este @keyframes). */
 
 /* Fade in animation for content loading */
 @keyframes fade-in {
@@ -80,8 +69,9 @@
  * block, same as nocturne.css's own :root -- no separate light/.dark set.
  *
  * `--color-accent` is deliberately NOT remapped here: it's already a real
- * Nocturne @theme key (the brand purple, used by text-accent/bg-accent
- * pervasively across the shipped Nocturne redesign). shadcn's registry
+ * Nocturne @theme key (the brand tone — near-white in the black/gray
+ * palette — used by text-accent/bg-accent pervasively across the shipped
+ * Nocturne redesign). shadcn's registry
  * components assume an unrelated "accent" role under the same name (a
  * neutral hover/selected tint) -- mapping it here would silently repoint
  * every existing text-accent/bg-accent usage in the app to a hover-tint
@@ -96,7 +86,13 @@
   --color-foreground: var(--color-ink);
   --color-card: var(--color-surface);
   --color-card-foreground: var(--color-ink);
-  --color-popover: var(--color-surface);
+  /* Los overlays (Dialog, DropdownMenu, Popover, Tooltip, AlertDialog) se
+     montan sobre --color-bg y comparten este token: apuntarlo al fondo, y no
+     a --color-surface, es lo que hace que un dropdown o el buscador del
+     wizard lean como el mismo plano en vez de como un panel más claro
+     flotando encima. Siguen delimitados por su `ring-1 ring-foreground/10`
+     + sombra, igual que las cards planas se leen por su borde. */
+  --color-popover: var(--color-bg);
   --color-popover-foreground: var(--color-ink);
   --color-primary: var(--color-accent);
   --color-primary-foreground: var(--color-bg);
@@ -130,5 +126,64 @@
   }
   html {
     @apply font-sans;
+    /* La app es dark-only: sin esto el navegador pinta las barras de scroll
+       (y los controles nativos) con la paleta clara del sistema, que es la
+       franja blanca que se veía a la derecha de los paneles con overflow. */
+    color-scheme: dark;
+    /* El ancho de la barra queda reservado siempre, aparezca o no: sin esto
+       el viewport se angosta 10px al aparecer y todo el contenido centrado
+       (mx-auto) salta hacia la izquierda. Con el riel transparente la franja
+       reservada es fondo puro, así que la barra se lee como si flotara
+       encima en vez de empujar el layout. */
+    scrollbar-gutter: stable;
+  }
+
+  /* Contraparte obligatoria del scrollbar-gutter de arriba.
+     Radix monta sus overlays modales (el switch de rol, el selector de
+     proyecto, todo Dialog/AlertDialog) sobre react-remove-scroll, que al
+     abrir bloquea el scroll del body e inyecta un <style> propio con
+     `margin-right: <ancho de barra>px !important` para compensar la barra
+     que acaba de sacar. Acá esa barra nunca liberaba espacio -- el riel
+     queda reservado igual -- así que la compensación no compensa nada y
+     empuja el layout entero ~10px cada vez que se abre un overlay.
+     Se anula el gap en 0. El !important no es opcional: la librería inyecta
+     su regla sin capa, y en el cascade las declaraciones !important van al
+     revés que las normales (una !important dentro de @layer le gana a una
+     !important sin capa). */
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px !important;
+  }
+
+  /* Scrollbar propia, del mismo plano que el fondo: riel transparente y
+     pulgar = ink translúcido, así la barra se lee como parte del contenido
+     y no como un componente del SO pegado encima. Firefox usa las dos
+     propiedades estándar; Chrome/Edge/Safari, el pseudo-elemento. Aplica a
+     cualquier contenedor con overflow (wizard, buscador, tablas de admin). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-ink) 22%, transparent)
+      transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    /* border transparente + background-clip deja aire a los costados del
+       pulgar sin necesitar un riel pintado. */
+    background: color-mix(in srgb, var(--color-ink) 22%, transparent);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-ink) 38%, transparent);
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 }

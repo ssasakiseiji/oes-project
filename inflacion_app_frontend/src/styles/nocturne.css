@@ -23,55 +23,76 @@
  *
  * The app forces dark mode permanently (ThemeContext adds `.dark` to <html>
  * on mount, no toggle exists) — no light-mode variants are needed here.
+ *
+ * Palette: the mockup's indigo/purple brand was replaced by a neutral
+ * black-and-gray one. Every token below is achromatic, so the emphasis
+ * hierarchy the purple used to carry through *hue* now has to be carried
+ * through *lightness* — which is why the ramps are ordered the way they are:
+ *   - --color-accent (#fafafa) is BRIGHTER than --color-ink (#dedede), and
+ *     accent-300 brighter still than body text. Accent is the "louder"
+ *     tone; if it ever drops below ink, every text-accent-300 call site in
+ *     the app silently stops reading as emphasis and starts reading as
+ *     muted. Same reason .btn-primary (accent border+text) still separates
+ *     from .btn-secondary (divider border, 16% ink).
+ *   - accent-2 is the same ramp shifted about one step darker. It is not a
+ *     second hue any more, so its only job is to read as a quieter sibling
+ *     of accent — that is what keeps StatCard's blue/purple variants and
+ *     DashboardPage's two role cards distinguishable from each other.
+ * --color-success / --color-danger stay chromatic on purpose: they encode
+ * meaning (subió/bajó, ok/error), not brand, and a monochrome app has no
+ * other channel to say it with.
  */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Inter se carga con <link rel="preconnect"> + <link rel="stylesheet"> en
+   index.html, no acá: un @import encadenado desde el CSS retrasa el fetch
+   hasta después de parsear la hoja entera. Si se agregan pesos nuevos (la
+   app usa 400/500/600/700), actualizar la URL allá. */
 
 @theme {
-  --color-bg: #161826;
-  --color-surface: #232532;
-  --color-ink: #e9e9ed;
-  --color-accent: #9184d9;
-  --color-accent-2: #a7a1db;
-  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  --color-bg: #0d0d0d;
+  --color-surface: #1a1a1a;
+  --color-ink: #dedede;
+  --color-accent: #fafafa;
+  --color-accent-2: #b5b5b5;
+  --color-divider: color-mix(in srgb, #dedede 16%, transparent);
   --color-success: #7cd992;
   /* Extension, not in the mockup (no destructive action was ever designed
      there): same lightness/chroma register as --color-success, so a danger
      state reads with equal weight rather than louder or duller. */
   --color-danger: #e2776f;
 
-  --color-nc-neutral-100: #f3f5fe;
-  --color-nc-neutral-200: #e4e7f5;
-  --color-nc-neutral-300: #cfd3e5;
-  --color-nc-neutral-400: #b2b6ca;
-  --color-nc-neutral-500: #9397ab;
-  --color-nc-neutral-600: #75798c;
-  --color-nc-neutral-700: #595d6c;
-  --color-nc-neutral-800: #3f424d;
-  --color-nc-neutral-900: #292b31;
+  --color-nc-neutral-100: #f4f4f4;
+  --color-nc-neutral-200: #e6e6e6;
+  --color-nc-neutral-300: #d1d1d1;
+  --color-nc-neutral-400: #b0b0b0;
+  --color-nc-neutral-500: #909090;
+  --color-nc-neutral-600: #6f6f6f;
+  --color-nc-neutral-700: #525252;
+  --color-nc-neutral-800: #383838;
+  --color-nc-neutral-900: #1c1c1c;
 
-  --color-accent-100: #f5f4ff;
-  --color-accent-200: #e7e5fe;
-  --color-accent-300: #d2cefd;
-  --color-accent-400: #b5abfc;
-  --color-accent-500: #968ae0;
-  --color-accent-600: #796cbf;
-  --color-accent-700: #5d5294;
-  --color-accent-800: #423a6a;
-  --color-accent-900: #2b2741;
+  --color-accent-100: #fbfbfb;
+  --color-accent-200: #f2f2f2;
+  --color-accent-300: #eaeaea;
+  --color-accent-400: #c4c4c4;
+  --color-accent-500: #9e9e9e;
+  --color-accent-600: #7a7a7a;
+  --color-accent-700: #565656;
+  --color-accent-800: #383838;
+  --color-accent-900: #242424;
 
-  --color-accent-2-100: #f5f4ff;
-  --color-accent-2-200: #e7e5fe;
-  --color-accent-2-300: #d2cefd;
-  --color-accent-2-400: #b5afe8;
-  --color-accent-2-500: #9690c9;
-  --color-accent-2-600: #7972a9;
-  --color-accent-2-700: #5c5783;
-  --color-accent-2-800: #423e5d;
-  --color-accent-2-900: #2b293a;
+  --color-accent-2-100: #f0f0f0;
+  --color-accent-2-200: #e0e0e0;
+  --color-accent-2-300: #c2c2c2;
+  --color-accent-2-400: #a6a6a6;
+  --color-accent-2-500: #8a8a8a;
+  --color-accent-2-600: #6b6b6b;
+  --color-accent-2-700: #4b4b4b;
+  --color-accent-2-800: #2e2e2e;
+  --color-accent-2-900: #1e1e1e;
 
-  --color-section: #262a60;
-  --color-section-glow: #353b80;
-  --color-section-ghost: #4c5397;
+  --color-section: #242424;
+  --color-section-glow: #3b3b3b;
+  --color-section-ghost: #565656;
 
   --font-heading: "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
@@ -92,6 +113,60 @@
   --nc-shadow-sm: 0 0 0 1px var(--color-nc-neutral-800);
   --nc-shadow-md: 0 0 0 1px var(--color-nc-neutral-700), 0 6px 18px rgba(0, 0, 0, 0.55);
   --nc-shadow-lg: 0 0 0 1px var(--color-nc-neutral-500), 0 16px 40px rgba(0, 0, 0, 0.65);
+}
+
+/* Fuera de @layer components a propósito: los @keyframes no participan de la
+   cascada por capas y anidarlos ahí solo los esconde de quien lee el bloque
+   de .skeleton. El barrido entra y sale del todo (el gradiente mide 200% del
+   ancho, así que -100% lo deja justo afuera por izquierda y 100% por
+   derecha). */
+@keyframes nc-skeleton-shimmer {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
+/* Puntos suspensivos animados de LoadingOverlay -- ver .nc-dot abajo. Tres
+   <span> y dos keyframes en vez del truco de animar `width` sobre un "..."
+   (depende del ancho exacto del glifo en la fuente) o `content` (animación
+   discreta, soporte disparejo). El primer punto no se anima; los otros dos
+   entran a un tercio y a dos tercios del ciclo y los tres vuelven a "." al
+   reiniciar. */
+@keyframes nc-dot-2 {
+  0%,
+  33% {
+    opacity: 0;
+  }
+  34%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes nc-dot-3 {
+  0%,
+  66% {
+    opacity: 0;
+  }
+  67%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Ambas animaciones son decorativas: sin ellas el placeholder sigue
+   leyéndose por su tinte, y el overlay queda con los tres puntos fijos. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  .nc-dot-2,
+  .nc-dot-3 {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 @layer components {
@@ -172,6 +247,25 @@
     height: 34px;
     padding: 0;
   }
+  /* Botón lleno: el único de la paleta que invierte el par fondo/texto.
+     .btn-primary (borde + texto accent) alcanza cuando compite con otras
+     acciones alrededor; esto es para la pantalla donde la acción es la
+     única cosa accionable y tiene que ser el punto más brillante --
+     login. Los hovers bajan por la rampa accent en vez de aclarar,
+     porque accent ya es lo más claro que hay. */
+  .btn-solid {
+    color: var(--color-bg);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .btn-solid:hover {
+    background: var(--color-accent-300);
+    border-color: var(--color-accent-300);
+  }
+  .btn-solid:active {
+    background: var(--color-accent-400);
+    border-color: var(--color-accent-400);
+  }
   .btn-block {
     width: 100%;
     margin-top: var(--nc-space-2);
@@ -184,6 +278,11 @@
     margin-bottom: 5px;
     color: color-mix(in srgb, var(--color-ink) 70%, transparent);
   }
+  /* Sin fondo propio: el campo se lee por su borde, no por ser una caja de
+     otro color. Con --color-surface quedaba como un rectángulo más claro
+     cada vez que caía sobre --color-bg (buscador del wizard, formularios
+     sobre el fondo desnudo); dentro de un panel --color-surface ya se veía
+     así, porque coincidía con la superficie que lo contiene. */
   .input {
     width: 100%;
     min-height: 36px;
@@ -192,7 +291,7 @@
     font-size: 14px;
     color: var(--color-ink);
     caret-color: var(--color-accent);
-    background: var(--color-surface);
+    background: transparent;
     border: 1px solid var(--color-divider);
     border-radius: var(--nc-radius-md);
   }
@@ -204,9 +303,78 @@
     outline-offset: 0;
     border-color: var(--color-accent);
   }
+  /* Chrome pinta el autocompletado con un fondo casi blanco propio que no
+     se puede sobreescribir con `background`; sí se puede con esto, porque
+     ese fondo lo aplica con una transición -- retrasarla indefinidamente
+     hace que nunca llegue a pintarse y el campo queda transparente, que es
+     como está diseñado. Se nota sobre todo en el login, donde el navegador
+     autocompleta casi siempre. */
+  .input:-webkit-autofill,
+  .input:-webkit-autofill:hover,
+  .input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink);
+    caret-color: var(--color-accent);
+    transition: background-color 0s 9999999s;
+  }
   textarea.input {
     min-height: 90px;
     resize: vertical;
+  }
+
+  /* Campo con label flotante: el label no vive encima del campo sino
+     sobre su borde, y al recortarse contra el fondo abre una muesca en
+     él. Es lo que deja armar un formulario sin card -- el borde del
+     campo es la única caja que hay, así que tiene que cargar también con
+     la etiqueta.
+     Requiere dos cosas del JSX: placeholder=" " en el input (el estado
+     "vacío" se detecta con :placeholder-shown, y un placeholder de texto
+     real nunca deja de estar oculto... ni de competir con el label), y el
+     <label> DESPUÉS del <input> en el DOM, porque el selector es de
+     hermano adyacente. htmlFor/id mantienen la asociación; el orden
+     visual lo fija el position: absolute. */
+  .field-float {
+    position: relative;
+  }
+  .field-float > .input {
+    min-height: 52px;
+    /* Padding simétrico: el input centra su texto dentro del content box, así
+       que cualquier asimetría vertical lo descuelga. El label flotado no pide
+       hueco propio -- se apoya sobre el borde superior y sólo asoma ~8px
+       dentro del campo, bien por encima de la línea de texto. */
+    padding: 6px 12px;
+    border-radius: var(--nc-radius-lg);
+  }
+  .field-float > .input:focus-visible {
+    /* El outline se dibuja por fuera de la caja, y el recorte del label
+       sólo tapa el borde: quedarían dos trozos de anillo asomando a los
+       costados de la muesca. Con offset negativo el anillo cae dentro del
+       borde y el recorte lo corta limpio. */
+    outline-offset: -2px;
+  }
+  .field-float > label {
+    position: absolute;
+    /* left: 8px + su padding de 4px = los 12px de padding del input: en reposo
+       el label cae exactamente sobre la línea donde va a aparecer el texto. */
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0 4px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    pointer-events: none;
+    transition:
+      top 0.15s ease,
+      font-size 0.15s ease,
+      color 0.15s ease;
+  }
+  .field-float > .input:focus + label,
+  .field-float > .input:not(:placeholder-shown) + label {
+    top: 0;
+    font-size: 11px;
+    color: var(--color-accent);
+    background: var(--color-bg);
   }
   .radio {
     display: inline-flex;
@@ -251,6 +419,16 @@
     border-radius: var(--nc-radius-md);
     background: var(--color-surface);
   }
+  /* Card sin superficie propia: misma caja que .card pero transparente, se
+     lee por el contraste de su contenido contra el fondo y un borde tenue
+     -- el mismo trato que el pill de rol del header. Es la regla que
+     .admin-surface ya aplica a sus cards hijas, expuesta como clase para
+     usarla suelta (tarjetas de tarea del panel de estudiante). Va sin
+     .elev-*: una card transparente no proyecta sombra. */
+  .card-flat {
+    background: transparent;
+    border: 1px solid var(--color-divider);
+  }
   .card-kicker {
     font-size: 10px;
     letter-spacing: 0.1em;
@@ -284,6 +462,106 @@
   }
   .elev-lg {
     box-shadow: var(--nc-shadow-lg);
+  }
+
+  /* Mismo trato que <html> en index.css: el riel del scroll queda reservado
+     aunque la barra no se renderice. Sin esto el contenido de una lista con
+     alto tope salta ~10px en cuanto deja de desbordar (filtrar hasta que
+     entran todos los resultados). Va como clase propia y no sobre las
+     utilidades .overflow-y-* en general porque los overlays de Radix también
+     scrollean con overflow-y-auto: ahí el gutter sería una franja muerta
+     permanente al costado de cada dropdown. */
+  .scroll-stable {
+    scrollbar-gutter: stable;
+  }
+
+  /* Panel admin: una sola superficie, de vidrio.
+     El cuerpo entero del panel es UNA card madre (.admin-surface) y el
+     sidebar queda sin card, desnudo sobre --color-bg. Las cards que caen
+     dentro de la madre dejan de ser superficies propias: pierden fondo y
+     sombra y conservan solo el borde, que ahí ya no dice "otro plano" sino
+     "otra sección". La raíz de cada vista no lleva card justamente porque
+     su borde trazaría el mismo rectángulo que la madre (marco doble).
+     Los overlays -- Dialog, DropdownMenu, Popover, Tooltip -- se montan en
+     un portal colgado de <body>, así que NO son descendientes de
+     .admin-surface y mantienen su fondo sólido aunque se abran desde acá. */
+  .admin-surface {
+    /* Vidrio sin escalón de superficie: la card NO lleva fondo propio, es el
+       mismo --color-bg que el resto de la pantalla. Lo que la separa es el
+       gradiente -- un reflejo tenue que entra por el canto superior y se
+       apaga enseguida -- más el filo de luz del borde y la sombra. Un velo
+       plano, por sutil que sea, siempre se lee como "otro plano de color";
+       el gradiente se lee como luz sobre el mismo plano, que es lo que hace
+       vidrio a un vidrio.
+       Las paradas van en px y no en %: el panel es de alto variable (Análisis
+       corto, Miembros larguísimo) y en % el reflejo se estiraría con el
+       contenido hasta dejar de parecer un reflejo. */
+    background: linear-gradient(
+      168deg,
+      color-mix(in srgb, var(--color-ink) 4%, transparent) 0,
+      color-mix(in srgb, var(--color-ink) 1.5%, transparent) 180px,
+      transparent 380px
+    );
+    /* El desenfoque solo tiene algo que hacer si detrás hay textura, y hoy el
+       fondo del dashboard es #0d0d0d plano: quienes cargan el efecto son el
+       gradiente y el filo de luz de abajo, no el blur. Queda declarado
+       igualmente porque es lo que hace que el panel siga leyéndose como
+       vidrio el día que atrás haya un glow, un gradiente o contenido.
+       Sin escribir el -webkit- a mano: lightningcss lo agrega según targets, y
+       si se declaran los dos se queda solo con el prefijado (Firefox, que
+       soporta la propiedad estándar desde la 103, se quedaba sin blur). */
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--nc-radius-lg);
+    /* Reemplaza el ring plano de --nc-shadow-sm: filo de luz en el canto
+       superior (el brillo del borde del vidrio) + sombra proyectada para
+       despegarlo del fondo. El inset se pinta contra el border-box, así que
+       no se va con el scroll interno del panel. */
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--color-ink) 12%, transparent),
+      0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+  .admin-surface .card {
+    background: transparent;
+    border: 1px solid var(--color-divider);
+  }
+  .admin-surface .elev-sm,
+  .admin-surface .elev-md,
+  .admin-surface .elev-lg {
+    box-shadow: none;
+  }
+
+  /* skeletons
+     Un placeholder no es contenido: no debe pesar más que lo que reemplaza.
+     Antes eran bloques de --color-nc-neutral-800 (#383838) sobre un fondo de
+     #0d0d0d, así que la pantalla de carga leía MÁS fuerte que la pantalla
+     cargada -- barras grises marcadas primero, texto tenue después.
+     Ahora el tinte va en alfa sobre --color-ink, apenas despegado del plano:
+     como es alfa y no un color fijo, la misma clase sirve sobre --color-bg
+     (tarjetas flat del panel de estudiante) y sobre --color-surface (tablas
+     de admin) sin repintarse. El shimmer es un barrido de la misma tinta, no
+     un color más claro: llega a ~13% de ink en la cresta. */
+  .skeleton {
+    background-color: color-mix(in srgb, var(--color-ink) 6%, transparent);
+    background-image: linear-gradient(
+      90deg,
+      transparent 20%,
+      color-mix(in srgb, var(--color-ink) 7%, transparent) 50%,
+      transparent 80%
+    );
+    background-repeat: no-repeat;
+    background-size: 200% 100%;
+    border-radius: var(--nc-radius-sm);
+    animation: nc-skeleton-shimmer 1.6s infinite linear;
+  }
+
+  /* Puntos de LoadingOverlay. steps(1, end) para que el punto aparezca de
+     golpe y no con un fundido: es un contador, no un latido. */
+  .nc-dot-2 {
+    animation: nc-dot-2 1.2s steps(1, end) infinite;
+  }
+  .nc-dot-3 {
+    animation: nc-dot-3 1.2s steps(1, end) infinite;
   }
 
   /* tags */

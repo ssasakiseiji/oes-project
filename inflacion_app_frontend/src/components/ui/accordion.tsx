@@ -69,7 +69,13 @@ function AccordionContent({
       className="data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up overflow-hidden text-sm"
       {...props}
     >
-      <div className={cn("h-(--radix-accordion-content-height)", className)}>
+      {/* Sin altura fija: --radix-accordion-content-height se mide una sola vez
+          al abrir y solo debe alimentar los keyframes de accordion-down/up.
+          Fijarla en el wrapper congelaba el alto medido, y como Content lleva
+          overflow-hidden, todo lo que creciera después (un accordion anidado
+          que se despliega, datos que llegan tarde) quedaba recortado y sin
+          forma de scrollear. */}
+      <div className={className}>
         {children}
       </div>
     </AccordionPrimitive.Content>

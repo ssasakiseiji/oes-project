@@ -5,7 +5,13 @@ import type { StylesConfig } from 'react-select';
 export const getReactSelectStyles = <Option = unknown>(): StylesConfig<Option, boolean> => ({
     control: (provided, state) => ({
         ...provided,
-        backgroundColor: 'var(--color-surface)',
+        // Sin fondo propio, igual que .input: el campo se lee por su borde y
+        // no por ser una caja de otro color. Con --color-surface quedaba como
+        // un rectángulo más claro cada vez que caía sobre un panel sin
+        // superficie (el cuerpo del panel admin es --color-bg puro).
+        // El `menu` de abajo sí conserva fondo sólido: es un overlay flotante
+        // que se dibuja encima del contenido y tiene que taparlo.
+        backgroundColor: 'transparent',
         borderColor: state.isFocused ? 'var(--color-accent)' : 'var(--color-divider)',
         borderWidth: '1px',
         borderRadius: 'var(--nc-radius-md)',
