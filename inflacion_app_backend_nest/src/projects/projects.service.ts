@@ -25,19 +25,35 @@ export class ProjectsService {
   // sintético -- no hace falta que tenga su propia fila ProjectMembership
   // para que el selector de proyecto del frontend le deje operar en
   // cualquiera igual que a un admin normal de ese proyecto.
+  //
+  // Ojo: el 'admin' sintético se SUMA a los roles de su membership real, no
+  // la reemplaza. Devolver siempre ['admin'] pelado le borraba los roles que
+  // sí tiene cargados (ej. {admin,monitor,student}) y dejaba al selector de
+  // rol del header sin nada para elegir (hasMultipleRoles = false), así que
+  // un superadmin no podía cambiarse a la vista de monitor/estudiante.
   async findMine(user: {
     id: number;
     roles: string[];
   }): Promise<ProjectMembershipSummary[]> {
     if (user.roles?.includes('superadmin')) {
-      const allProjects = await this.prisma.project.findMany({
-        orderBy: { name: 'asc' },
-      });
+      const [allProjects, memberships] = await Promise.all([
+        this.prisma.project.findMany({ orderBy: { name: 'asc' } }),
+        this.prisma.projectMembership.findMany({
+          where: { userId: user.id },
+        }),
+      ]);
+
+      const rolesByProject = new Map(
+        memberships.map((m) => [m.projectId, m.roles]),
+      );
+
       return allProjects.map((p) => ({
         projectId: p.id,
         projectName: p.name,
         isArchived: p.isArchived,
-        roles: ['admin'],
+        roles: [
+          ...new Set(['admin', ...(rolesByProject.get(p.id) ?? [])]),
+        ],
       }));
     }
 
