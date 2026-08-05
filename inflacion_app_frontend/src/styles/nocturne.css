@@ -188,6 +188,43 @@
     );
   }
 
+  /* Barra superior del dashboard: opaca y pegada arriba, con el divisor
+     apagado hasta que hay contenido pasando por debajo.
+     En el tope de la página el header no separa nada -- lo que hay arriba es
+     el borde de la ventana -- así que la línea sería decoración. Recién
+     cuando el contenido se desliza por abajo la raya dice algo ("sigue para
+     arriba"), y ahí aparece.
+     El fondo es --color-bg plano y opaco a propósito: nada de translucidez.
+     Sobre tablas densas el backdrop-filter obliga a recomponer la franja en
+     cada frame de scroll, y en tema oscuro el contraste del texto del header
+     pasaría a depender de qué esté pasando atrás. */
+  .nc-header {
+    position: relative;
+    background: var(--color-bg);
+  }
+
+  .nc-header::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 1px;
+    /* Mismo degradado que .hr: en Nocturne los divisores se apagan en las
+       puntas en vez de tocar el borde de la ventana. */
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-divider) 48px,
+      var(--color-divider) calc(100% - 48px),
+      transparent
+    );
+    opacity: 0;
+    transition: opacity 180ms ease-out;
+  }
+
+  .nc-header[data-stuck='true']::after {
+    opacity: 1;
+  }
+
   /* buttons */
   .btn {
     display: inline-flex;

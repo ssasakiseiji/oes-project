@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { RoleProvider, useRole } from '../contexts/RoleContext';
 import { ProjectProvider, useProject } from '../contexts/ProjectContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useScrolledPast } from '../hooks/useScrolledPast';
 import type { AuthUser } from '../types/api';
 
 interface RoleConfigEntry {
@@ -118,6 +119,10 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
     // selector de proyecto Y sin cambio de rol, o sea sin ninguna forma de
     // salir del aviso salvo ensanchar la ventana.
     const isWideHeader = useMediaQuery(HEADER_WIDE_QUERY);
+
+    // Divisor del header: aparece sólo cuando hay contenido pasando por debajo
+    // (ver useScrolledPast y .nc-header en nocturne.css).
+    const { sentinelRef, hasScrolledPast } = useScrolledPast<HTMLDivElement>();
     const showProjectSwitcher = !isPlatformMode && hasMultipleProjects && activeProject !== null;
     const showPlatformToggle = isSuperadmin;
     const platformToggleLabel = isPlatformMode ? 'Volver a mi Proyecto' : 'Modo Plataforma';
@@ -142,8 +147,23 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
 
     return (
         <div className="min-h-screen w-full text-ink font-sans" style={{ background: 'var(--color-bg)' }}>
-            <div className={`${isAdminView ? 'max-w-[1800px]' : 'max-w-screen-2xl'} mx-auto p-4`}>
-                <header className="flex justify-between items-center mb-6 sm:mb-8 gap-4">
+            <div className={`${isAdminView ? 'max-w-[1800px]' : 'max-w-screen-2xl'} mx-auto px-4 pb-4`}>
+                {/* Centinela del divisor. Va ARRIBA del header y necesita alto
+                    propio para que el observer lo vea; -mb-px se lo devuelve al
+                    layout para que no corra todo un pixel hacia abajo. */}
+                <div ref={sentinelRef} aria-hidden="true" className="h-px -mb-px" />
+
+                {/* El padding vertical era del contenedor (p-4) y pasa acá: al
+                    quedar pegado arriba, el aire por encima del nombre tiene
+                    que ser parte de la barra, no del documento que scrollea.
+                    Los márgenes de abajo bajan en la misma medida para que el
+                    hueco hasta el panel siga siendo el de antes (24/32px).
+                    z-30: debajo de dropdowns y overlays (z-50) y del drawer de
+                    PlatformDashboard (z-40/50), que tienen que taparlo. */}
+                <header
+                    data-stuck={hasScrolledPast}
+                    className="nc-header sticky top-0 z-30 flex justify-between items-center py-4 mb-2 sm:mb-4 gap-4"
+                >
                     <div className="min-w-0 flex-1">
                         <h1 className="text-lg sm:text-xl md:text-2xl font-medium truncate">{user.name}</h1>
 
