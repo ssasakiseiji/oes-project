@@ -9,6 +9,7 @@ export interface ObservationValueFields {
   textValue: string | null;
   booleanValue: boolean | null;
   choiceValue: string | null;
+  isUnavailable: boolean;
 }
 
 // Extrae el valor "mostrable" de una Observation/DraftObservation ya leída
@@ -82,7 +83,27 @@ export function valueSchemaFor(variable: VariableForValidation) {
 export function toObservationValueFields(
   variable: VariableForValidation,
   rawValue: unknown,
+  isUnavailable = false,
 ): ObservationValueFields {
+  const empty: ObservationValueFields = {
+    numericValue: null,
+    textValue: null,
+    booleanValue: null,
+    choiceValue: null,
+    isUnavailable: false,
+  };
+
+  // Fase AD: "no disponible" es una respuesta SIN valor. No se valida nada
+  // contra el dataType (no hay qué validar) y las cuatro columnas de valor
+  // quedan en NULL a propósito: es lo que mantiene a estas filas fuera de
+  // promedios, canastas y distribuciones en admin/analysis.ts. Si el cliente
+  // manda valor Y la marca, gana la marca -- el checkbox del wizard ya limpia
+  // el valor al activarse, así que recibir ambos es un cliente desincronizado
+  // y descartar el valor es la lectura conservadora.
+  if (isUnavailable) {
+    return { ...empty, isUnavailable: true };
+  }
+
   const schema = valueSchemaFor(variable);
   const parsed = schema.safeParse(rawValue);
 
@@ -96,12 +117,7 @@ export function toObservationValueFields(
     });
   }
 
-  const fields: ObservationValueFields = {
-    numericValue: null,
-    textValue: null,
-    booleanValue: null,
-    choiceValue: null,
-  };
+  const fields: ObservationValueFields = { ...empty };
 
   switch (variable.dataType) {
     case 'numeric':

@@ -60,6 +60,7 @@ export class MonitorService {
           textValue: true,
           booleanValue: true,
           choiceValue: true,
+          isUnavailable: true,
         },
       }),
       this.prisma.draftObservation.findMany({
@@ -73,6 +74,7 @@ export class MonitorService {
           textValue: true,
           booleanValue: true,
           choiceValue: true,
+          isUnavailable: true,
         },
       }),
       this.prisma.observationUnit.findMany({
@@ -133,9 +135,21 @@ export class MonitorService {
               status = 'No completado';
             }
 
+            // Fase AD: una variable marcada "no disponible" es trabajo hecho
+            // (el estudiante fue y miró), así que cuenta en `current` -- pero
+            // NO es un dato relevado. El nivel de completitud se calcula sobre
+            // los valores efectivos: quien vuelve con 10 "no disponibles" no
+            // puede quedar al mismo nivel que quien relevó las 10. La
+            // diferencia entre los dos números es lo que el panel muestra.
+            const unavailableCount = submitted.filter(
+              (o) => o.isUnavailable,
+            ).length;
             const currentProgress = submitted.length;
+            const effectiveProgress = currentProgress - unavailableCount;
             const percentage =
-              totalVariables > 0 ? (currentProgress / totalVariables) * 100 : 0;
+              totalVariables > 0
+                ? (effectiveProgress / totalVariables) * 100
+                : 0;
             let completionLevel: CompletionLevel = null;
             if (status === 'Completado') {
               if (percentage < 33) completionLevel = 'bajo';
@@ -165,7 +179,11 @@ export class MonitorService {
               observationUnitName,
               status,
               completionLevel,
-              progress: { current: currentProgress, total: totalVariables },
+              progress: {
+                current: currentProgress,
+                total: totalVariables,
+                unavailable: unavailableCount,
+              },
               submittedValues,
               draftValues,
             };

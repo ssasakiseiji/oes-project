@@ -82,6 +82,7 @@ export class StudentsService {
           textValue: true,
           booleanValue: true,
           choiceValue: true,
+          isUnavailable: true,
           observationUnit: { select: { name: true } },
         },
       }),
@@ -95,6 +96,7 @@ export class StudentsService {
           textValue: true,
           booleanValue: true,
           choiceValue: true,
+          isUnavailable: true,
           observationUnit: { select: { name: true } },
         },
       }),
@@ -140,8 +142,26 @@ export class StudentsService {
           }
         });
 
-      // Si no hay registros en este período, usar las asignaciones actuales
-      let unitsForPeriod = Array.from(unitsMap.values());
+      // El período abierto es el único donde se puede escribir (ver
+      // CollectionPeriodGuard), así que ahí las tareas SON las asignaciones
+      // vigentes, unidas a las unidades que ya tienen datos -- si una
+      // asignación se revoca a mitad de período, lo ya cargado no debe
+      // desaparecer del dashboard. Antes las asignaciones eran un fallback
+      // que sólo aplicaba con `unitsMap` vacío, así que al guardar el primer
+      // borrador las demás unidades asignadas desaparecían de la lista.
+      //
+      // En períodos cerrados se mantiene la foto histórica (sólo unidades con
+      // registros), con las asignaciones actuales como fallback cuando el
+      // período no tiene ningún dato.
+      if (period.status === 'Open') {
+        assignedObservationUnitsList.forEach((unit) => {
+          if (!unitsMap.has(unit.id)) unitsMap.set(unit.id, unit);
+        });
+      }
+
+      let unitsForPeriod = Array.from(unitsMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
       if (unitsForPeriod.length === 0) {
         unitsForPeriod = assignedObservationUnitsList;
       }
@@ -165,10 +185,22 @@ export class StudentsService {
           status = 'En Proceso';
         }
 
+        // Fase AD: las variables marcadas "no disponible" viajan aparte y no
+        // dentro de los mapas de valores. Sus cuatro columnas de valor son
+        // NULL, así que en el mapa serían indistinguibles de una variable sin
+        // cargar -- que es exactamente la ambigüedad que esta fase elimina.
+        // La fuente es la misma que la del status: borradores si todavía no
+        // se envió, observaciones si ya se envió.
+        const unavailableSource =
+          submittedForPeriod.length > 0 ? submittedForPeriod : draftsForPeriod;
+
         return {
           observationUnitId: observationUnit.id,
           observationUnitName: observationUnit.name,
           status,
+          unavailableVariableIds: unavailableSource
+            .filter((row) => row.isUnavailable && row.variableId != null)
+            .map((row) => row.variableId!),
           draftValues: draftsForPeriod.reduce<Record<string, unknown>>(
             (acc, d) => {
               acc[d.variableId!] = pickObservationValue(d);
@@ -202,8 +234,11 @@ export class StudentsService {
     projectId: number,
     values: SaveDraftDto['values'],
   ) {
+    // Fase AD: una entrada marcada como no disponible se guarda aunque no
+    // traiga valor -- es justamente la fila que sostiene la marca. El resto
+    // sigue descartándose por vacía.
     const entries = (values ?? []).filter(
-      (v) => v.value != null && v.value !== '',
+      (v) => v.isUnavailable === true || (v.value != null && v.value !== ''),
     );
 
     const variables =
@@ -227,7 +262,7 @@ export class StudentsService {
         variableId: entry.variableId,
         observationUnitId,
         periodId,
-        ...toObservationValueFields(variable, entry.value),
+        ...toObservationValueFields(variable, entry.value, entry.isUnavailable),
       };
     });
     const validRows = rows.filter((r): r is NonNullable<typeof r> => r != null);
@@ -280,7 +315,7 @@ export class StudentsService {
         variableId: entry.variableId,
         observationUnitId,
         periodId,
-        ...toObservationValueFields(variable, entry.value),
+        ...toObservationValueFields(variable, entry.value, entry.isUnavailable),
       };
     });
 

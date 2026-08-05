@@ -14,9 +14,13 @@ import { z } from 'zod';
 // students.service.ts vía common/validation/variable-value.ts, porque acá
 // no se sabe a qué Variable corresponde cada entrada hasta resolverla en
 // la base.
+// Fase AD: `isUnavailable` marca "fui, miré y no había" -- una respuesta sin
+// valor. Es la única entrada que puede llegar con `value` en null y aun así
+// tener que persistirse; el resto se descarta como vacía (ver saveDraft).
 const valueEntrySchema = z.object({
   variableId: z.number().int().positive(),
   value: z.union([z.number(), z.string(), z.boolean(), z.null()]),
+  isUnavailable: z.boolean().optional(),
 });
 
 export const saveDraftSchema = z.object({
@@ -28,9 +32,14 @@ export const submitObservationsSchema = z.object({
   observationUnitId: z.number().int().positive(),
   values: z
     .array(
-      valueEntrySchema.extend({
-        value: z.union([z.number(), z.string(), z.boolean()]),
-      }),
+      // En el envío el valor sí es obligatorio, SALVO que la entrada venga
+      // marcada como no disponible -- ahí la ausencia de valor es el dato.
+      valueEntrySchema.refine(
+        (entry) =>
+          entry.isUnavailable === true ||
+          (entry.value !== null && entry.value !== ''),
+        { message: 'La entrada debe tener un valor o estar marcada como no disponible' },
+      ),
     )
     .min(1, 'Debe proporcionar al menos un valor'),
 });

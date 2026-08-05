@@ -213,6 +213,11 @@ model Observation {
   textValue         String?   @map("text_value")
   booleanValue      Boolean?  @map("boolean_value")
   choiceValue       String?   @map("choice_value") @db.VarChar(255)
+  // Fase AD: "el estudiante fue, miró y no había nada que observar" -- una
+  // respuesta, no un dato faltante. Con las cuatro columnas de valor en NULL
+  // era indistinguible de "todavía no lo cargó", que es exactamente lo que
+  // hacía que el checkbox del wizard no pudiera persistirse.
+  isUnavailable     Boolean   @default(false) @map("is_unavailable")
   periodId          Int?      @map("period_id")
   variableId        Int?      @map("variable_id")
   userId            Int?      @map("user_id")
@@ -240,6 +245,10 @@ model DraftObservation {
   textValue         String?   @map("text_value")
   booleanValue      Boolean?  @map("boolean_value")
   choiceValue       String?   @map("choice_value") @db.VarChar(255)
+  // Ver Observation.isUnavailable. En el borrador la fila existe justamente
+  // para que la marca sobreviva a cerrar el wizard: sin ella no habría nada
+  // que guardar (las cuatro columnas de valor van en NULL).
+  isUnavailable     Boolean   @default(false) @map("is_unavailable")
   periodId          Int?      @map("period_id")
   variableId        Int?      @map("variable_id")
   userId            Int?      @map("user_id")
