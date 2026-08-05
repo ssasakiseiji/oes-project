@@ -1,52 +1,56 @@
-import { useState, useMemo, type ComponentType } from 'react';
-import { LogOut, User, Shield, UserCog, GraduationCap, FolderKanban, ChevronDown, Check, Building2, ArrowLeftCircle, type LucideIcon } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { LogOut, User, Menu, ChevronDown, Check } from 'lucide-react';
 import StudentDashboard from '../components/StudentDashboard';
 import MonitorDashboard from '../components/MonitorDashboard';
 import AdminDashboard from '../components/AdminDashboard';
 import PlatformDashboard from '../components/PlatformDashboard';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from '../components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '../components/ui/dropdown-menu';
 import { RoleProvider, useRole } from '../contexts/RoleContext';
 import { ProjectProvider, useProject } from '../contexts/ProjectContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { AuthUser } from '../types/api';
 
 interface RoleConfigEntry {
     label: string;
-    icon: LucideIcon;
-    bgColor: string;
-    textColor: string;
-    borderColor: string;
-    hoverBg: string;
 }
 
-// Configuración de roles -- colores tomados de la paleta Nocturne (accent/
-// accent-2/success) en vez de los azules/verdes/púrpuras genéricos de Tailwind,
-// para que el badge de rol combine con el resto del shell rediseñado.
+// Configuración de roles. Ni el pill del header ni los ítems del menú llevan
+// ícono ni color propio: el rol se identifica por su nombre y nada más.
 const roleConfig: Record<string, RoleConfigEntry> = {
-    admin: {
-        label: 'Administrador',
-        icon: Shield,
-        bgColor: 'bg-accent/20',
-        textColor: 'text-accent',
-        borderColor: 'border-accent/30',
-        hoverBg: 'hover:bg-accent/30',
-    },
-    monitor: {
-        label: 'Monitor',
-        icon: UserCog,
-        bgColor: 'bg-accent-2/20',
-        textColor: 'text-accent-2',
-        borderColor: 'border-accent-2/30',
-        hoverBg: 'hover:bg-accent-2/30',
-    },
-    student: {
-        label: 'Estudiante',
-        icon: GraduationCap,
-        bgColor: 'bg-success/20',
-        textColor: 'text-success',
-        borderColor: 'border-success/30',
-        hoverBg: 'hover:bg-success/30',
-    },
+    admin: { label: 'Administrador' },
+    monitor: { label: 'Monitor' },
+    student: { label: 'Estudiante' },
 };
+
+// Marca del rol activo dentro del dropdown. Es una sola, igual para los tres:
+// como solo puede haber un rol activo a la vez, el resaltado dice "este es el
+// que estás usando" y nada más -- un color por rol no agregaba información y
+// obligaba a estirar la paleta. Achromático a propósito: en Nocturne el verde
+// (--color-success) está reservado para significado (ok/error, subió/bajó), así
+// que teñir "Estudiante" de verde lo hacía leer como un estado y no como una
+// selección.
+const ROLE_ACTIVE_CLASS = 'bg-accent/20 text-accent font-semibold';
+
+// Pill de rol: transparente, sin ícono, texto en el color de letra base.
+// El único adorno es el borde (--color-divider = ink al 16%) para que se siga
+// leyendo como pill, y el chevron cuando es clickeable.
+const ROLE_PILL_CLASS =
+    'mt-2 text-sm font-semibold text-ink px-3 py-1 rounded-full inline-flex items-center gap-2 border border-divider bg-transparent';
+
+// Debajo de este ancho el cluster derecho del header (selector de proyecto +
+// Modo Plataforma + perfil) ya no entra al lado del nombre: el pill de rol,
+// que vive debajo del nombre y no encoge, se desborda de su columna y termina
+// pisando los botones. Ahí los tres controles se colapsan en un único botón
+// hamburguesa, que además deja todo el ancho restante para nombre y rol.
+const HEADER_WIDE_QUERY = '(min-width: 768px)';
+
+// Todos los dropdowns del header van con modal={false}. Con el modal por
+// defecto, Radix le pone aria-hidden a #root mientras el trigger -- que vive
+// adentro de #root -- todavía tiene el foco, y Chrome lo reporta como error de
+// accesibilidad ("Blocked aria-hidden on an element because its descendant
+// retained focus"). Sin modal no hay aria-hidden sobre el resto de la página ni
+// bloqueo de scroll; el cierre por click afuera y por Escape lo sigue
+// manejando el dismissable layer, así que no se pierde comportamiento.
 
 interface DashboardContentProps {
     user: AuthUser;
@@ -68,6 +72,12 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
     // componente padre cuyo efecto corre DESPUÉS del de este hijo).
     const [isPlatformMode, setIsPlatformMode] = useState(() => isSuperadmin && availableProjects.length === 0);
 
+    // Acordeón de proyectos del menú hamburguesa. Contraído por defecto: en el
+    // menú móvil la lista completa es la sección más larga de lejos, y con
+    // muchos proyectos empuja "Modo Plataforma" y "Cerrar Sesión" fuera de la
+    // vista (el menú scrollea, pero nada indica que haya algo más abajo).
+    const [isProjectListOpen, setIsProjectListOpen] = useState(false);
+
     const activeProject = useMemo(
         () => availableProjects.find(p => p.projectId === activeProjectId) ?? null,
         [availableProjects, activeProjectId]
@@ -88,67 +98,70 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
     };
 
     const currentRoleConfig = activeRole ? roleConfig[activeRole] : null;
-    const RoleIcon: LucideIcon | ComponentType = currentRoleConfig ? currentRoleConfig.icon : User;
+
+    // El panel admin es sidebar + tablas anchas: se le da más ancho útil que al
+    // resto de los roles (student/monitor son lecturas angostas y a 1800px
+    // quedarían con líneas larguísimas).
+    const isAdminView = !isPlatformMode && activeRole === 'admin';
+
+    // Qué controles existen en este contexto. Se calcula una sola vez porque el
+    // header los dibuja en dos formas distintas (botones sueltos en escritorio,
+    // ítems del menú hamburguesa en móvil) y las condiciones tienen que ser
+    // exactamente las mismas en ambas.
+    //
+    // El header ya no se poda cuando el rol activo es admin en pantalla angosta
+    // (AdminDashboard muestra ahí su aviso de "se necesita más ancho"). Esa poda
+    // existía para evitar el choque visual de tres controles al lado del nombre,
+    // y el hamburguesa lo resuelve de raíz: adentro del menú no compiten por
+    // ancho con nada. Sin ella, además, desaparece un callejón sin salida --
+    // un superadmin con un solo rol en el proyecto activo se quedaba sin
+    // selector de proyecto Y sin cambio de rol, o sea sin ninguna forma de
+    // salir del aviso salvo ensanchar la ventana.
+    const isWideHeader = useMediaQuery(HEADER_WIDE_QUERY);
+    const showProjectSwitcher = !isPlatformMode && hasMultipleProjects && activeProject !== null;
+    const showPlatformToggle = isSuperadmin;
+    const platformToggleLabel = isPlatformMode ? 'Volver a mi Proyecto' : 'Modo Plataforma';
+
+    // Lista de proyectos, compartida entre el dropdown propio de escritorio y
+    // el acordeón de proyectos dentro del hamburguesa (que la indenta para que
+    // se lea como contenido del acordeón y no como ítems sueltos del menú).
+    const renderProjectItems = (extraClassName = '') =>
+        availableProjects.map((project) => {
+            const isActive = project.projectId === activeProjectId;
+            return (
+                <DropdownMenuItem
+                    key={project.projectId}
+                    onSelect={() => switchProject(project.projectId)}
+                    className={`py-2.5 ${extraClassName} ${isActive ? 'text-ink font-semibold' : 'text-ink/80'}`}
+                >
+                    <span className="flex-1 truncate">{project.projectName}</span>
+                    {isActive && <Check size={18} className="text-accent" />}
+                </DropdownMenuItem>
+            );
+        });
 
     return (
         <div className="min-h-screen w-full text-ink font-sans" style={{ background: 'var(--color-bg)' }}>
-            <div className="max-w-screen-2xl mx-auto p-4">
+            <div className={`${isAdminView ? 'max-w-[1800px]' : 'max-w-screen-2xl'} mx-auto p-4`}>
                 <header className="flex justify-between items-center mb-6 sm:mb-8 gap-4">
                     <div className="min-w-0 flex-1">
                         <h1 className="text-lg sm:text-xl md:text-2xl font-medium truncate">{user.name}</h1>
 
                         {isPlatformMode && (
-                            <span className="mt-2 inline-flex items-center gap-2 text-sm font-semibold bg-nc-neutral-500/20 text-nc-neutral-300 px-3 py-1 rounded-full border border-nc-neutral-400/30">
-                                <Building2 size={16} />
+                            <span className="mt-2 inline-flex items-center text-sm font-semibold bg-nc-neutral-500/20 text-nc-neutral-300 px-3 py-1 rounded-full border border-nc-neutral-400/30">
                                 Modo Plataforma
                             </span>
-                        )}
-
-                        {/* Selector de Proyecto -- solo visible si el usuario pertenece a más de uno y no está en Modo Plataforma (que es project-agnostic) */}
-                        {!isPlatformMode && hasMultipleProjects && activeProject && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <button className="group/trigger mt-2 text-sm font-semibold bg-nc-neutral-500/20 text-nc-neutral-300 px-3 py-1 rounded-full inline-flex items-center gap-2 border border-nc-neutral-400/30 hover:bg-nc-neutral-500/30 transition-all cursor-pointer">
-                                        <FolderKanban size={16} />
-                                        <span className="truncate max-w-[10rem]">{activeProject.projectName}</span>
-                                        <ChevronDown size={14} className="transition-transform duration-200 group-data-[state=open]/trigger:rotate-180" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-64">
-                                    <DropdownMenuLabel className="flex items-center gap-2 text-muted">
-                                        <FolderKanban size={14} />
-                                        Cambiar proyecto activo
-                                    </DropdownMenuLabel>
-                                    {availableProjects.map((project) => {
-                                        const isActive = project.projectId === activeProjectId;
-                                        return (
-                                            <DropdownMenuItem
-                                                key={project.projectId}
-                                                onSelect={() => switchProject(project.projectId)}
-                                                className={`py-2.5 ${isActive ? 'text-ink font-semibold' : 'text-ink/80'}`}
-                                            >
-                                                <span className="p-1.5 rounded-md bg-nc-neutral-500/20 text-nc-neutral-300">
-                                                    <FolderKanban size={16} />
-                                                </span>
-                                                <span className="flex-1 truncate">{project.projectName}</span>
-                                                {isActive && <Check size={18} className="text-accent" />}
-                                            </DropdownMenuItem>
-                                        );
-                                    })}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
                         )}
 
                         {/* Badge de Rol con Dropdown Integrado */}
                         {!isPlatformMode && currentRoleConfig && (
                             hasMultipleRoles ? (
-                                <DropdownMenu>
+                                <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
-                                        <button className={`group/trigger mt-2 text-sm font-semibold ${currentRoleConfig.bgColor} ${currentRoleConfig.textColor} px-3 py-1 rounded-full capitalize inline-flex items-center gap-2 border ${currentRoleConfig.borderColor} ${currentRoleConfig.hoverBg} transition-all cursor-pointer`}>
-                                            <RoleIcon size={16} />
+                                        <button className={`group/trigger ${ROLE_PILL_CLASS} hover:bg-ink/10 transition-all cursor-pointer`}>
                                             <span>{currentRoleConfig.label}</span>
                                             {availableRoles.length > 1 && (
-                                                <span className="ml-0.5 px-1.5 py-0.5 bg-white/20 rounded text-xs font-bold">
+                                                <span className="text-xs font-medium text-muted">
                                                     +{availableRoles.length - 1}
                                                 </span>
                                             )}
@@ -156,25 +169,23 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                                         </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="start" className="w-56">
-                                        <DropdownMenuLabel className="flex items-center gap-2 text-muted">
-                                            <User size={14} />
+                                        <DropdownMenuLabel className="text-muted">
                                             Cambiar rol activo
                                         </DropdownMenuLabel>
                                         {availableRoles.map((role) => {
                                             const config = roleConfig[role];
-                                            const Icon = config.icon;
+                                            // Una membership podría traer un rol que no está en roleConfig
+                                            // (dato viejo/seed): se omite en vez de romper el header entero.
+                                            if (!config) return null;
                                             const isActive = role === activeRole;
                                             return (
                                                 <DropdownMenuItem
                                                     key={role}
                                                     onSelect={() => switchRole(role)}
-                                                    className={`py-2.5 ${isActive ? `${config.bgColor} ${config.textColor} font-semibold` : 'text-ink/80'}`}
+                                                    className={`py-2.5 px-2.5 ${isActive ? ROLE_ACTIVE_CLASS : 'text-ink/80'}`}
                                                 >
-                                                    <span className={`p-1.5 rounded-md ${config.bgColor} ${config.textColor}`}>
-                                                        <Icon size={16} />
-                                                    </span>
                                                     <span className="flex-1">{config.label}</span>
-                                                    {isActive && <Check size={18} className={config.textColor} />}
+                                                    {isActive && <Check size={18} className="text-accent" />}
                                                 </DropdownMenuItem>
                                             );
                                         })}
@@ -186,43 +197,144 @@ const DashboardContent = ({ user, onLogout }: DashboardContentProps) => {
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             ) : (
-                                <span className={`mt-2 text-sm font-semibold ${currentRoleConfig.bgColor} ${currentRoleConfig.textColor} px-3 py-1 rounded-full capitalize inline-flex items-center gap-2 border ${currentRoleConfig.borderColor}`}>
-                                    <RoleIcon size={16} />
-                                    <span>{currentRoleConfig.label}</span>
+                                <span className={ROLE_PILL_CLASS}>
+                                    {currentRoleConfig.label}
                                 </span>
                             )
                         )}
                     </div>
 
-                    {/* Toggle Modo Plataforma -- solo visible para superadmin */}
-                    {isSuperadmin && (
-                        <button
-                            onClick={() => setIsPlatformMode(prev => !prev)}
-                            className="btn btn-secondary rounded-full px-2.5 sm:px-4 py-2.5 sm:py-3 flex-shrink-0"
-                        >
-                            {isPlatformMode ? <ArrowLeftCircle size={18} /> : <Building2 size={18} />}
-                            <span className="hidden sm:inline">{isPlatformMode ? 'Volver a mi Proyecto' : 'Modo Plataforma'}</span>
-                        </button>
-                    )}
+                    {isWideHeader ? (
+                        <>
+                            {/* Selector de Proyecto -- solo visible si el usuario pertenece a
+                                más de uno y no está en Modo Plataforma (que es
+                                project-agnostic). Vive en el cluster derecho, pegado al
+                                toggle de Modo Plataforma y con su mismo botón: son las dos
+                                acciones de "en qué contexto estoy trabajando", así que
+                                comparten forma en vez de que una sea pill y la otra botón.
+                                Sin ícono, igual que el pill de rol. */}
+                            {showProjectSwitcher && (
+                                <DropdownMenu modal={false}>
+                                    <DropdownMenuTrigger asChild>
+                                        <button className="group/trigger btn btn-secondary rounded-full px-4 py-3 flex-shrink-0">
+                                            <span className="truncate max-w-[12rem]">{activeProject.projectName}</span>
+                                            <ChevronDown size={14} className="transition-transform duration-200 group-data-[state=open]/trigger:rotate-180" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-64">
+                                        <DropdownMenuLabel className="text-muted">
+                                            Cambiar proyecto activo
+                                        </DropdownMenuLabel>
+                                        {renderProjectItems()}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            )}
 
-                    {/* Menú dropdown en icono de perfil */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button
-                                className="btn btn-icon btn-secondary rounded-full !w-auto !h-auto p-2.5 sm:p-3 flex-shrink-0"
-                                aria-label="Menú de usuario"
-                            >
-                                <User size={20} className="sm:w-6 sm:h-6" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuLabel className="text-ink truncate">{user.name}</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={onLogout} className="py-2.5 text-ink/80">
-                                <LogOut size={16} />
-                                <span>Cerrar Sesión</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                            {/* Toggle Modo Plataforma -- solo visible para superadmin */}
+                            {showPlatformToggle && (
+                                <button
+                                    onClick={() => setIsPlatformMode(prev => !prev)}
+                                    className="btn btn-secondary rounded-full px-4 py-3 flex-shrink-0"
+                                >
+                                    {/* El texto no puede esconderse: sin ícono, el
+                                        botón quedaría vacío */}
+                                    <span>{platformToggleLabel}</span>
+                                </button>
+                            )}
+
+                            {/* Menú dropdown en icono de perfil */}
+                            <DropdownMenu modal={false}>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        className="btn btn-icon btn-secondary rounded-full !w-auto !h-auto p-3 flex-shrink-0"
+                                        aria-label="Menú de usuario"
+                                    >
+                                        <User size={24} />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuLabel className="text-ink truncate">{user.name}</DropdownMenuLabel>
+                                    <DropdownMenuItem onSelect={onLogout} className="py-2.5 text-ink/80">
+                                        <LogOut size={16} />
+                                        <span>Cerrar Sesión</span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </>
+                    ) : (
+                        /* Móvil: un solo botón hamburguesa con todo el cluster
+                           derecho adentro, en el mismo orden que en escritorio
+                           (proyecto, Modo Plataforma, perfil). */
+                        <DropdownMenu
+                            modal={false}
+                            // Cada apertura arranca con el acordeón de proyectos
+                            // contraído. Se resetea al abrir y no al cerrar para no
+                            // mostrar el colapso durante la animación de salida.
+                            onOpenChange={(open) => { if (open) setIsProjectListOpen(false); }}
+                        >
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    // border-transparent: en reposo el ícono va suelto sobre el
+                                    // fondo, sin la caja de .btn-secondary. El borde sigue
+                                    // reservando su 1px, así que no salta al pasar el mouse; el
+                                    // hover/active del secondary (fondo tenue) queda como feedback.
+                                    className="btn btn-icon btn-secondary border-transparent rounded-full !w-auto !h-auto p-2.5 flex-shrink-0"
+                                    aria-label="Menú"
+                                >
+                                    <Menu size={20} />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                                <DropdownMenuLabel className="text-ink truncate">{user.name}</DropdownMenuLabel>
+
+                                {showProjectSwitcher && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        {/* Cabecera del acordeón: muestra el proyecto
+                                            activo (que es la información que importa
+                                            con la lista contraída) y despliega el
+                                            resto. preventDefault en onSelect para que
+                                            el menú no se cierre al abrirlo -- va en
+                                            onSelect y no en onClick para que también
+                                            funcione con Enter/Espacio. */}
+                                        <DropdownMenuItem
+                                            onSelect={(e) => { e.preventDefault(); setIsProjectListOpen(prev => !prev); }}
+                                            className="py-2.5 text-ink/80"
+                                            aria-expanded={isProjectListOpen}
+                                        >
+                                            <span className="flex-1 min-w-0">
+                                                <span className="block text-xs text-muted">Proyecto activo</span>
+                                                <span className="block truncate font-semibold text-ink">{activeProject.projectName}</span>
+                                            </span>
+                                            <ChevronDown
+                                                size={16}
+                                                className={`transition-transform duration-200 ${isProjectListOpen ? 'rotate-180' : ''}`}
+                                            />
+                                        </DropdownMenuItem>
+                                        {isProjectListOpen && renderProjectItems('pl-4')}
+                                    </>
+                                )}
+
+                                {showPlatformToggle && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onSelect={() => setIsPlatformMode(prev => !prev)}
+                                            className="py-2.5 text-ink/80"
+                                        >
+                                            <span className="flex-1">{platformToggleLabel}</span>
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={onLogout} className="py-2.5 text-ink/80">
+                                    <LogOut size={16} />
+                                    <span>Cerrar Sesión</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
                 </header>
 
                 <main>

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { apiFetch } from '../../api';
 import { Modal } from './Modal';
-import { LoadingSpinner } from './LoadingSpinner';
+import { ChartSkeleton } from './skeletons';
+import { LoadingArea } from './LoadingArea';
+import { EvolutionLineChart } from './charts/EvolutionLineChart';
+import { formatNumber } from './charts/chartTheme';
 import type { VariableHistoryRow } from '../../types/api';
 
 export interface HistoricalChartModalProps {
@@ -30,11 +32,21 @@ export const HistoricalChartModal = ({ isOpen, onClose, type, id, name, projectI
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Evolución de "${name}"`}>
-            {isLoading ? <LoadingSpinner /> : (
-            <div style={{width: '100%', height: 300}}>
-                <ResponsiveContainer><LineChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" /><XAxis dataKey="name" tick={{ fill: 'var(--color-ink)' }} /><YAxis tickFormatter={(val) => new Intl.NumberFormat('es-PY').format(val)} tick={{ fill: 'var(--color-ink)' }}/><RechartsTooltip formatter={(val) => new Intl.NumberFormat('es-PY').format(Number(val))} contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-divider)', borderRadius: 'var(--nc-radius-md)', color: 'var(--color-ink)' }}/><Legend /><Line type="monotone" dataKey="avgValue" name="Valor Promedio" stroke="var(--color-accent)" strokeWidth={2}/></LineChart></ResponsiveContainer>
-            </div>
-            )}
+            <LoadingArea isLoading={isLoading} skeleton={<ChartSkeleton />}>
+                {/* Comparte el gráfico con la pestaña de Gráficos (Fase AE): el
+                    mismo dato dibujado dos veces con dos estilos distintos se
+                    lee como dos datos distintos. */}
+                <EvolutionLineChart
+                    height={300}
+                    data={data.map(row => ({
+                        period: row.name,
+                        value: row.avgValue === null ? null : Number(row.avgValue),
+                    }))}
+                    formatValue={formatNumber}
+                    seriesLabel="Valor promedio"
+                />
+                <p className="text-xs text-muted mt-2">Solo períodos cerrados.</p>
+            </LoadingArea>
         </Modal>
     );
 };
