@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { EmptyState } from './ui/EmptyState';
 
 interface ErrorBoundaryProps {
     children: ReactNode;
@@ -25,27 +26,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         }
     }
 
-    handleReload = () => {
-        this.setState({ hasError: false });
-        window.location.reload();
-    };
-
     render() {
         if (this.state.hasError) {
+            // Mismo patrón que el resto de los estados sin contenido de la app:
+            // sin caja, sin borde y sin acción -- sólo texto sobre el fondo. La
+            // recarga la hace el usuario desde el navegador, así que el copy
+            // tiene que pedirla explícitamente.
             return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg shadow-lg p-8 max-w-md text-center">
-                        <h1 className="text-xl font-bold text-gray-800 mb-2">Ocurrió un error inesperado</h1>
-                        <p className="text-gray-600 mb-6">
-                            La aplicación encontró un problema. Intentá recargar la página; si el error persiste, contactá al administrador.
-                        </p>
-                        <button
-                            onClick={this.handleReload}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            Recargar página
-                        </button>
-                    </div>
+                <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+                    <EmptyState
+                        title="Ocurrió un error inesperado"
+                        description="La aplicación encontró un problema. Recargá la página desde tu navegador; si el error persiste, contactá al administrador."
+                    />
                 </div>
             );
         }

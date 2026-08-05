@@ -9,6 +9,23 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'headers'> {
     skipAuthRedirect?: boolean;
 }
 
+// Sesión caída (token ausente, inválido o vencido). Antes esto se resolvía con
+// `window.location.href = '/'`, una navegación completa del documento, y de ahí
+// salía el bug de "no puedo volver a entrar sin refresh duro": al recargar, el
+// navegador vuelve a autocompletar el formulario de login escribiendo en los
+// inputs sin disparar onChange, así que el estado de React quedaba vacío
+// mientras el usuario veía sus credenciales cargadas -- y el submit mandaba
+// strings vacíos, que el backend contesta con "Credenciales incorrectas".
+// Ahora se avisa por evento y App resetea la sesión en el mismo render, sin
+// recargar el documento. (LoginPage además lee los valores del DOM, así que el
+// autocompletado ya no puede desincronizarse; ver ahí.)
+export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
+
+const resetSession = () => {
+    localStorage.removeItem('token');
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+};
+
 export async function apiFetch<T = unknown>(url: string, options: ApiFetchOptions = {}): Promise<T> {
     // 1. Busca el token guardado en el navegador
     const token = localStorage.getItem('token');
@@ -40,22 +57,22 @@ export async function apiFetch<T = unknown>(url: string, options: ApiFetchOption
             // Si no se puede parsear el error, usar mensaje genérico
         }
 
-        // 401 = token ausente → redirigir al login (salvo que se pida no hacerlo)
+        // 401 = token ausente → volver al login (salvo que se pida no hacerlo)
         if (response.status === 401) {
             if (!options.skipAuthRedirect) {
-                localStorage.removeItem('token');
-                window.location.href = '/';
+                resetSession();
             }
             throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
         }
 
-        // 403 = puede ser token expirado O un error de autorización diferente
+        // 403 = puede ser token expirado O un error de autorización diferente.
+        // El backend contesta 403 "Token inválido o expirado" para un token
+        // vencido (el 401 queda para el token ausente), así que este es el
+        // camino real de una sesión que se cae sola con la pestaña abierta.
         if (response.status === 403) {
-            // Solo redirigir si es un error de token (auth.js devuelve "Token inválido o expirado")
             if (errorMessage.toLowerCase().includes('token')) {
                 if (!options.skipAuthRedirect) {
-                    localStorage.removeItem('token');
-                    window.location.href = '/';
+                    resetSession();
                 }
                 throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
             }

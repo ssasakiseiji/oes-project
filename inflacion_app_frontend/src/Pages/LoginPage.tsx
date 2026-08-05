@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { TrendingUp, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { LoginResponse } from '../types/api';
 
 // Ver comentario equivalente en api.ts sobre por qué ?? y no ||.
@@ -10,8 +10,17 @@ interface LoginPageProps {
 }
 
 function LoginPage({ onLoginSuccess }: LoginPageProps) {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    // email/password NO viven en estado de React, a diferencia del resto de los
+    // formularios de la app: estos dos son los únicos que el navegador
+    // autocompleta. El autocompletado escribe directo en el DOM y no siempre
+    // dispara onChange -- sobre todo cuando ocurre durante la carga de la
+    // página -- así que con inputs controlados el estado quedaba vacío y, peor,
+    // el siguiente render de React pisaba el valor autocompletado con ese
+    // string vacío. El usuario veía sus credenciales, mandaba "" y "", y el
+    // backend contestaba "Credenciales incorrectas" (ver el sondeo en api.ts).
+    // Dejando el DOM como única fuente de verdad no hay nada que
+    // desincronizar; el label flotante no los necesita porque se posiciona con
+    // :placeholder-shown, que también lee el DOM.
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -20,11 +29,17 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
         setIsLoading(true);
         setError('');
 
+        // Se lee antes de cualquier await: currentTarget queda en null apenas
+        // el handler cede el control.
+        const submitted = new FormData(e.currentTarget);
+        const submittedEmail = String(submitted.get('email') ?? '');
+        const submittedPassword = String(submitted.get('password') ?? '');
+
         try {
             const response = await fetch(`${API_BASE_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email: submittedEmail, password: submittedPassword }),
             });
 
             const data = await response.json();
@@ -43,84 +58,98 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--color-bg)' }}>
-            <div className="w-full max-w-sm">
-                {/* Hero */}
-                <div
-                    className="relative overflow-hidden rounded-t-3xl px-7 pt-10 pb-9"
-                    style={{ background: 'linear-gradient(160deg, var(--color-section) 0%, var(--color-section-glow) 55%, var(--color-bg) 100%)' }}
-                >
-                    <div
-                        className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full"
-                        style={{ background: 'radial-gradient(circle, rgba(145,132,217,.35), transparent 70%)' }}
-                    />
-                    <div className="relative mb-3.5 flex h-10 w-10 items-center justify-center rounded-[10px] bg-white/10">
-                        <TrendingUp size={20} className="text-ink" strokeWidth={2.5} />
+        // Sin card ni hero: la pantalla es el fondo desnudo y todo se lee por
+        // contraste contra él -- el título por brillo, los campos por su borde,
+        // el botón por ser la única superficie llena.
+        <div className="flex min-h-screen items-center justify-center px-6 py-12" style={{ background: 'var(--color-bg)' }}>
+            <div className="w-full max-w-[360px]">
+                <header className="mb-9 text-center">
+                    <p className="card-kicker mb-4">Plataforma de Investigación</p>
+                    {/* text-balance: a este ancho el título entra en dos líneas
+                        y sin balancear la segunda queda en una sola palabra
+                        huérfana. */}
+                    <h1 className="text-accent text-[32px] leading-[1.15] font-semibold tracking-tight text-balance">
+                        Inicia sesión en tu cuenta.
+                    </h1>
+                    <p className="text-muted mt-3 text-sm">Hola, bienvenido de vuelta a tu cuenta</p>
+                </header>
+
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    {/* El <label> va después del <input> a propósito: .field-float
+                        lo posiciona sobre el borde con un selector de hermano
+                        adyacente (ver nocturne.css). placeholder=" " es lo que
+                        hace que :placeholder-shown detecte el campo vacío. */}
+                    <div className="field-float">
+                        {/* autoCapitalize/autoCorrect: los teclados de celular
+                            capitalizan la primera letra, y el backend buscaba el
+                            email sin normalizar -- "Juan@..." daba 401 con la
+                            contraseña correcta. El backend ya normaliza (ver
+                            common/validation/email.ts); esto ataca la causa
+                            donde ocurre, así el usuario ve lo que escribió. */}
+                        <input
+                            id="email"
+                            name="email"
+                            type="email"
+                            required
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            autoComplete="email"
+                            spellCheck={false}
+                            className="input"
+                            placeholder=" "
+                        />
+                        <label htmlFor="email">Correo electrónico</label>
                     </div>
-                    <h1 className="relative mb-1 text-2xl font-medium text-ink">Portal IPC</h1>
-                    <p className="relative text-[13px] text-ink/65">Índice de Precios al Consumidor</p>
-                </div>
 
-                {/* Form sheet -- overlaps the hero, matches the mockup's -18px overlap */}
-                <div className="card elev-lg relative -mt-[18px] rounded-t-none px-6 pt-7 pb-6">
-                    <h2 className="mb-5 text-lg font-medium text-ink">Iniciar sesión</h2>
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                        <div className="field">
-                            <label htmlFor="email">Correo electrónico</label>
-                            <input
-                                id="email"
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                className="input"
-                                placeholder="tu@email.com"
-                            />
+                    <div className="field-float">
+                        <input
+                            id="password"
+                            name="password"
+                            type="password"
+                            required
+                            autoComplete="current-password"
+                            className="input"
+                            placeholder=" "
+                        />
+                        <label htmlFor="password">Contraseña</label>
+                    </div>
+
+                    {/* Sin rojo: el error se lee como un campo más del formulario,
+                        por su borde contra el fondo desnudo. El borde va más
+                        marcado que el de los inputs (35% vs 16% de ink) porque es
+                        la única señal que queda de que algo salió mal. */}
+                    {error && (
+                        <div
+                            role="alert"
+                            className="text-accent rounded-[var(--nc-radius-md)] px-3 py-2 text-[13px]"
+                            style={{
+                                background: 'transparent',
+                                border: '1px solid color-mix(in srgb, var(--color-ink) 35%, transparent)',
+                            }}
+                        >
+                            {error}
                         </div>
+                    )}
 
-                        <div className="field">
-                            <label htmlFor="password">Contraseña</label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                className="input"
-                                placeholder="••••••••"
-                            />
-                        </div>
-
-                        {error && (
-                            <div
-                                className="rounded-md px-3 py-2 text-sm"
-                                style={{
-                                    background: 'color-mix(in srgb, #f87171 15%, transparent)',
-                                    color: '#fca5a5',
-                                    border: '1px solid color-mix(in srgb, #f87171 35%, transparent)',
-                                }}
-                            >
-                                {error}
-                            </div>
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="btn btn-solid mt-2 h-[52px] w-full rounded-[var(--nc-radius-lg)] text-sm"
+                    >
+                        {isLoading ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                <span>Ingresando...</span>
+                            </>
+                        ) : (
+                            <span>Iniciar sesión</span>
                         )}
+                    </button>
+                </form>
 
-                        <button type="submit" disabled={isLoading} className="btn btn-primary btn-block">
-                            {isLoading ? (
-                                <>
-                                    <Loader2 size={16} className="animate-spin" />
-                                    <span>Ingresando...</span>
-                                </>
-                            ) : (
-                                <span>Iniciar sesión</span>
-                            )}
-                        </button>
-
-                        <p className="text-muted mt-1 text-center text-xs">¿Olvidaste tu contraseña?</p>
-                    </form>
-                </div>
-
-                <p className="text-muted mt-6 text-center text-xs">Portal IPC - Universidad Nacional de Itapúa</p>
-                <p className="text-muted mt-2 text-center text-sm">¿Problemas para acceder? Contacta a tu administrador</p>
+                <div className="hr mt-10" />
+                <p className="text-muted text-center text-xs">¿Problemas para acceder? Contacta a tu administrador</p>
+                <p className="text-muted mt-2 text-center text-[11px]">Universidad Nacional de Itapúa</p>
             </div>
         </div>
     );

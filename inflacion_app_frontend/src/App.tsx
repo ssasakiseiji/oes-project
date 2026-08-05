@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import LoginPage from './Pages/LoginPage';
 import DashboardPage from './Pages/DashboardPage';
-import { apiFetch } from './api';
+import { apiFetch, SESSION_EXPIRED_EVENT } from './api';
 import { ToastProvider } from './components/Toast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { queryClient } from './lib/queryClient';
@@ -27,6 +27,21 @@ function App() {
     }
   }, []);
 
+  // La sesión se cae sola cuando vence el token (8h, ver auth.service.ts) y
+  // api.ts avisa por evento en vez de recargar el documento. Devolver al login
+  // acá -- en el mismo render, sin navegación -- es lo que evita el ciclo de
+  // recarga + autocompletado que dejaba el formulario inservible hasta un
+  // refresh duro.
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setCurrentUser(null);
+      // El cache es del usuario que se fue: sin esto la próxima sesión arranca
+      // leyendo datos de la anterior.
+      queryClient.clear();
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
 
   const handleLoginSuccess = ({ user, token }: LoginResponse) => {
     localStorage.setItem('token', token); // Guarda el token
